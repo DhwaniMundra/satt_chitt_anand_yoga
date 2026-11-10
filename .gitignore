@@ -1,0 +1,27 @@
+# Private: application strategy and the original brief (has personal details). Never pushed.
+do_not_push/
+instructions.md
+
+# Toolchain, model and runtime data: large or personal, recreated by scripts/setup_tools.sh and the server.
+tools/
+models/
+data/
+
+# Python
+backend/.venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+
+# Android / Gradle
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/.kotlin/
+*.apk
+
+# Full-size screen recordings stay local; the compressed copies (*_small.mp4) and GIFs are committed.
+docs/media/**/student_tour.mp4
+docs/media/**/teacher_tour.mp4
+*.log
