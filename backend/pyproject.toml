@@ -1,0 +1,27 @@
+[project]
+name = "sca"
+version = "0.1.0"
+description = "Backend for the Satt Chitt Anand yoga app: accounts, classes, WhatsApp sharing and the Gemma practice assistant"
+requires-python = ">=3.12"
+dependencies = [
+  "fastapi==0.115.*",
+  "uvicorn==0.32.*",
+  "litert-lm==0.18.1",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["sca"]
+
+[project.optional-dependencies]
+dev = ["pytest==8.*", "httpx==0.28.*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.ruff]
+line-length = 120

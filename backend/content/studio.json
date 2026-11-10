@@ -1,0 +1,90 @@
+{
+  "name": {"en": "Satt Chitt Anand Yoga", "hi": "सत् चित् आनंद योग", "mr": "सत् चित् आनंद योग"},
+  "tagline": {"en": "Truth · Consciousness · Bliss", "hi": "सत्य · चेतना · आनंद", "mr": "सत्य · चैतन्य · आनंद"},
+  "since": 1994,
+  "class_start_ist": "08:00",
+  "duration_min": 55,
+  "teacher": {
+    "name": "Ramit M Tippannavar",
+    "short": "Ramit ji",
+    "title": {"en": "Founder & Lead Teacher", "hi": "संस्थापक एवं मुख्य शिक्षक", "mr": "संस्थापक व मुख्य शिक्षक"},
+    "bio": {
+      "en": "More than 12 years of training in the Kaivalyadhama lineage, with certifications in classical Hatha and therapeutic Pranayama. His teaching joins precise alignment with breath.",
+      "hi": "कैवल्यधाम परंपरा में 12 वर्षों से अधिक का प्रशिक्षण, शास्त्रीय हठ योग और चिकित्सीय प्राणायाम में प्रमाणपत्र। उनकी शिक्षा सटीक आसन-संरेखण को श्वास से जोड़ती है।",
+      "mr": "कैवल्यधाम परंपरेत 12 वर्षांहून अधिक प्रशिक्षण, शास्त्रीय हठयोग आणि उपचारात्मक प्राणायामात प्रमाणपत्र. त्यांचे शिकवणे अचूक आसन-रचना आणि श्वास यांना जोडते."
+    }
+  },
+  "classes": [
+    {
+      "key": "hatha",
+      "name": {"en": "Hatha Yoga", "hi": "हठ योग", "mr": "हठयोग"},
+      "level": {"en": "All levels", "hi": "सभी स्तर", "mr": "सर्व स्तर"},
+      "about": {
+        "en": "Classical postures held with steady breath. Builds strength, balance and flexibility.",
+        "hi": "स्थिर श्वास के साथ शास्त्रीय आसन। शक्ति, संतुलन और लचीलापन बढ़ाता है।",
+        "mr": "स्थिर श्वासासह शास्त्रीय आसने. ताकद, संतुलन आणि लवचिकता वाढवते."
+      }
+    },
+    {
+      "key": "pranayama",
+      "name": {"en": "Pranayama", "hi": "प्राणायाम", "mr": "प्राणायाम"},
+      "level": {"en": "All levels", "hi": "सभी स्तर", "mr": "सर्व स्तर"},
+      "about": {
+        "en": "Breathwork: slow, guided breathing practices to calm and focus the mind.",
+        "hi": "श्वास-अभ्यास: मन को शांत और एकाग्र करने के लिए धीमी, निर्देशित श्वास।",
+        "mr": "श्वासाचा सराव: मन शांत आणि एकाग्र करण्यासाठी संथ, मार्गदर्शित श्वसन."
+      }
+    },
+    {
+      "key": "vinyasa",
+      "name": {"en": "Vinyasa Flow", "hi": "विन्यास फ्लो", "mr": "विन्यास फ्लो"},
+      "level": {"en": "Intermediate", "hi": "मध्यम स्तर", "mr": "मध्यम स्तर"},
+      "about": {
+        "en": "Postures linked in a flowing sequence, one movement to one breath.",
+        "hi": "एक श्वास, एक गति: आसनों का बहता हुआ क्रम।",
+        "mr": "एक श्वास, एक हालचाल: आसनांचा प्रवाही क्रम."
+      }
+    },
+    {
+      "key": "dhyana",
+      "name": {"en": "Dhyana · Meditation", "hi": "ध्यान", "mr": "ध्यान"},
+      "level": {"en": "All levels", "hi": "सभी स्तर", "mr": "सर्व स्तर"},
+      "about": {
+        "en": "Seated stillness and guided attention.",
+        "hi": "बैठकर स्थिरता और निर्देशित ध्यान।",
+        "mr": "बसून स्थिरता आणि मार्गदर्शित ध्यान."
+      }
+    },
+    {
+      "key": "nidra",
+      "name": {"en": "Yoga Nidra", "hi": "योग निद्रा", "mr": "योगनिद्रा"},
+      "level": {"en": "All levels", "hi": "सभी स्तर", "mr": "सर्व स्तर"},
+      "about": {
+        "en": "Deep guided relaxation, lying down.",
+        "hi": "लेटकर गहरा, निर्देशित विश्राम।",
+        "mr": "झोपून केलेली खोल, मार्गदर्शित विश्रांती."
+      }
+    },
+    {
+      "key": "beginners",
+      "name": {"en": "Beginners' Path", "hi": "शुरुआती पथ", "mr": "नवशिक्यांचा मार्ग"},
+      "level": {"en": "Foundations", "hi": "बुनियाद", "mr": "पाया"},
+      "about": {
+        "en": "The foundations, step by step: posture, breath and rest.",
+        "hi": "बुनियादी बातें, कदम-दर-कदम: आसन, श्वास और विश्राम।",
+        "mr": "पायाभूत गोष्टी, टप्प्याटप्प्याने: आसन, श्वास आणि विश्रांती."
+      }
+    },
+    {
+      "key": "satsang",
+      "name": {"en": "Satsang · Open Practice", "hi": "सत्संग · खुला अभ्यास", "mr": "सत्संग · मुक्त सराव"},
+      "level": {"en": "All levels", "hi": "सभी स्तर", "mr": "सर्व स्तर"},
+      "about": {
+        "en": "Sunday gathering: open practice, questions and conversation.",
+        "hi": "रविवार की सभा: खुला अभ्यास, प्रश्न और बातचीत।",
+        "mr": "रविवारचा मेळावा: मुक्त सराव, प्रश्न आणि गप्पा."
+      }
+    }
+  ],
+  "weekly": {"mon": "hatha", "tue": "pranayama", "wed": "vinyasa", "thu": "dhyana", "fri": "hatha", "sat": "nidra", "sun": "satsang"}
+}
