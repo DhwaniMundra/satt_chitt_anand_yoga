@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A lotus in the 108dp adaptive-icon grid; everything sits inside the 66dp safe zone. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path android:fillColor="#F6F1E7" android:pathData="M54,32 C62,41 64,53 54,66 C44,53 46,41 54,32 Z" />
+    <path android:fillColor="#E9B98F" android:pathData="M54,66 C44,63 37,55 35,45 C45,47 51,55 54,66 Z" />
+    <path android:fillColor="#E9B98F" android:pathData="M54,66 C64,63 71,55 73,45 C63,47 57,55 54,66 Z" />
+    <path android:fillColor="#F6F1E7" android:pathData="M54,68 C43,68 34,63 30,55 C40,55 49,60 54,68 Z" />
+    <path android:fillColor="#F6F1E7" android:pathData="M54,68 C65,68 74,63 78,55 C68,55 59,60 54,68 Z" />
+    <path android:fillColor="#E9B98F" android:pathData="M40,72 L68,72 L68,75 L40,75 Z" />
+</vector>
