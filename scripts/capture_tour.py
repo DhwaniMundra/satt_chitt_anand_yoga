@@ -1,0 +1,130 @@
+"""Walks through the app on the emulator and saves the same screenshots and two screen recordings every time,
+so each iteration can be compared with the last: docs/media/<version>/.
+
+Needs: `source scripts/env.sh`, the emulator running (scripts/run_emulator.sh), and the backend running on the
+synthetic demo database (backend/scripts/seed_demo.py), with Gemma loaded.
+
+Usage: python3 scripts/capture_tour.py v0.2
+"""
+
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+from PIL import Image
+
+import phone as p
+
+ROOT = Path(__file__).resolve().parents[1]
+APK = ROOT / "android" / "app" / "build" / "outputs" / "apk" / "debug" / "app-debug.apk"
+STUDENT = ("9800000002", "demo123")
+TEACHER = ("9800000001", "demo123")
+
+
+def main(version: str) -> None:
+    out = ROOT / "docs" / "media" / version
+    out.mkdir(parents=True, exist_ok=True)
+
+    def shot(name: str) -> None:
+        full = out / f"{name}.png"
+        p.screenshot(full)
+        image = Image.open(full).convert("RGB")
+        image.resize((image.width // 2, image.height // 2), Image.LANCZOS).save(full, optimize=True)
+
+    def log_in(number: str, password: str) -> None:
+        p.tap("Log in", exact=True)
+        p.type_into("WhatsApp number", number)
+        p.type_into("Password", password)
+        p.hide_keyboard()
+        p.tap("Log in", exact=True, last=True)  # the button under the form, not the switch above it
+        time.sleep(3)
+
+    p.adb("install", "-r", str(APK))
+    p.adb("shell", "cmd", "alarm", "set-timezone", "Asia/Kolkata")
+    p.demo_mode()
+    p.launch(clear=True)
+
+    # ---- student ----
+    video = p.Recording(out / "student_tour.mp4")
+    shot("01_welcome")
+    p.tap("I'm a student")
+    shot("02_signup")
+    log_in(*STUDENT)
+    shot("03_today")
+    p.tap("Join class")
+    shot("04_checkin_before")
+    p.tap("Okay")  # the 😐 face, by its spoken label
+    time.sleep(3)
+    p.launch()  # back from the Meet link in the browser
+    p.tap("Week", exact=True)
+    shot("05_week")
+    p.tap("Breathe", exact=True)
+    p.tap("Start", exact=True)
+    time.sleep(6)
+    shot("06_breathe")
+    p.tap("Stop", exact=True)
+    p.tap("Ask", exact=True)
+    shot("07_ask")
+    p.tap("Yoga for back pain?")
+    p.find("From the notes", timeout=120)
+    time.sleep(1)
+    shot("08_ask_answer")
+    p.tap("Me", exact=True)
+    shot("09_me")
+    p.tap("हिन्दी")
+    time.sleep(3)
+    p.tap("आज", exact=True)
+    time.sleep(1.5)
+    shot("10_today_hindi")
+    video.stop()
+
+    p.launch()  # a fresh start empties the chat, so the Hindi suggestions show
+    p.tap("पूछें", exact=True)
+    p.tap("कक्षा से पहले क्या खाएँ?")
+    p.find("नोट्स से", timeout=120)
+    time.sleep(1)
+    shot("11_ask_hindi")
+    p.tap("मैं", exact=True)
+    p.tap("English")
+    time.sleep(3)
+    p.scroll_down()
+    p.tap("Log out")
+    time.sleep(1.5)
+
+    # ---- teacher ----
+    video = p.Recording(out / "teacher_tour.mp4")
+    p.tap("I'm the teacher")
+    log_in(*TEACHER)
+    shot("12_teacher_classes")
+    p.type_into("Google Meet link", "meet.google.com/xyz-abcd-efg")
+    p.hide_keyboard()
+    p.tap("Save and share on WhatsApp")
+    time.sleep(2.5)
+    shot("13_teacher_share")
+    p.back()
+    time.sleep(1)
+    p.scroll_down()
+    p.scroll_down()
+    shot("14_teacher_group")
+    p.tap("Students", exact=True)
+    time.sleep(2)
+    shot("15_students")
+    p.tap("Insights", exact=True)
+    time.sleep(2)
+    shot("16_insights_demo_data")
+    video.stop()
+
+    for name in ("student_tour", "teacher_tour"):
+        make_gif(out / f"{name}.mp4", out / f"{name}.gif")
+    print(f"saved to {out}")
+
+
+def make_gif(video: Path, gif: Path) -> None:
+    """A small looping GIF for the README: 270 px wide, 8 frames a second, 2x speed."""
+    palette = "fps=8,setpts=0.5*PTS,scale=270:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=96[p];[b][p]paletteuse=dither=bayer"
+    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(video), "-vf", palette, str(gif)], check=True)
+
+
+if __name__ == "__main__":
+    main(sys.argv[1])
