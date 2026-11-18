@@ -1,5 +1,6 @@
-# Private: application strategy and the original brief (has personal details). Never pushed.
+# Private: application strategy, local notes and visualisations, the original brief (has personal details). Never pushed.
 do_not_push/
+.local/
 instructions.md
 
 # Toolchain, model and runtime data: large or personal, recreated by scripts/setup_tools.sh and the server.
@@ -21,7 +22,6 @@ android/local.properties
 android/.kotlin/
 *.apk
 
-# Full-size screen recordings stay local; the compressed copies (*_small.mp4) and GIFs are committed.
-docs/media/**/student_tour.mp4
-docs/media/**/teacher_tour.mp4
+# Raw tour screenshots and recordings and the 1080p video live in .local/visualization/ (ignored above); only the
+# curated media in docs/media/ is committed.
 *.log

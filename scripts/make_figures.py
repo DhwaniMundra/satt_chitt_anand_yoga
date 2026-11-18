@@ -1,19 +1,42 @@
-"""Portfolio figures from the tour screenshots: a hero image and before/after pairs, into docs/media/figures/.
+"""Makes the media committed in docs/media/ from the local tours in .local/visualization/ (gitignored):
+
+- figures/: the hero image and before-and-after pairs
+- gifs/: short feature GIFs for the README, cut from the tour recordings
+- iterations/: one contact sheet of screenshots per version, for the iteration log
 
 Usage: python3 scripts/make_figures.py
 """
 
+import subprocess
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 ROOT = Path(__file__).resolve().parents[1]
-MEDIA = ROOT / "docs" / "media"
-OUT = MEDIA / "figures"
+LOCAL = ROOT / ".local" / "visualization"
+TOURS = LOCAL / "tours"
+OUT = ROOT / "docs" / "media"
 CREAM, MOSS, SAFFRON, INK, MUTED = "#F6F1E7", "#3F5B45", "#C26A2D", "#2B2A26", "#6E6A60"
 SERIF = "/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf"
 SANS = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
 SANS_BOLD = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
+
+# Feature GIFs: name, source recording, start and length in seconds, speed.
+GIFS = (
+    ("join_and_check_in", TOURS / "v0.4" / "student_tour_small.mp4", 22.0, 7.5, 1.0),
+    ("breathe", TOURS / "v0.4" / "student_tour_small.mp4", 43.4, 10.2, 1.0),
+    ("ask", TOURS / "v0.4" / "student_tour_small.mp4", 57.4, 9.0, 1.0),
+    ("hindi", TOURS / "v0.4" / "student_tour_small.mp4", 69.5, 9.5, 1.0),
+    ("teacher_shares_link", TOURS / "v0.4" / "teacher_tour_small.mp4", 26.5, 9.5, 1.0),
+    ("two_phones", LOCAL / "two_phones_v0.4.mp4", 44.0, 88.0, 4.0),
+)
+# Contact sheets: version folder and a caption.
+SHEETS = (
+    ("v0.1", "v0.1, first tour: the findings are in docs/iterations/v0.1.md"),
+    ("v0.2", "v0.2: after the first round of fixes"),
+    ("v0.4", "v0.4: after the code review and the Marathi notes"),
+    ("v0.4-two-phones", "v0.4: two phones, one server (teacher and students, in order)"),
+)
 
 
 def phone(path: Path, height: int) -> Image.Image:
@@ -51,8 +74,10 @@ def wrap(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.FreeTypeFont, wid
     return lines + [line]
 
 
-def hero(version: str) -> None:
-    shots = MEDIA / version
+def hero() -> None:
+    """The README's first image. hero_teacher and hero_today were taken at a quiet hour, so they show the regular
+    8:00 AM class rather than the tour's extra class 20 minutes ahead."""
+    shots = TOURS / "v0.4"
     canvas = Image.new("RGBA", (2400, 1350), CREAM)
     draw = ImageDraw.Draw(canvas)
     draw.text((120, 260), "Satt Chitt Anand", font=ImageFont.truetype(SERIF, 104), fill=MOSS)
@@ -63,12 +88,10 @@ def hero(version: str) -> None:
             "that answers in English, Hindi and Marathi.")
     for i, line in enumerate(wrap(draw, text, body, 860)):
         draw.text((124, 500 + i * 56), line, font=body, fill=INK)
-    draw.text((124, 1180), f"Screens from {version}, synthetic demo data", font=ImageFont.truetype(SANS, 26), fill=MUTED)
-    # hero_teacher and hero_today are taken at a quiet hour, so they show the regular 8:00 AM class rather than the
-    # tour's extra class 20 minutes ahead.
+    draw.text((124, 1180), "Screens from v0.4, synthetic demo data", font=ImageFont.truetype(SANS, 26), fill=MUTED)
     for name, x, y in (("hero_teacher", 1080, 170), ("hero_today", 1470, 90), ("08_ask_answer", 1860, 170)):
         place(canvas, phone(shots / f"{name}.png", 1080), (x, y))
-    canvas.convert("RGB").save(OUT / "hero.png", optimize=True)
+    canvas.convert("RGB").save(OUT / "figures" / "hero.png", optimize=True)
 
 
 def before_after(name: str, before: Path, after: Path, before_note: str, after_note: str) -> None:
@@ -86,25 +109,60 @@ def before_after(name: str, before: Path, after: Path, before_note: str, after_n
         for i, line in enumerate(lines):
             draw.text((x, 100 + i * 38), line, font=note, fill=INK)
         place(canvas, item, (x, top))
-    canvas.convert("RGB").save(OUT / f"{name}.png", optimize=True)
+    canvas.convert("RGB").save(OUT / "figures" / f"{name}.png", optimize=True)
+
+
+def gif(name: str, source: Path, start: float, seconds: float, speed: float) -> None:
+    """A looping GIF, 300 px wide (two phones: 600), 10 frames a second."""
+    width = 600 if name == "two_phones" else 300
+    chain = (f"setpts=PTS/{speed},fps=10,scale={width}:-1:flags=lanczos,split[a][b];"
+             "[a]palettegen=max_colors=128:stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=4:diff_mode=rectangle")
+    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-ss", str(start), "-t", str(seconds), "-i", str(source),
+                    "-filter_complex", chain, "-loop", "0", str(OUT / "gifs" / f"{name}.gif")], check=True)
+
+
+def sheet(version: str, caption: str) -> None:
+    """Every numbered screenshot of one tour in a grid, as a JPEG small enough to commit."""
+    files = sorted((TOURS / version).glob("[0-9]*.png"))
+    cols, width = 8, 260
+    tiles = [Image.open(f).convert("RGB") for f in files]
+    tiles = [t.resize((width, round(t.height * width / t.width)), Image.LANCZOS) for t in tiles]
+    tile_h = max(t.height for t in tiles)
+    rows = (len(tiles) + cols - 1) // cols
+    canvas = Image.new("RGB", (cols * (width + 16) + 16, rows * (tile_h + 44) + 90), CREAM)
+    draw = ImageDraw.Draw(canvas)
+    draw.text((16, 24), caption, font=ImageFont.truetype(SANS_BOLD, 28), fill=MOSS)
+    small = ImageFont.truetype(SANS, 16)
+    for k, (tile, file) in enumerate(zip(tiles, files, strict=True)):
+        x, y = 16 + (k % cols) * (width + 16), 80 + (k // cols) * (tile_h + 44)
+        canvas.paste(tile, (x, y))
+        draw.text((x, y + tile.height + 6), file.stem.replace("_", " "), font=small, fill=MUTED)
+    canvas.save(OUT / "iterations" / f"{version}.jpg", quality=82, optimize=True)
 
 
 def main() -> None:
-    OUT.mkdir(parents=True, exist_ok=True)
-    hero("v0.4")
+    if not TOURS.is_dir():
+        raise SystemExit(f"{TOURS} is missing: run scripts/capture_tour.py first")
+    for folder in ("figures", "gifs", "iterations"):
+        (OUT / folder).mkdir(parents=True, exist_ok=True)
+    hero()
     before_after(
-        "signup_v0.1_v0.2", MEDIA / "v0.1" / "02_signup_login_hidden.png", MEDIA / "v0.2" / "02_signup.png",
+        "signup_v0.1_v0.2", TOURS / "v0.1" / "02_signup_login_hidden.png", TOURS / "v0.2" / "02_signup.png",
         "v0.1: a returning student had to scroll past the whole sign-up form to find 'Log in'.",
         "v0.2: 'Create account' and 'Log in' sit side by side above the form.",
     )
     before_after(
-        "ask_hindi_v0.1_v0.2", MEDIA / "v0.1" / "10_ask_hindi_food_miss.png", MEDIA / "v0.2" / "11_ask_hindi.png",
+        "ask_hindi_v0.1_v0.2", TOURS / "v0.1" / "10_ask_hindi_food_miss.png", TOURS / "v0.2" / "11_ask_hindi.png",
         "v0.1: asked in Hindi, 'What should I eat before class?' uses an inflected verb the notes' keywords did "
         "not list, so the assistant found no notes and said it did not know.",
         "v0.2: inflected Hindi and Marathi forms added to the notes' keywords; a test now covers every suggested "
         "question in all three languages.",
     )
-    print(f"figures in {OUT}")
+    for spec in GIFS:
+        gif(*spec)
+    for spec in SHEETS:
+        sheet(*spec)
+    print(f"media in {OUT}")
 
 
 if __name__ == "__main__":

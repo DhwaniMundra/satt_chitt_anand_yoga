@@ -1,6 +1,7 @@
 """Two phones, one server: a teacher on emulator-5554 and students on emulator-5556. Checks the loop across
-devices, saves a screenshot at each step, and records both screens into one side-by-side video, all in
-docs/media/<version>/.
+devices, saves a screenshot at each step (.local/visualization/tours/<version>/) and records both screens into one
+side-by-side video (.local/visualization/two_phones_<version>.mp4); the pass/fail list goes to
+docs/evals/two_phones_<version>.md.
 
 Needs: both emulators running (scripts/run_emulator.sh, then SCA_AVD=sca_phone_2 SCA_PORT=5556 ...), the APK built,
 and the backend running on a fresh database with SCA_TEACHER_CODE set. `server` is the address the app shows:
@@ -24,6 +25,7 @@ from PIL import Image
 import phone as p
 
 ROOT = Path(__file__).resolve().parents[1]
+LOCAL = ROOT / ".local" / "visualization"  # gitignored
 APK = ROOT / "android" / "app" / "build" / "outputs" / "apk" / "debug" / "app-debug.apk"
 TEACHER, STUDENT = "emulator-5554", "emulator-5556"
 
@@ -34,7 +36,7 @@ def on(serial: str) -> None:
 
 
 def main(version: str, server: str, db_path: Path, teacher_code: str) -> None:
-    out = ROOT / "docs" / "media" / version
+    out = LOCAL / "tours" / version
     out.mkdir(parents=True, exist_ok=True)
     results: list[tuple[str, bool]] = []
 
@@ -182,24 +184,24 @@ def main(version: str, server: str, db_path: Path, teacher_code: str) -> None:
     shot("09_student_approved")
 
     stop_recording()
-    side_by_side(out)
+    side_by_side(out, LOCAL / f"two_phones_{version.removesuffix('-two-phones')}.mp4")
 
     passed = sum(ok for _, ok in results)
-    report = out / "results.md"
+    report = ROOT / "docs" / "evals" / f"two_phones_{version.removesuffix('-two-phones')}.md"
     report.write_text(
         f"# Two-phone test: {version}\n\n"
         f"- **Server:** {server} (the laptop as seen from the emulators; an APK built with -PscaServer uses the laptop's Wi-Fi address instead)\n"
         f"- **Phones:** {TEACHER} (teacher), {STUDENT} (students), Android 16 emulators\n"
         f"- **Passed:** {passed}/{len(results)}\n\n"
         + "".join(f"- {'✅' if ok else '❌'} {what}\n" for what, ok in results)
-        + "\nTest people only. Screenshots in this folder, numbered in order.\n",
+        + f"\nTest people only. Screenshots and the recording are kept locally in .local/visualization/tours/{version}/.\n",
         encoding="utf-8",
     )
     print(f"{passed}/{len(results)} passed; {report}")
 
 
-def side_by_side(out: Path) -> None:
-    """Teacher on the left, student on the right, both parts in sequence: two_phones.mp4 and a GIF."""
+def side_by_side(out: Path, final: Path) -> None:
+    """Teacher on the left, student on the right, both parts in sequence, into `final`."""
     parts = []
     for part in ("part1", "part2"):
         joined = out / f"{part}.mp4"
@@ -213,9 +215,7 @@ def side_by_side(out: Path) -> None:
     listing = out / "parts.txt"
     listing.write_text("".join(f"file '{p.name}'\n" for p in parts))
     subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", str(listing), "-c", "copy",
-                    "-movflags", "+faststart", str(out / "two_phones.mp4")], check=True)
-    palette = "fps=6,setpts=0.5*PTS,scale=480:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=96[p];[b][p]paletteuse=dither=bayer"
-    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(out / "two_phones.mp4"), "-vf", palette, str(out / "two_phones.gif")], check=True)
+                    "-movflags", "+faststart", str(final)], check=True)
     for leftover in [listing, *parts, *out.glob("part*_*.mp4")]:
         leftover.unlink()
 

@@ -1,0 +1,127 @@
+1
+00:00:00,500 --> 00:00:06,450
+Namaste. This is Satt Chitt Anand, an app for an online yoga studio and its students.
+
+2
+00:00:06,650 --> 00:00:11,800
+Classes are live on Google Meet every morning, and the class talks on WhatsApp.
+
+3
+00:00:12,900 --> 00:00:17,950
+Students pick English, Hindi or Marathi, and sign up with their WhatsApp number.
+
+4
+00:00:18,150 --> 00:00:24,300
+A group code from the class WhatsApp group lets them in at once. Otherwise, the teacher approves them.
+
+5
+00:00:25,400 --> 00:00:28,525
+Today shows the next class, with a countdown.
+
+6
+00:00:28,725 --> 00:00:32,000
+One tap on Join class opens Google Meet.
+
+7
+00:00:33,100 --> 00:00:39,525
+Just before joining, the app asks one thing: how do you feel right now? Five faces. No reading needed.
+
+8
+00:00:39,725 --> 00:00:44,425
+After class, it asks again, so everyone can see whether the classes help.
+
+9
+00:00:45,525 --> 00:00:52,075
+Week shows the studio's rhythm, from Hatha to Sunday Satsang, and introduces the teacher, Ramit ji.
+
+10
+00:00:53,175 --> 00:00:58,025
+Breathe is a circle that grows as you breathe in, and shrinks as you breathe out.
+
+11
+00:00:58,225 --> 00:01:00,725
+It follows the eye, not words.
+
+12
+00:01:04,175 --> 00:01:10,300
+Me shows a student's practice: classes, days in a row, and how much better they feel after class.
+
+13
+00:01:11,400 --> 00:01:17,050
+Ask is a practice assistant. Students tap a suggested question, or type their own.
+
+14
+00:01:17,250 --> 00:01:24,675
+It runs Gemma 4, an open AI model, on the studio's laptop, and answers only from the studio's own notes.
+
+15
+00:01:24,875 --> 00:01:28,400
+Under every answer, it shows which notes it used.
+
+16
+00:01:29,500 --> 00:01:33,250
+It never diagnoses, and never touches medicines.
+
+17
+00:01:33,450 --> 00:01:40,500
+If someone mentions chest pain or fainting, it skips the AI, and tells them to stop and call one one two.
+
+18
+00:01:41,600 --> 00:01:47,525
+Everything works in Hindi and Marathi too: the screens, the class names, and the answers.
+
+19
+00:01:47,725 --> 00:01:52,400
+For Marathi, it copies notes written in Marathi, so the facts stay right.
+
+20
+00:01:53,500 --> 00:01:56,725
+For the teacher, Classes shows the coming week.
+
+21
+00:01:56,925 --> 00:02:02,675
+Paste the Meet link, tap Save and share, and WhatsApp opens with the message ready for the group.
+
+22
+00:02:03,775 --> 00:02:09,775
+Students shows who is waiting. The teacher approves them, removes them, or gives a new password.
+
+23
+00:02:10,875 --> 00:02:17,050
+Insights shows who joined each class, and how they felt before and after. Here, with demo data.
+
+24
+00:02:18,150 --> 00:02:20,650
+Here it is on two phones at once.
+
+25
+00:02:20,850 --> 00:02:27,200
+The teacher posts the link. The student joins, checks in before and after class, and asks a question.
+
+26
+00:02:27,400 --> 00:02:30,050
+And the teacher sees the check-in arrive.
+
+27
+00:02:36,550 --> 00:02:43,775
+Under the hood: an Android app, and a small server on the studio's laptop, where Gemma runs on the graphics card.
+
+28
+00:02:43,975 --> 00:02:51,575
+Accounts and check-ins live on that laptop, with an optional private backup. Questions are kept only if the student agrees.
+
+29
+00:02:52,675 --> 00:03:01,800
+Sixty-nine automatic tests. Thirty-four questions to the assistant, every answer read. And an outside review that found fifteen bugs.
+
+30
+00:03:02,000 --> 00:03:08,200
+When Marathi answers changed facts, notes written in Marathi took the errors from seven to zero.
+
+31
+00:03:09,300 --> 00:03:15,225
+We would love to hear from you. Would you use this before class? What was confusing? What is missing?
+
+32
+00:03:15,425 --> 00:03:19,725
+Reply to whoever sent you this video. Thank you, and namaste.
