@@ -77,13 +77,16 @@ def test_suggested_questions_find_their_section(assistant, question, section):
     assert assistant.retriever.top(question)[0].title == section
 
 
-def test_suggestions_match_the_app():
+def test_note_suggestions_in_the_app_are_tested():
+    """The app's suggestions 2 and 4 are answered from the studio notes and must be among the tested questions above.
+    Suggestions 1 and 3 ask about the student's own practice and are covered by scripts/eval_companion.py."""
     root = Path(__file__).resolve().parents[2] / "android" / "app" / "src" / "main" / "res"
     shown = set()
     for folder in ("values", "values-hi", "values-mr"):
         text = (root / folder / "strings.xml").read_text(encoding="utf-8")
-        shown |= {line.split(">")[1].split("<")[0].replace("\\'", "'") for line in text.splitlines() if 'name="sugg_' in line}
-    assert shown == {q for q, _ in SUGGESTIONS}
+        shown |= {line.split(">")[1].split("<")[0].replace("\\'", "'") for line in text.splitlines()
+                  if 'name="sugg_2"' in line or 'name="sugg_4"' in line}
+    assert len(shown) == 6 and shown <= {q for q, _ in SUGGESTIONS}
 
 
 def test_marathi_notes_have_every_section():
