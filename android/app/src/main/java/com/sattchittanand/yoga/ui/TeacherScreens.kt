@@ -31,7 +31,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -51,7 +50,8 @@ import kotlin.math.roundToInt
 @Composable
 fun TeacherClassesScreen(vm: AppViewModel, openStudents: () -> Unit) {
     val home = vm.teacherHome ?: return
-    var expanded by rememberSaveable { mutableStateOf(home.sessions.firstOrNull()?.id ?: -1) }
+    // The soonest class is open by default, and again whenever a sooner one appears.
+    var expanded by rememberSaveable(home.sessions.firstOrNull()?.id) { mutableStateOf(home.sessions.firstOrNull()?.id ?: -1) }
     PullToRefreshBox(isRefreshing = vm.busy, onRefresh = vm::refresh, modifier = Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Label(stringResource(R.string.brand_latin), Palette.saffron)
@@ -134,6 +134,7 @@ private fun GroupCard(vm: AppViewModel) {
             group, { group = it }, label = { Text(stringResource(R.string.group_link)) },
             placeholder = { Text("chat.whatsapp.com/…") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
         )
+        vm.error?.takeIf { it == "bad_group_link" || it == "bad_meet_link" }?.let { Text(errorText(it), color = MaterialTheme.colorScheme.error) }
         Button(onClick = { vm.saveSettings(group, standing, saved) }, enabled = !vm.busy) { Text(stringResource(R.string.save)) }
         HorizontalDivider(color = Palette.line)
         Label(stringResource(R.string.group_code_label))
@@ -153,7 +154,8 @@ private fun GroupCard(vm: AppViewModel) {
 @Composable
 fun StudentsScreen(vm: AppViewModel) {
     LaunchedEffect(Unit) { vm.loadStudents() }
-    var shownPassword by remember { mutableStateOf<Pair<String, String>?>(null) } // (name, new password)
+    // (name, new password). Saveable: the server has already changed the password, so it must survive rotation.
+    var shownPassword by rememberSaveable { mutableStateOf<Pair<String, String>?>(null) }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text(stringResource(R.string.students_title), style = MaterialTheme.typography.headlineSmall)
         if (vm.students.isEmpty() && !vm.busy) Text(stringResource(R.string.no_students), color = Palette.muted)

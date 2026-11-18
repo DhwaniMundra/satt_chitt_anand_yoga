@@ -21,7 +21,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException
 from pydantic import BaseModel, Field
 
 from sca import auth, db, studio as studio_mod, whatsapp
-from sca.assistant import Assistant
+from sca.assistant import Assistant, Busy
 from sca.backup import GitHubBackup
 from sca.studio import IST
 
@@ -29,6 +29,7 @@ ROOT = Path(__file__).resolve().parents[2]
 BACKEND = ROOT / "backend"
 log = logging.getLogger("sca")
 Lang = Literal["en", "hi", "mr"]
+CHECKIN_BEFORE_MIN = 60  # how early before class the "before" check-in opens
 
 
 @dataclass(frozen=True)
@@ -41,6 +42,7 @@ class Config:
     backup_repo: str | None = None
     github_token: str | None = None
     backup_every_s: int = 600
+    public_url: str | None = None  # the address phones use, e.g. http://192.168.1.20:8000; shown in the invite
     studio_path: Path = BACKEND / "content" / "studio.json"
     notes_path: Path = BACKEND / "knowledge" / "yoga_health.md"
 
@@ -55,6 +57,7 @@ class Config:
             backup_repo=os.environ.get("SCA_BACKUP_REPO"),
             github_token=os.environ.get("SCA_GITHUB_TOKEN"),
             backup_every_s=int(os.environ.get("SCA_BACKUP_EVERY_S", "600")),
+            public_url=os.environ.get("SCA_PUBLIC_URL"),
         )
 
 
@@ -142,7 +145,9 @@ def practice_stats(conn: sqlite3.Connection, user_id: int) -> dict:
         },
         reverse=True,
     )
-    streak, expected = 0, db.now().astimezone(IST).date()
+    today = db.now().astimezone(IST).date()
+    days = [d for d in days if d <= today]  # a check-in for a later class does not count yet
+    streak, expected = 0, today
     if days and days[0] < expected:
         expected -= timedelta(days=1)  # today's class may not have happened yet
     for day in days:
@@ -190,12 +195,13 @@ def create_app(config: Config) -> FastAPI:
                 db.import_rows(conn, saved)
                 log.info("restored the database from %s", config.backup_repo)
         if config.teacher_code:
-            db.set_setting(conn, "teacher_code", config.teacher_code)
+            db.set_setting(conn, "teacher_code", config.teacher_code.strip().upper())
         elif db.get_setting(conn, "teacher_code") is None:
             db.set_setting(conn, "teacher_code", auth.new_code(8))
         if db.get_setting(conn, "group_code") is None:
             db.set_setting(conn, "group_code", auth.new_code())
-        log.warning("Teacher sign-up code: %s", db.get_setting(conn, "teacher_code"))
+        if conn.execute("SELECT 1 FROM users WHERE role = 'teacher'").fetchone() is None:
+            log.warning("Teacher sign-up code: %s", db.get_setting(conn, "teacher_code"))
         conn.close()
         if config.gemma != "off":
             threading.Thread(
@@ -208,6 +214,8 @@ def create_app(config: Config) -> FastAPI:
 
     app = FastAPI(title="Satt Chitt Anand", lifespan=lifespan)
     app.state.assistant = assistant
+    logins = auth.Attempts()  # per phone number
+    codes = auth.Attempts()  # per user entering a group code
 
     def get_db() -> Iterator[sqlite3.Connection]:
         conn = db.connect(config.db_path)
@@ -268,7 +276,12 @@ def create_app(config: Config) -> FastAPI:
             raise HTTPException(400, "bad_phone") from None
         code = body.code.strip().upper()
         if body.role == "teacher":
+            if conn.execute("SELECT 1 FROM users WHERE role = 'teacher'").fetchone() is not None:
+                raise HTTPException(409, "teacher_exists")  # one teacher per studio; the code no longer works
+            if logins.blocked("teacher-code"):
+                raise HTTPException(429, "too_many_attempts")
             if code != db.get_setting(conn, "teacher_code"):
+                logins.fail("teacher-code")
                 raise HTTPException(400, "bad_teacher_code")
             status = "approved"
         elif code:
@@ -295,9 +308,13 @@ def create_app(config: Config) -> FastAPI:
             phone = auth.normalize_phone(body.phone)
         except ValueError:
             raise HTTPException(400, "bad_phone") from None
+        if logins.blocked(phone):
+            raise HTTPException(429, "too_many_attempts")
         row = conn.execute("SELECT * FROM users WHERE phone = ?", (phone,)).fetchone()
         if row is None or not auth.check_password(body.password, row["pw_hash"]):
+            logins.fail(phone)
             raise HTTPException(401, "bad_login")
+        logins.clear(phone)
         return sign_in(conn, row)
 
     # ---------- signed in ----------
@@ -320,13 +337,19 @@ def create_app(config: Config) -> FastAPI:
             conn.execute("UPDATE users SET lang = ? WHERE id = ?", (body.lang, user["id"]))
         if body.research_consent is not None:
             conn.execute("UPDATE users SET research_consent = ? WHERE id = ?", (int(body.research_consent), user["id"]))
+            if not body.research_consent:  # withdrawing consent removes what it allowed
+                conn.execute("UPDATE questions SET user_id = NULL, question = NULL, sources = '[]' WHERE user_id = ?", (user["id"],))
         conn.commit()
         return {"user": user_json(conn.execute("SELECT * FROM users WHERE id = ?", (user["id"],)).fetchone())}
 
     @app.post("/me/group_code")
     def join_group(body: CodeIn, user: sqlite3.Row = Depends(current_user), conn: sqlite3.Connection = Depends(get_db)) -> dict:
         """A pending student who later gets the group code from the WhatsApp group is approved at once."""
+        key = str(user["id"])
+        if codes.blocked(key):
+            raise HTTPException(429, "too_many_attempts")
         if body.code.strip().upper() != db.get_setting(conn, "group_code"):
+            codes.fail(key)
             raise HTTPException(400, "bad_group_code")
         conn.execute("UPDATE users SET status = 'approved' WHERE id = ? AND status = 'pending'", (user["id"],))
         conn.commit()
@@ -348,9 +371,10 @@ def create_app(config: Config) -> FastAPI:
         # The last class this person joined that has (nearly) ended and has no "after" check-in yet.
         waiting = conn.execute(
             "SELECT s.* FROM checkins b JOIN class_sessions s ON s.id = b.session_id "
-            "WHERE b.user_id = ? AND b.phase = 'before' AND NOT EXISTS (SELECT 1 FROM checkins a WHERE a.user_id = "
-            "b.user_id AND a.session_id = b.session_id AND a.phase = 'after') ORDER BY s.starts_at DESC LIMIT 1",
-            (user["id"],),
+            "WHERE b.user_id = ? AND b.phase = 'before' AND s.starts_at <= ? AND NOT EXISTS (SELECT 1 FROM checkins a "
+            "WHERE a.user_id = b.user_id AND a.session_id = b.session_id AND a.phase = 'after') "
+            "ORDER BY s.starts_at DESC LIMIT 1",
+            (user["id"], db.iso(moment)),
         ).fetchone()
         after = None
         if waiting is not None:
@@ -371,7 +395,19 @@ def create_app(config: Config) -> FastAPI:
     ) -> dict:
         if user["status"] != "approved":
             raise HTTPException(403, "pending")
-        session_row(conn, session_id)
+        row = session_row(conn, session_id)
+        start = db.parse_iso(row["starts_at"])
+        end = start + timedelta(minutes=row["duration_min"])
+        moment = db.now()
+        if body.phase == "before":
+            open_ = start - timedelta(minutes=CHECKIN_BEFORE_MIN) <= moment <= end
+        else:
+            joined = conn.execute(
+                "SELECT 1 FROM checkins WHERE user_id = ? AND session_id = ? AND phase = 'before'", (user["id"], session_id)
+            ).fetchone()
+            open_ = joined is not None and end - timedelta(minutes=10) <= moment <= end + timedelta(hours=12)
+        if not open_:
+            raise HTTPException(400, "checkin_closed")
         conn.execute(
             "INSERT INTO checkins (user_id, session_id, phase, mood, created_at) VALUES (?, ?, ?, ?, ?) "
             "ON CONFLICT(user_id, session_id, phase) DO UPDATE SET mood = excluded.mood",
@@ -391,12 +427,19 @@ def create_app(config: Config) -> FastAPI:
 
     @app.post("/ask")
     def ask(body: AskIn, user: sqlite3.Row = Depends(current_user), conn: sqlite3.Connection = Depends(get_db)) -> dict:
-        answer = assistant.ask(body.question.strip(), body.lang)
-        # The question's text is kept only with the person's research consent; health questions are personal.
+        if user["status"] != "approved":
+            raise HTTPException(403, "pending")
+        try:
+            answer = assistant.ask(body.question.strip(), body.lang)
+        except Busy:
+            raise HTTPException(503, "busy") from None
+        # Health questions are personal. Without research consent the studio keeps only that a question was asked
+        # (language, path, time taken): not the words, not the topic, not who asked.
+        consent = bool(user["research_consent"])
         conn.execute(
             "INSERT INTO questions (user_id, lang, question, sources, mode, latency_s, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (user["id"], body.lang, body.question if user["research_consent"] else None, json.dumps(answer.sources),
-             answer.mode, answer.latency_s, db.iso(db.now())),
+            (user["id"] if consent else None, body.lang, body.question if consent else None,
+             json.dumps(answer.sources if consent else []), answer.mode, answer.latency_s, db.iso(db.now())),
         )
         conn.commit()
         return {"answer": answer.text, "sources": answer.sources, "mode": answer.mode, "latency_s": round(answer.latency_s, 2)}
@@ -443,16 +486,20 @@ def create_app(config: Config) -> FastAPI:
 
     @app.put("/teacher/settings")
     def update_settings(body: SettingsIn, _: sqlite3.Row = Depends(teacher), conn: sqlite3.Connection = Depends(get_db)) -> dict:
+        # Check both before saving either, so a bad link never leaves the other half-saved.
+        updates = {}
         if body.group_link is not None:
-            link = body.group_link.strip()
-            if not studio_mod.GROUP_LINK.match(link):
-                raise HTTPException(400, "bad_group_link")
-            db.set_setting(conn, "group_link", link)
+            try:
+                updates["group_link"] = studio_mod.clean_group_link(body.group_link)
+            except ValueError:
+                raise HTTPException(400, "bad_group_link") from None
         if body.default_meet_link is not None:
             try:
-                db.set_setting(conn, "default_meet_link", studio_mod.clean_meet_link(body.default_meet_link))
+                updates["default_meet_link"] = studio_mod.clean_meet_link(body.default_meet_link)
             except ValueError:
                 raise HTTPException(400, "bad_meet_link") from None
+        for key, value in updates.items():
+            db.set_setting(conn, key, value)
         return {key: db.get_setting(conn, key) for key in ("group_link", "group_code", "default_meet_link")}
 
     @app.post("/teacher/group_code")
@@ -462,7 +509,7 @@ def create_app(config: Config) -> FastAPI:
 
     @app.get("/teacher/invite")
     def invite(lang: Lang = "en", _: sqlite3.Row = Depends(teacher), conn: sqlite3.Connection = Depends(get_db)) -> dict:
-        text = whatsapp.invite_message(studio, db.get_setting(conn, "group_code"), lang)
+        text = whatsapp.invite_message(studio, db.get_setting(conn, "group_code"), lang, config.public_url)
         return {"text": text, "url": whatsapp.share_url(text), "group_link": db.get_setting(conn, "group_link")}
 
     @app.get("/teacher/students")

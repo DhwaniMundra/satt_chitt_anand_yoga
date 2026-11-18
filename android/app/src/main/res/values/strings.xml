@@ -33,6 +33,11 @@
     <string name="err_network">Cannot reach the studio server. Check your internet and try again.</string>
     <string name="err_short_password">The password needs at least 6 letters.</string>
     <string name="err_generic">Something went wrong. Please try again.</string>
+    <string name="err_pending">Ask opens once Ramit ji approves you. Have the group code? Enter it on the Today screen.</string>
+    <string name="err_busy">Many questions are waiting. Please try again in a minute.</string>
+    <string name="err_too_many_attempts">Too many tries. Please wait 15 minutes and try again.</string>
+    <string name="err_teacher_exists">This studio already has its teacher. Sign up as a student.</string>
+    <string name="err_checkin_closed">Check-in opens an hour before class.</string>
 
     <!-- Tabs -->
     <string name="tab_today">Today</string>

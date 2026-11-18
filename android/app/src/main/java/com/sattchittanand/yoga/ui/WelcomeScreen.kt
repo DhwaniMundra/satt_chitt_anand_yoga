@@ -45,6 +45,25 @@ import androidx.compose.ui.unit.dp
 import com.sattchittanand.yoga.AppViewModel
 import com.sattchittanand.yoga.R
 
+/** The studio server's address, folded away under a small link: needed on a real phone before signing in. */
+@Composable
+fun ServerAddress(vm: AppViewModel) {
+    var open by rememberSaveable { mutableStateOf(false) }
+    var address by rememberSaveable { mutableStateOf(vm.prefs.server) }
+    TextButton(onClick = { open = !open }) {
+        Text("${stringResource(R.string.server)}: ${vm.prefs.server}", style = MaterialTheme.typography.labelMedium, color = Palette.muted)
+    }
+    if (open) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedTextField(
+                address, { address = it }, singleLine = true, modifier = Modifier.weight(1f),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
+            )
+            OutlinedButton(onClick = { vm.saveServer(address); open = false }) { Text(stringResource(R.string.save)) }
+        }
+    }
+}
+
 val LANGUAGES = listOf("en" to "English", "hi" to "हिन्दी", "mr" to "मराठी")
 
 @Composable
@@ -79,6 +98,7 @@ fun WelcomeScreen(vm: AppViewModel, onLanguage: (String) -> Unit) {
         LanguageChips(vm.prefs.lang, onLanguage)
         Spacer(Modifier.height(12.dp))
 
+        vm.error?.takeIf { role == null }?.let { Text(errorText(it), color = MaterialTheme.colorScheme.error, textAlign = TextAlign.Center) }
         val chosen = role
         if (chosen == null) {
             Button(onClick = { role = "student" }, modifier = Modifier.fillMaxWidth().height(60.dp)) {
@@ -91,6 +111,7 @@ fun WelcomeScreen(vm: AppViewModel, onLanguage: (String) -> Unit) {
                 Spacer(Modifier.padding(4.dp))
                 Text(stringResource(R.string.i_am_teacher))
             }
+            ServerAddress(vm)
             return@Column
         }
 

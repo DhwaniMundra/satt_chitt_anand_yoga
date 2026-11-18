@@ -30,6 +30,11 @@
     <string name="err_network">स्टूडियो सर्वर से जुड़ नहीं पा रहे। इंटरनेट जाँचें और फिर कोशिश करें।</string>
     <string name="err_short_password">पासवर्ड में कम से कम 6 अक्षर होने चाहिए।</string>
     <string name="err_generic">कुछ गड़बड़ हुई। कृपया फिर कोशिश करें।</string>
+    <string name="err_pending">रमित जी की मंज़ूरी के बाद आप प्रश्न पूछ सकेंगे। ग्रुप कोड है? आज वाली स्क्रीन पर डालें।</string>
+    <string name="err_busy">कई प्रश्न कतार में हैं। कृपया एक मिनट बाद फिर कोशिश करें।</string>
+    <string name="err_too_many_attempts">बहुत ज़्यादा कोशिशें हुईं। कृपया 15 मिनट बाद फिर कोशिश करें।</string>
+    <string name="err_teacher_exists">इस स्टूडियो के शिक्षक पहले से हैं। विद्यार्थी के रूप में साइन अप करें।</string>
+    <string name="err_checkin_closed">चेक-इन कक्षा से एक घंटा पहले खुलता है।</string>
 
     <string name="tab_today">आज</string>
     <string name="tab_week">सप्ताह</string>

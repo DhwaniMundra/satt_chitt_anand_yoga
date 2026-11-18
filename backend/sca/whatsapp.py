@@ -37,8 +37,16 @@ def class_message(studio: dict, class_name: str, starts_at: datetime, minutes: i
     )
 
 
-def invite_message(studio: dict, code: str, lang: str) -> str:
-    return pick(TEXT["invite"], lang).format(studio=pick(studio["name"], lang), code=code)
+SERVER_LINE = {
+    "en": "In the app, under Server address, enter: {url}",
+    "hi": "ऐप में सर्वर पता डालें: {url}",
+    "mr": "ॲपमध्ये सर्व्हर पत्ता टाका: {url}",
+}
+
+
+def invite_message(studio: dict, code: str, lang: str, server_url: str | None = None) -> str:
+    text = pick(TEXT["invite"], lang).format(studio=pick(studio["name"], lang), code=code)
+    return text if server_url is None else f"{text}\n{pick(SERVER_LINE, lang).format(url=server_url)}"
 
 
 def share_url(text: str) -> str:

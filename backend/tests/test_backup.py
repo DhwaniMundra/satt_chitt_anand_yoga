@@ -22,7 +22,10 @@ class FakeGitHub:
         if request.get_method() == "GET":
             if self.content is None:
                 raise urllib.error.HTTPError(request.full_url, 404, "Not Found", {}, None)
-            return io.BytesIO(json.dumps({"content": self.content, "sha": str(self.sha)}).encode())
+            if request.headers.get("Accept") == "application/vnd.github.raw+json":
+                return io.BytesIO(base64.b64decode(self.content))  # the file itself, at any size
+            # Like GitHub's "object" reply for a file over 1 MB: the sha, but no content.
+            return io.BytesIO(json.dumps({"content": "", "encoding": "none", "sha": str(self.sha)}).encode())
         body = json.loads(request.data)
         assert body.get("sha") == (str(self.sha) if self.content else None)
         self.content, self.sha = body["content"], self.sha + 1
@@ -50,3 +53,10 @@ def test_push_then_restore(tmp_path, monkeypatch):
     db.import_rows(target, backup.pull())
     assert db.get_setting(target, "group_code") == "ABC123" and not db.is_empty(target)
     assert all(url.endswith("/repos/someone/private-repo/contents/backup/sca.json") and auth == "Bearer tok" for _, url, auth in fake.calls)
+
+
+def test_restore_over_settings_made_at_start_up(tmp_path):
+    target = db.connect(tmp_path / "c.sqlite3")
+    db.set_setting(target, "group_code", "NEW111")  # made by the first start, before any user existed
+    db.import_rows(target, {"settings": [{"key": "group_code", "value": "OLD222"}]})
+    assert db.get_setting(target, "group_code") == "OLD222"

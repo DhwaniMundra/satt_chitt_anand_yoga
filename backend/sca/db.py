@@ -46,7 +46,7 @@ CREATE TABLE IF NOT EXISTS feedback (
 );
 CREATE TABLE IF NOT EXISTS questions (
   id INTEGER PRIMARY KEY,
-  user_id INTEGER NOT NULL REFERENCES users(id),
+  user_id INTEGER REFERENCES users(id),  -- NULL unless the person gave research consent
   lang TEXT NOT NULL,
   question TEXT,
   sources TEXT NOT NULL,
@@ -103,12 +103,13 @@ def export_rows(conn: sqlite3.Connection) -> dict[str, list[dict]]:
 
 
 def import_rows(conn: sqlite3.Connection, data: dict[str, list[dict]]) -> None:
-    """Loads rows written by `export_rows` into an empty database."""
+    """Loads rows written by `export_rows`. A row already present (such as a setting made at start-up) is
+    replaced by the backed-up one."""
     for table in BACKUP_TABLES:
         for row in data.get(table, []):
             columns = ", ".join(row)
             marks = ", ".join("?" for _ in row)
-            conn.execute(f"INSERT INTO {table} ({columns}) VALUES ({marks})", tuple(row.values()))
+            conn.execute(f"INSERT OR REPLACE INTO {table} ({columns}) VALUES ({marks})", tuple(row.values()))
     conn.commit()
 
 
