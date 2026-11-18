@@ -9,8 +9,8 @@ An Android app for an online yoga studio, its teacher and its students.
 
 ## The brief
 
-A teacher runs a live class every morning on Google Meet, and the class keeps in touch in one WhatsApp group. The app
-had to fit around that, not replace it:
+A teacher runs a live class every morning on Google Meet for a class of about ten students, who keep in touch in one
+WhatsApp group. The app had to fit around that, not replace it:
 
 - the day's class and its link one tap away, without scrolling back through the group;
 - the teacher shares the link once, in the group where the class already talks;
@@ -76,18 +76,8 @@ scripts/demo.sh two     # the server, two phones, and the app; scripts/demo.sh s
 Password `demo123`: teacher `9800000001`, students `9800000002` to `9800000006`. Setup, tests, tours and the video:
 [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md).
 
-## Not done yet
-
-- **Language review.** All Hindi and Marathi text, including the Marathi notes the assistant copies, is an AI-drafted
-  translation waiting for a native speaker.
-- **Real students.** Everything shown uses demo data. Next: a week of classes with a few students who agree to try it,
-  and what they say.
-- **Beyond the laptop.** It runs on one laptop over the home Wi-Fi; students elsewhere would need it hosted.
-- **The studio.** Its name, schedule and teacher's bio come from its public site, and are to be confirmed with it.
-
 ## Credits
 
 Designed and directed by **Dhwani Mundra**: the brief, the product decisions, and every round of critique and changes.
 The code, tours and evaluations were written with **Claude Code**, an AI coding agent, working from her direction.
-The Android toolchain and the on-device Gemma setup were reused from an earlier project. Studio
-content: Satt Chitt Anand Yoga Classes, Ramit M Tippannavar.
+Studio content: Satt Chitt Anand Yoga Classes, Ramit M Tippannavar.

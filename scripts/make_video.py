@@ -1,7 +1,7 @@
 """Renders docs/media/video/satt_chitt_anand_tour.mp4: a narrated tour of the app, about three minutes, to share with
 people and ask for their feedback.
 
-Made the way an earlier project's video script makes its video: Kokoro-82M speaks each line of the script on this
+How it is made: Kokoro-82M speaks each line of the script on this
 laptop and reports when each word starts; every scene lasts as long as its lines; frames are drawn with Pillow and
 streamed to ffmpeg; a quiet synthesised pad sits under the voice (nothing to license); the mix is brought to -16 LUFS
 with one fixed gain from a measuring pass. Captions follow the voice word by word, so the video also works muted, as
