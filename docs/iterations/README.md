@@ -16,8 +16,9 @@ flowchart LR
 1. **Build** from the brief, or from the last round's findings (including outside reviews).
 2. **Tour.** `scripts/capture_tour.py <version>` drives the app on the emulator through the same steps every
    time (sign up and log in, join a class, check in, breathe, ask in English and Hindi, then the teacher's screens)
-   and saves screenshots and two screen recordings to `docs/media/<version>/`. The same steps each time make
-   versions comparable side by side.
+   and saves screenshots and two screen recordings locally (`.local/visualization/`). `scripts/make_figures.py` turns
+   each tour into one contact sheet in [`docs/media/iterations/`](../media/iterations/), so versions can be compared
+   side by side.
 3. **Evaluate the assistant.** `backend/scripts/eval_assistant.py` asks a fixed set of questions in English,
    Hindi and Marathi, runs coarse automatic checks, and writes every answer to `docs/evals/`. The checks only
    catch obvious failures; a person reads every answer.
@@ -33,15 +34,22 @@ Testing with real students starts only with their consent (the app asks for it a
 
 | Version | What changed | Evidence |
 |---|---|---|
-| [v0.1](v0.1.md) | First build from the brief | `docs/media/v0.1/` |
-| [v0.2](v0.2.md) | Fixes from the first tour: log-in switch, Hindi retrieval, sources, time zones | `docs/media/v0.2/`, `docs/evals/assistant_v0.2.md`, `docs/media/figures/` |
-| [v0.3](v0.3.md) | Assistant: Marathi answers checked by reading them; a first prompt fix | `docs/evals/assistant_v0.3.md` |
-| [v0.4](v0.4.md) | An independent code review (15 fixes); Marathi answers from Marathi notes; two phones against one server | `docs/evals/assistant_v0.4.md`, `docs/evals/marathi_experiments.md`, `docs/media/v0.4/`, `docs/media/v0.4-two-phones/` |
+| [v0.1](v0.1.md) | First build from the brief | [screens](../media/iterations/v0.1.jpg) |
+| [v0.2](v0.2.md) | Fixes from the first tour: log-in switch, Hindi retrieval, sources, time zones | [screens](../media/iterations/v0.2.jpg), [`assistant_v0.2`](../evals/assistant_v0.2.md), [before and after](../media/figures/) |
+| [v0.3](v0.3.md) | Assistant: Marathi answers checked by reading them; a first prompt fix | [`assistant_v0.3`](../evals/assistant_v0.3.md) |
+| [v0.4](v0.4.md) | An independent code review (15 fixes); Marathi answers from Marathi notes; two phones against one server; the narrated video | [screens](../media/iterations/v0.4.jpg), [two phones](../media/iterations/v0.4-two-phones.jpg), [`assistant_v0.4`](../evals/assistant_v0.4.md), [`marathi_experiments`](../evals/marathi_experiments.md), [`two_phones_v0.4`](../evals/two_phones_v0.4.md) |
+
+## About the git history
+
+The first build (v0.1 to v0.3) was written in one sitting on 18 Nov 2026, between about 12:00 and 12:40 Pacific time,
+and committed afterwards as one commit per feature, in the order the features were built; their times are
+approximate, within that window. Every later commit is as it was made.
 
 ## Who did what
 
-The brief (`instructions.md`, kept private) came from Dhwani Mundra. The code, tours and evaluations in v0.1–v0.4
-were produced with Claude Code, an AI coding agent. In v0.4 two further agents
-worked from written briefs (a code review, Marathi experiments); their reports were checked before anything was
-applied. Product decisions are recorded
+Dhwani Mundra wrote the brief (`instructions.md`, kept private) and directed every round in a Claude Code session:
+what to build, what to fix, how the app and the repository should be organised, and what to leave out. Claude Code,
+an AI coding agent, wrote the code and ran the tours and evaluations. In v0.4 two further agents worked from written
+briefs (a code review, Marathi experiments); their reports were checked before anything was applied. The Android
+toolchain and the on-device Gemma setup were reused from an earlier project. Product decisions are recorded
 in [`../decisions.md`](../decisions.md).

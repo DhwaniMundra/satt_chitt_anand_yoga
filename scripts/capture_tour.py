@@ -1,5 +1,6 @@
 """Walks through the app on the emulator and saves the same screenshots and two screen recordings every time,
-so each iteration can be compared with the last: docs/media/<version>/.
+so each iteration can be compared with the last: .local/visualization/tours/<version>/ (gitignored;
+scripts/make_figures.py turns the best of it into the committed GIFs and contact sheets in docs/media/).
 
 Needs: `source scripts/env.sh`, the emulator running (scripts/run_emulator.sh), and the backend running on the
 synthetic demo database (backend/scripts/seed_demo.py), with Gemma loaded.
@@ -20,6 +21,7 @@ from PIL import Image
 import phone as p
 
 ROOT = Path(__file__).resolve().parents[1]
+LOCAL = ROOT / ".local" / "visualization"  # gitignored: recordings on top, raw screenshots in tours/
 APK = ROOT / "android" / "app" / "build" / "outputs" / "apk" / "debug" / "app-debug.apk"
 STUDENT = ("9800000002", "demo123")
 TEACHER = ("9800000001", "demo123")
@@ -34,7 +36,7 @@ def class_soon(db_path: Path) -> None:
 
 
 def main(version: str, db_path: Path) -> None:
-    out = ROOT / "docs" / "media" / version
+    out = LOCAL / "tours" / version
     out.mkdir(parents=True, exist_ok=True)
 
     def shot(name: str) -> None:
@@ -58,7 +60,7 @@ def main(version: str, db_path: Path) -> None:
     p.launch(clear=True)
 
     # ---- student ----
-    video = p.Recording(out / "student_tour.mp4")
+    video = p.Recording(LOCAL / f"student_tour_{version}.mp4")
     shot("01_welcome")
     p.tap("I'm a student")
     shot("02_signup")
@@ -105,7 +107,7 @@ def main(version: str, db_path: Path) -> None:
     time.sleep(1.5)
 
     # ---- teacher ----
-    video = p.Recording(out / "teacher_tour.mp4")
+    video = p.Recording(LOCAL / f"teacher_tour_{version}.mp4")
     p.tap("I'm the teacher")
     log_in(*TEACHER)
     shot("12_teacher_classes")
@@ -128,21 +130,14 @@ def main(version: str, db_path: Path) -> None:
     video.stop()
 
     for name in ("student_tour", "teacher_tour"):
-        make_gif(out / f"{name}.mp4", out / f"{name}.gif")
-        make_small(out / f"{name}.mp4", out / f"{name}_small.mp4")
+        make_small(LOCAL / f"{name}_{version}.mp4", out / f"{name}_small.mp4")
     print(f"saved to {out}")
 
 
 def make_small(video: Path, small: Path) -> None:
-    """A 540 px copy for the repository (the full recording stays local, see .gitignore)."""
+    """A 540 px copy, the source for the GIFs and the narrated video."""
     subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(video), "-vf", "scale=540:-2,fps=24", "-c:v", "libx264",
                     "-crf", "30", "-preset", "slow", "-an", "-movflags", "+faststart", str(small)], check=True)
-
-
-def make_gif(video: Path, gif: Path) -> None:
-    """A small looping GIF for the README: 270 px wide, 8 frames a second, 2x speed."""
-    palette = "fps=8,setpts=0.5*PTS,scale=270:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=96[p];[b][p]paletteuse=dither=bayer"
-    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(video), "-vf", palette, str(gif)], check=True)
 
 
 if __name__ == "__main__":
