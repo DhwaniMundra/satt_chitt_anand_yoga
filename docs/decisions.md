@@ -16,6 +16,8 @@ say so in the iteration log.
 | 9 | What does the studio keep of the questions people ask? | Everything, or nothing, or **only with consent** | **Only with consent** | Health questions are personal. Without the research consent switch, only the time, language and which notes were used are stored, never the words |
 | 10 | Which demo data appears in screenshots and videos? | Real students, or **synthetic data** | **Synthetic**, labelled on every image | No real person's data in a public repository. The Insights numbers in the demo are invented and are never results |
 | 11 | App technology? | Flutter, React Native, **Kotlin with Jetpack Compose** | **Kotlin + Compose** | Native Android is what LiteRT-LM supports for running Gemma on the phone later, and it needs no extra runtime |
+| 12 | How are Marathi answers made? | (a) Gemma answers in Marathi from the English notes. (b) Gemma answers in English, then translates. (c) **A Marathi version of the notes, which Gemma copies** | **(c)** | Measured on 19 questions, read by hand: (a) changed facts in 5 answers, (b) the translation step changed facts too, (c) changed none. The cost: the Marathi notes must be checked by a Marathi speaker and kept in step with the English ([v0.4](iterations/v0.4.md)) |
+| 13 | Where does the app run for now? | (a) Hosted on the internet. (b) The laptop on the home Wi-Fi. (c) **Demos on the laptop** | **(c)**, with (b) ready | The aim is a working app to show, not a rollout. `scripts/demo.sh` runs the server and one or two emulators. A phone on the same Wi-Fi works with an APK built with `-PscaServer=http://<laptop IP>:8000` |
 
 ## Open questions
 
@@ -23,5 +25,5 @@ say so in the iteration log.
   a small cloud machine, or a tunnel (for example Cloudflare Tunnel) in front of the laptop. Then the app's
   `usesCleartextTraffic` flag goes.
 - **On-device Gemma** for students with capable phones, so questions never leave the phone.
-- **Marathi answers** from Gemma 4 E4B are not yet reliable enough (see `docs/evals/`).
+- **The Marathi notes** (and all Hindi and Marathi text) need reading by native speakers.
 - **Consent from the studio** to use its name, schedule and teacher's bio in a public repository.

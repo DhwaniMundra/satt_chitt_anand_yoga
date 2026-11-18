@@ -8,13 +8,19 @@ the studio can read and correct.
 ![The app: the teacher's classes, a student's Today screen, and the assistant](docs/media/figures/hero.png)
 
 <p>
-  <img src="docs/media/v0.2/student_tour.gif" width="240" alt="Student tour">
+  <img src="docs/media/v0.4/student_tour.gif" width="240" alt="Student tour">
   &nbsp;
-  <img src="docs/media/v0.2/teacher_tour.gif" width="240" alt="Teacher tour">
+  <img src="docs/media/v0.4/teacher_tour.gif" width="240" alt="Teacher tour">
 </p>
 
-*Screens and recordings use synthetic demo data. Full recordings:
-[student](docs/media/v0.2/student_tour_small.mp4), [teacher](docs/media/v0.2/teacher_tour_small.mp4).*
+**Two phones, one server:** the teacher (left) posts the class link; a student (right) joins, checks in before and
+after class, and asks the assistant; then a new student waits for approval until the teacher approves.
+
+![Teacher and student phones side by side](docs/media/v0.4-two-phones/two_phones.gif)
+
+*Screens and recordings use synthetic demo data and test people. Full recordings:
+[student](docs/media/v0.4/student_tour_small.mp4), [teacher](docs/media/v0.4/teacher_tour_small.mp4),
+[two phones](docs/media/v0.4-two-phones/two_phones.mp4).*
 
 ## What it does
 
@@ -67,15 +73,18 @@ flowchart LR
   break WhatsApp's terms and can get the teacher's number banned. The teacher shares from the app instead, and the
   group code stands in for group membership. All decisions, with the options considered:
   [`docs/decisions.md`](docs/decisions.md).
-- **The assistant's knowledge** is one file, [`backend/knowledge/yoga_health.md`](backend/knowledge/yoga_health.md):
+- **The assistant's knowledge** is one file (with a Marathi version, see below), [`backend/knowledge/yoga_health.md`](backend/knowledge/yoga_health.md):
   about 25 short sections, each with keywords in English, Hindi and Marathi. The best-matching sections go into
   Gemma's instructions with rules: answer only from the notes, never diagnose or change medicines, send people to
-  their doctor and the teacher, and reply in the student's language.
+  their doctor and the teacher, and reply in the student's language. For Marathi, Gemma 4 E4B translating on the fly
+  changed facts, so Marathi questions get the matching sections of
+  [`yoga_health.mr.md`](backend/knowledge/yoga_health.mr.md), which it copies
+  ([how that was decided](docs/iterations/v0.4.md#2-marathi-answers)).
 
 ## How it was iterated
 
 Each version is built, toured on the emulator by a script, evaluated, and critiqued screen by screen and answer by
-answer. The findings drive the next version. The log, with before-and-after images:
+answer; v0.4 added an independent code review. The findings drive the next version. The log, with before-and-after images:
 [`docs/iterations/`](docs/iterations/README.md). Assistant evaluations, with every answer in full:
 [`docs/evals/`](docs/evals/).
 
@@ -88,6 +97,17 @@ answer. The findings drive the next version. The log, with before-and-after imag
 Linux with an NVIDIA GPU. The toolchain (JDK 21, Android SDK, emulator image) and the model live in `tools/` and
 `models/`, which git ignores.
 
+**A demo, in one command**
+```bash
+scripts/demo.sh          # server with Gemma on demo data, an emulator, the app open
+scripts/demo.sh two      # a second phone: teacher on one, student on the other
+scripts/demo.sh stop
+```
+Logins, password `demo123`: teacher `9800000001`; students `9800000002`–`9800000006`; `9800000007` is waiting for
+approval.
+
+**Step by step**
+
 ```bash
 source scripts/env.sh                  # points java, adb and the emulator at tools/
 scripts/run_backend.sh                 # API on :8000, Gemma loads in the background (SCA_GEMMA=off to skip)
@@ -97,15 +117,17 @@ adb install -r android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
 The server prints the **teacher sign-up code** when it starts (or set `SCA_TEACHER_CODE`). The emulator reaches the
-laptop at `http://10.0.2.2:8000`; a phone on the same Wi-Fi uses the laptop's address, set under **Me → Server
-address**.
+laptop at `http://10.0.2.2:8000`. A phone on the same Wi-Fi needs the laptop's address: build with
+`scripts/build_app.sh -PscaServer=http://<laptop IP>:8000`, or change **Server address** on the first screen.
 
 **Demo data and media**
 ```bash
 cd backend && .venv/bin/python -m scripts.seed_demo ../data/demo.sqlite3 && cd ..
 SCA_DB=$PWD/data/demo.sqlite3 scripts/run_backend.sh
-python3 scripts/capture_tour.py v0.3     # screenshots + recordings into docs/media/v0.3/
+python3 scripts/capture_tour.py v0.5 data/demo.sqlite3   # screenshots + recordings into docs/media/v0.5/
 python3 scripts/make_figures.py
+# two phones (second emulator: SCA_AVD=sca_phone_2 SCA_PORT=5556 scripts/run_emulator.sh), fresh database:
+python3 scripts/two_phone_test.py v0.5-two-phones http://10.0.2.2:8000 data/two_phones.sqlite3 <teacher code>
 ```
 
 **Tests and evaluation**
@@ -139,14 +161,14 @@ restores from the last backup.
 | `backend/knowledge/` | The assistant's notes |
 | `backend/content/studio.json` | Classes, weekly rhythm, teacher, in three languages |
 | `backend/evals/`, `backend/scripts/` | Assistant question set and evaluation; demo data |
-| `scripts/` | Environment, build, emulator, the capture tour, figures |
+| `scripts/` | Environment, build, emulator, `demo.sh`, the capture tour, the two-phone test, figures |
 | `docs/` | Decisions, iteration log, evaluations, media |
 
 ## Status and limits
 
-- **A prototype.** Not yet used by real students. Translations are drafts awaiting a native speaker's reading.
-- **Marathi answers** from Gemma 4 E4B still contain errors; see [`docs/iterations/v0.3.md`](docs/iterations/v0.3.md).
-- The server runs on a laptop over plain HTTP: fine on the emulator and home Wi-Fi, not yet for students elsewhere.
+- **A prototype for demos.** Not used by real students. All Hindi and Marathi text, including the Marathi notes the
+  assistant copies, is an AI-drafted translation awaiting a native speaker's reading.
+- The server runs on a laptop over plain HTTP: fine on the emulator and home Wi-Fi, not for students elsewhere.
 - Studio name, schedule and teacher bio come from the studio's public site; confirm with the studio before
   publishing.
 - The assistant gives general guidance from the studio's notes. It is not medical advice.
@@ -154,4 +176,4 @@ restores from the last backup.
 ## Credits
 
 Brief and product direction: Dhwani Mundra. Engineering: Claude Code (an AI coding agent),
-which wrote most of the code in v0.1–v0.3. Studio content: Satt Chitt Anand Yoga Classes, Ramit M Tippannavar.
+which wrote most of the code in v0.1–v0.4. Studio content: Satt Chitt Anand Yoga Classes, Ramit M Tippannavar.

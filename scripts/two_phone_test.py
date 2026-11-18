@@ -1,12 +1,16 @@
-"""Two phones against one server over the laptop's Wi-Fi address, as a real pilot would run: a teacher on
-emulator-5554 and students on emulator-5556. Checks the loop across devices and saves a screenshot at each step to
+"""Two phones, one server: a teacher on emulator-5554 and students on emulator-5556. Checks the loop across
+devices, saves a screenshot at each step, and records both screens into one side-by-side video, all in
 docs/media/<version>/.
 
-Needs: both emulators running, the APK built with -PscaServer=<url>, and the backend running on a fresh database
-at that address with SCA_TEACHER_CODE set. Uses test people only.
+Needs: both emulators running (scripts/run_emulator.sh, then SCA_AVD=sca_phone_2 SCA_PORT=5556 ...), the APK built,
+and the backend running on a fresh database with SCA_TEACHER_CODE set. `server` is the address the app shows:
+http://10.0.2.2:8000 for emulators, or the laptop's Wi-Fi address for an APK built with -PscaServer.
+Uses test people only.
 
-Usage: python3 scripts/two_phone_test.py v0.3-wifi http://10.0.0.159:8000 data/wifi_test.sqlite3 PILOT1
+Usage: python3 scripts/two_phone_test.py v0.3-two-phones http://10.0.2.2:8000 data/two_phones.sqlite3 PILOT1
 """
+
+import subprocess
 
 import os
 import sqlite3
@@ -66,6 +70,7 @@ def main(version: str, server: str, db_path: Path, teacher_code: str) -> None:
 
     def sign_up(name: str, number: str, code: str, teacher: bool = False) -> None:
         p.tap("I'm the teacher" if teacher else "I'm a student")
+        p.tap("Create account", exact=True)  # the switch above the form; the teacher's form opens on "Log in"
         p.type_into("Your name", name)
         p.type_into("WhatsApp number", number)
         p.type_into("Password", "pilot123")
@@ -81,12 +86,28 @@ def main(version: str, server: str, db_path: Path, teacher_code: str) -> None:
         p.demo_mode()
         p.launch(clear=True)
 
-    # 1. Teacher signs up and sets the class link; the app already points at the laptop's Wi-Fi address.
+    recordings: list[tuple[str, p.Recording]] = []
+
+    def record(part: str) -> None:
+        """Starts recording both phones at once (screenrecord stops by itself after 3 minutes, hence parts)."""
+        for serial, who in ((TEACHER, "teacher"), (STUDENT, "student")):
+            on(serial)
+            recordings.append((serial, p.Recording(out / f"{part}_{who}.mp4", f"/sdcard/{part}.mp4")))
+
+    def stop_recording() -> None:
+        while recordings:
+            serial, rec = recordings.pop(0)
+            on(serial)
+            rec.stop()
+
+    record("part1")
+
+    # 1. Teacher signs up and sets the class link; the app already shows the server address it will use.
     on(TEACHER)
-    check("teacher phone shows the Wi-Fi server address before sign-in", server)
+    check("teacher phone shows the server address before sign-in", server)
     shot("01_teacher_welcome_server")
     sign_up("Ramit (test)", "9800000101", teacher_code, teacher=True)
-    check("teacher signed up over Wi-Fi", "Your classes")
+    check("teacher signed up", "Your classes")
     # A class in progress (started 47 min ago, 8 min left), so check-ins are open now.
     conn = sqlite3.connect(db_path)
     start = (datetime.now(UTC) - timedelta(minutes=47)).isoformat(timespec="seconds").replace("+00:00", "Z")
@@ -121,7 +142,7 @@ def main(version: str, server: str, db_path: Path, teacher_code: str) -> None:
     time.sleep(2)
     p.tap("Ask", exact=True)
     p.tap("What should I eat before class?")
-    check("Gemma answers over Wi-Fi", "From the notes", timeout=120)
+    check("Gemma answers the student", "From the notes", timeout=120)
     shot("05_student_ask")
 
     # 3. Teacher sees the check-in from the other phone.
@@ -130,6 +151,9 @@ def main(version: str, server: str, db_path: Path, teacher_code: str) -> None:
     time.sleep(2)
     check("teacher sees the student's before and after", "1 joined")
     shot("06_teacher_insights")
+
+    stop_recording()
+    record("part2")
 
     # 4. Student B signs up without the code: pending, no link, until the teacher approves.
     on(STUDENT)
@@ -157,11 +181,14 @@ def main(version: str, server: str, db_path: Path, teacher_code: str) -> None:
     check_gone("approved student is no longer waiting, after returning to the app", "Waiting for approval")
     shot("09_student_approved")
 
+    stop_recording()
+    side_by_side(out)
+
     passed = sum(ok for _, ok in results)
     report = out / "results.md"
     report.write_text(
-        f"# Two-phone test over Wi-Fi: {version}\n\n"
-        f"- **Server:** {server} (the laptop's Wi-Fi address; both emulators reach it as phones on the network would)\n"
+        f"# Two-phone test: {version}\n\n"
+        f"- **Server:** {server} (the laptop as seen from the emulators; an APK built with -PscaServer uses the laptop's Wi-Fi address instead)\n"
         f"- **Phones:** {TEACHER} (teacher), {STUDENT} (students), Android 16 emulators\n"
         f"- **Passed:** {passed}/{len(results)}\n\n"
         + "".join(f"- {'✅' if ok else '❌'} {what}\n" for what, ok in results)
@@ -169,6 +196,28 @@ def main(version: str, server: str, db_path: Path, teacher_code: str) -> None:
         encoding="utf-8",
     )
     print(f"{passed}/{len(results)} passed; {report}")
+
+
+def side_by_side(out: Path) -> None:
+    """Teacher on the left, student on the right, both parts in sequence: two_phones.mp4 and a GIF."""
+    parts = []
+    for part in ("part1", "part2"):
+        joined = out / f"{part}.mp4"
+        subprocess.run(
+            ["ffmpeg", "-y", "-loglevel", "error", "-i", str(out / f"{part}_teacher.mp4"), "-i", str(out / f"{part}_student.mp4"),
+             "-filter_complex", "[0:v]scale=540:-2,fps=24[a];[1:v]scale=540:-2,fps=24[b];[a][b]hstack=inputs=2:shortest=1[v]",
+             "-map", "[v]", "-c:v", "libx264", "-crf", "30", "-preset", "slow", "-an", str(joined)],
+            check=True,
+        )
+        parts.append(joined)
+    listing = out / "parts.txt"
+    listing.write_text("".join(f"file '{p.name}'\n" for p in parts))
+    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", str(listing), "-c", "copy",
+                    "-movflags", "+faststart", str(out / "two_phones.mp4")], check=True)
+    palette = "fps=6,setpts=0.5*PTS,scale=480:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=96[p];[b][p]paletteuse=dither=bayer"
+    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(out / "two_phones.mp4"), "-vf", palette, str(out / "two_phones.gif")], check=True)
+    for leftover in [listing, *parts, *out.glob("part*_*.mp4")]:
+        leftover.unlink()
 
 
 if __name__ == "__main__":
