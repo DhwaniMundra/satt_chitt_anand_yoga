@@ -61,7 +61,7 @@ MARATHI = "[Marathi](/məɹˈɑti/)"
 CLIPS = {
     "breathe": (MEDIA / "v0.4" / "student_tour_small.mp4", 43.4, 10.2, 1.0),
     "ask": (MEDIA / "v0.4" / "student_tour_small.mp4", 57.4, 8.6, 1.0),
-    "two": (LOCAL / "two_phones_v0.4.mp4", 44.0, 88.0, 5.0),
+    "two": (LOCAL / "two_phones_v0.4.mp4", 44.0, 94.0, 5.0),  # to the teacher's Insights showing the check-in
 }
 
 
@@ -144,7 +144,7 @@ SCENES = (
         "Here it is on two phones at once.",
         "The teacher posts the link. The student joins, checks in before and after class, and asks a question.",
         "And the teacher sees the check-in arrive.",
-    ), (Shot(0, clip="two"),), kind="wide", least=17.8),
+    ), (Shot(0, clip="two"),), kind="wide", least=19.0),
     Scene("built", "How it's built", "How it's built", "Under the hood", (
         "Under the hood: an Android app, and a small server on the studio's laptop, where Gemma runs on the graphics card.",
         "Accounts and check-ins live on that laptop, with an optional private backup. "
@@ -594,7 +594,9 @@ def extract_clips() -> None:
         height = PHONE_H - 2 * BEZEL if name != "two" else PHONE_H - 40
         subprocess.run(
             ["ffmpeg", "-loglevel", "error", "-ss", str(start), "-t", str(seconds), "-i", str(source),
-             "-vf", f"setpts=PTS/{speed},fps={FPS},scale=-2:{height}:flags=lanczos", str(folder / "%05d.png")],
+             # Sampling at FPS / speed plays back `speed` times faster (setpts does not work on the two-phone
+             # recording, whose timestamps come from joining two recordings).
+             "-vf", f"fps={FPS / speed},scale=-2:{height}:flags=lanczos", str(folder / "%05d.png")],
             check=True,
         )
 

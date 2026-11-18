@@ -103,25 +103,25 @@ The teacher posts the link. The student joins, checks in before and after class,
 And the teacher sees the check-in arrive.
 
 27
-00:02:36,550 --> 00:02:43,775
+00:02:37,750 --> 00:02:44,975
 Under the hood: an Android app, and a small server on the studio's laptop, where Gemma runs on the graphics card.
 
 28
-00:02:43,975 --> 00:02:51,575
+00:02:45,175 --> 00:02:52,775
 Accounts and check-ins live on that laptop, with an optional private backup. Questions are kept only if the student agrees.
 
 29
-00:02:52,675 --> 00:03:01,800
+00:02:53,875 --> 00:03:03,000
 Sixty-nine automatic tests. Thirty-four questions to the assistant, every answer read. And an outside review that found fifteen bugs.
 
 30
-00:03:02,000 --> 00:03:08,200
+00:03:03,200 --> 00:03:09,400
 When Marathi answers changed facts, notes written in Marathi took the errors from seven to zero.
 
 31
-00:03:09,300 --> 00:03:15,225
+00:03:10,500 --> 00:03:16,425
 We would love to hear from you. Would you use this before class? What was confusing? What is missing?
 
 32
-00:03:15,425 --> 00:03:19,725
+00:03:16,625 --> 00:03:20,925
 Reply to whoever sent you this video. Thank you, and namaste.
