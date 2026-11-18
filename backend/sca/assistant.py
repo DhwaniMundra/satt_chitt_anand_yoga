@@ -2,14 +2,17 @@
 
 Three paths, checked in order:
 1. Urgent: a question that names an emergency sign gets a fixed reply sending the person to 112. No model.
-2. Gemma: the top sections of `knowledge/yoga_health.md` go into the system prompt and Gemma 4 answers.
+2. Gemma: the top sections of `knowledge/yoga_health.md` go into the system prompt and Gemma 4 answers. For Marathi,
+   the sections come from the person-made translation `knowledge/yoga_health.mr.md` when it has all of them.
 3. Notes: when Gemma is not loaded, the best-matching section is returned as it is.
 """
 
+import itertools
 import math
 import re
 import threading
 import time
+import unicodedata
 from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
@@ -21,17 +24,24 @@ STOPWORDS = set(
     # Common Hindi and Marathi function words.
     + "का की के को में से है हैं पर और या क्या कैसे करें कर मैं मुझे मेरा मेरी भी तो यह वह लिए नहीं "
     "आहे आहेत मला माझा माझी मी ला ने चा ची चे मध्ये साठी आणि किंवा कसे काय करू करा शकते शकतो नाही".split()
+    + ["योग", "योगा"]  # as uninformative here as "yoga"; it pulled up "Yoga Nidra" for every Hindi or Marathi question
 )
 KEYWORD_WEIGHT = 3  # a word in a section's title or Keywords line counts as much as three in its text
 
-# Emergency signs in the three languages. Matching is on lowercase text, by substring.
-URGENT = [
-    "chest pain", "pain in my chest", "chest pressure", "heart attack", "can't breathe", "cannot breathe",
-    "unable to breathe", "fainted", "fainting", "passed out", "unconscious", "stroke", "suicid", "kill myself",
-    "self harm", "self-harm", "end my life", "heavy bleeding",
-    "सीने में दर्द", "छाती में दर्द", "सांस नहीं", "बेहोश", "आत्महत्या", "दिल का दौरा",
-    "छातीत दुख", "छातीत वेदना", "श्वास घेता येत नाही", "बेशुद्ध", "हृदयविकाराचा झटका",
-]
+# Emergency signs in the three languages, matched on normalised text (see `normalise`).
+URGENT = re.compile(
+    "|".join(
+        [
+            r"chest\s*(pain|hurt|tight|pressure)", r"pain in (my |the )?chest", r"heart attack",
+            r"(can ?not|cant|unable to|could ?not|couldnt) breath", r"(trouble|difficulty) breathing",
+            r"faint", r"passed out", r"unconscious", r"stroke", r"suicid", r"kill(ing)? myself", r"self.?harm",
+            r"end (my|it) (life|all)", r"heavy bleeding",
+            r"(सीने|छाती) (मे|में) (दर्द|दबाव)", r"सांस (नही|नहीं)", r"बेहोश", r"आत्महत्या", r"दिल का दौरा",
+            r"खुद को (मार|नुकसान)",
+            r"छातीत (दुख|वेदना|कळ)", r"श्वास घेता येत (नाही|नाहीये)", r"बेशुद्ध", r"हृदयविकाराचा झटका", r"स्वतःला (इजा|संपव)",
+        ]
+    )
+)
 URGENT_REPLY = {
     "en": "This could be urgent. Please stop practising and get medical help now: call 112 or go to the nearest "
     "hospital. If you are thinking of harming yourself, please call Tele-MANAS on 14416 (free, any time).",
@@ -44,6 +54,10 @@ NOTES_LEAD = {
     "en": "The assistant is resting right now. Here is what the studio's notes say:",
     "hi": "सहायक अभी उपलब्ध नहीं है। स्टूडियो के नोट्स में यह लिखा है (अंग्रेज़ी में):",
     "mr": "सहायक सध्या उपलब्ध नाही. स्टुडिओच्या नोंदींमध्ये हे लिहिले आहे (इंग्रजीत):",
+}
+NOTES_LEAD_OWN = {  # the same, when the notes exist in the person's language
+    "hi": "सहायक अभी उपलब्ध नहीं है। स्टूडियो के नोट्स में यह लिखा है:",
+    "mr": "सहायक सध्या उपलब्ध नाही. स्टुडिओच्या नोंदींमध्ये हे लिहिले आहे:",
 }
 NO_MATCH = {
     "en": "I don't have notes on that. Please ask Ramit ji in class or in the WhatsApp group.",
@@ -64,6 +78,15 @@ Answer using only the studio notes below. Rules:
 
 Studio notes:
 {notes}"""
+# Added after the notes when they are already in the student's language. Gemma 4 E4B translating the English notes into
+# Marathi itself changed facts ("lie on the back" became "on the belly") and garbled words; copying a translation made
+# by a person does not (docs/evals/assistant_v0.4.md).
+TRANSLATED_RULE = """
+
+6. The notes above are already in {language}. Answer with their own words and sentences: copy the points that answer the
+   question, and always copy the point about the doctor or about stopping when the notes have one. Do not translate
+   them again and do not change any word."""
+TRANSLATED_LANGS = ("mr",)  # languages with a `<notes>.<lang>.md` translation next to the English notes
 
 
 class Busy(Exception):
@@ -106,6 +129,15 @@ def load_sections(path: Path) -> list[Section]:
     return sections
 
 
+def load_translation(path: Path) -> dict[str, str]:
+    """A translated notes file: its `## ` headings repeat the English titles, its text is in the other language.
+    Returns {English title: translated text}; empty when the file does not exist."""
+    if not path.is_file():
+        return {}
+    parts = re.split(r"^## ", path.read_text(encoding="utf-8"), flags=re.MULTILINE)[1:]
+    return {title.strip(): body.strip() for title, _, body in (part.partition("\n") for part in parts)}
+
+
 class Retriever:
     """BM25 over the sections: rare words that appear in a section count most."""
 
@@ -143,9 +175,16 @@ class Retriever:
         return [self.sections[i] for score, i in scored[:k] if score > 0 and score >= keep * best]
 
 
+def normalise(text: str) -> str:
+    """Lowercase, one spelling per sound: curly and straight apostrophes dropped ("can’t" = "cant"), chandrabindu
+    as anusvara (साँस = सांस), nukta dropped (ख़ुद = खुद)."""
+    text = unicodedata.normalize("NFC", text).lower()
+    text = re.sub(r"['’‘`]", "", text)
+    return text.replace("\u0901", "\u0902").replace("\u093c", "")
+
+
 def is_urgent(question: str) -> bool:
-    lowered = question.lower()
-    return any(sign in lowered for sign in URGENT)
+    return URGENT.search(normalise(question)) is not None
 
 
 class Gemma:
@@ -164,9 +203,25 @@ class Gemma:
         make_backend = litert_lm.Backend.GPU if backend == "gpu" else litert_lm.Backend.CPU
         self._engine = litert_lm.Engine(str(model_path), backend=make_backend(), max_num_tokens=4096, cache_dir=str(cache_dir))
         self._lock = threading.Lock()
+        self._foreign: list[int] | None = None
         self.name = f"{model_path.stem} ({backend})"
 
-    def reply(self, system: str, question: str, max_output_tokens: int = 320) -> str:
+    def foreign_tokens(self) -> list[int]:
+        """Tokens holding a letter that is neither Latin nor Devanagari (about 80,000 of 262,144; listed once, < 1 s).
+        Marathi answers otherwise slip in a Japanese, Korean or Arabic word now and then (ともに, 전에, يكا)."""
+        if self._foreign is None:
+            ids = []
+            for i in itertools.count():
+                try:
+                    text = self._engine.detokenize([i])
+                except RuntimeError:  # past the end of the vocabulary
+                    break
+                if any(ch.isalpha() and not unicodedata.name(ch, "").startswith(("LATIN", "DEVANAGARI")) for ch in text):
+                    ids.append(i)
+            self._foreign = ids
+        return self._foreign
+
+    def reply(self, system: str, question: str, max_output_tokens: int = 320, ban_foreign_scripts: bool = False) -> str:
         with self._lock:
             conversation = self._engine.create_conversation(
                 max_output_tokens=max_output_tokens,
@@ -175,8 +230,10 @@ class Gemma:
             )
             try:
                 # Without this, Marathi answers could loop on one word (docs/evals/assistant_v0.2.md, mr-sleep).
-                no_repeat = self._lm.NoRepeatNgramConfig(no_repeat_ngram_size=8)
-                answer = conversation.send_message(question, no_repeat_ngram_config=no_repeat).to_json()
+                options = {"no_repeat_ngram_config": self._lm.NoRepeatNgramConfig(no_repeat_ngram_size=8)}
+                if ban_foreign_scripts:
+                    options["suppress_tokens_config"] = self._lm.SuppressTokensConfig(suppress_tokens=self.foreign_tokens())
+                answer = conversation.send_message(question, **options).to_json()
             finally:
                 conversation.close()
         return "".join(p.get("text", "") for p in answer.get("content", []) if isinstance(p, dict)).strip()
@@ -185,16 +242,21 @@ class Gemma:
 class Assistant:
     def __init__(self, notes_path: Path, studio_name: str, teacher: str) -> None:
         self.retriever = Retriever(load_sections(notes_path))
+        self.translations = {lang: load_translation(notes_path.with_name(f"{notes_path.stem}.{lang}.md")) for lang in TRANSLATED_LANGS}
         self.studio_name = studio_name
         self.teacher = teacher
         self.gemma: Gemma | None = None
         self.status = "off"  # off, loading, ready, failed
+        # Questions allowed to wait for Gemma at once; beyond that, ask() raises Busy instead of tying up a server
+        # thread for minutes (each waiting request holds one of the server's 40 worker threads).
+        self._slots = threading.BoundedSemaphore(4)
 
     def load_gemma(self, model_path: Path, backend: str, cache_dir: Path) -> None:
         """Loads the model; meant to run on a background thread so the server answers meanwhile."""
         self.status = "loading"
         try:
             self.gemma = Gemma(model_path, backend, cache_dir)
+            self.gemma.foreign_tokens()  # listed now, so the first Marathi question does not wait for it
             self.status = "ready"
         except Exception as error:  # noqa: BLE001 - any load failure leaves the notes-only path working
             self.status = f"failed: {error}"
@@ -205,10 +267,25 @@ class Assistant:
             return Answer(URGENT_REPLY[lang], ["When to stop and get help"], "urgent", time.perf_counter() - start)
         sections = self.retriever.top(question)
         sources = [s.title for s in sections]
+        translation = self.translations.get(lang, {})
         if self.gemma is None:
-            text = f"{NOTES_LEAD[lang]}\n\n{sections[0].text}" if sections else NO_MATCH[lang]
-            return Answer(text, sources[:1], "notes", time.perf_counter() - start)
-        notes = "\n\n".join(f"### {s.title}\n{s.text}" for s in sections) or "(no notes match this question)"
-        system = SYSTEM.format(studio=self.studio_name, teacher=self.teacher, language=LANGUAGE_NAMES[lang], notes=notes)
-        text = self.gemma.reply(system, question)
+            if not sections:
+                return Answer(NO_MATCH[lang], [], "notes", time.perf_counter() - start)
+            best = sections[0]
+            text = translation.get(best.title) or best.text
+            lead = NOTES_LEAD["en"] if lang == "en" else (NOTES_LEAD_OWN[lang] if best.title in translation else NOTES_LEAD[lang])
+            return Answer(f"{lead}\n\n{text}", sources[:1], "notes", time.perf_counter() - start)
+        translated = bool(sections) and all(s.title in translation for s in sections)
+        notes = "\n\n".join(f"### {s.title}\n{translation[s.title] if translated else s.text}" for s in sections)
+        system = SYSTEM.format(
+            studio=self.studio_name, teacher=self.teacher, language=LANGUAGE_NAMES[lang], notes=notes or "(no notes match this question)"
+        )
+        if translated:
+            system += TRANSLATED_RULE.format(language=LANGUAGE_NAMES[lang])
+        if not self._slots.acquire(blocking=False):
+            raise Busy
+        try:
+            text = self.gemma.reply(system, question, ban_foreign_scripts=lang in TRANSLATED_LANGS)
+        finally:
+            self._slots.release()
         return Answer(text, sources, "gemma", time.perf_counter() - start)

@@ -64,7 +64,9 @@ def hero(version: str) -> None:
     for i, line in enumerate(wrap(draw, text, body, 860)):
         draw.text((124, 500 + i * 56), line, font=body, fill=INK)
     draw.text((124, 1180), f"Screens from {version}, synthetic demo data", font=ImageFont.truetype(SANS, 26), fill=MUTED)
-    for name, x, y in (("12_teacher_classes", 1080, 170), ("03_today", 1470, 90), ("08_ask_answer", 1860, 170)):
+    # hero_teacher and hero_today are taken at a quiet hour, so they show the regular 8:00 AM class rather than the
+    # tour's extra class 20 minutes ahead.
+    for name, x, y in (("hero_teacher", 1080, 170), ("hero_today", 1470, 90), ("08_ask_answer", 1860, 170)):
         place(canvas, phone(shots / f"{name}.png", 1080), (x, y))
     canvas.convert("RGB").save(OUT / "hero.png", optimize=True)
 
@@ -89,7 +91,7 @@ def before_after(name: str, before: Path, after: Path, before_note: str, after_n
 
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
-    hero("v0.2")
+    hero("v0.4")
     before_after(
         "signup_v0.1_v0.2", MEDIA / "v0.1" / "02_signup_login_hidden.png", MEDIA / "v0.2" / "02_signup.png",
         "v0.1: a returning student had to scroll past the whole sign-up form to find 'Log in'.",

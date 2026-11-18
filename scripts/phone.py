@@ -72,9 +72,16 @@ def tap_xy(x: int, y: int) -> None:
 
 
 def type_into(field_label: str, value: str) -> None:
-    """Taps the field labelled `field_label` and types `value` (ASCII; adb cannot type Devanagari)."""
+    """Taps the field labelled `field_label` and types `value` (ASCII; adb cannot type Devanagari). Closes the
+    keyboard and scrolls down first if the field is hidden, as a person would."""
+    hide_keyboard()
+    try:
+        find(field_label, timeout=2)
+    except TimeoutError:
+        scroll_down()
     tap(field_label)
-    adb("shell", "input", "text", value.replace(" ", "%s"))
+    escaped = "".join("\\" + ch if ch in "()&;<>|*'\"$`!?#~\\" else ch for ch in value)  # the phone's shell reads it
+    adb("shell", "input", "text", escaped.replace(" ", "%s"))
     time.sleep(0.4)
 
 
@@ -115,15 +122,15 @@ def demo_mode() -> None:
 
 
 class Recording:
-    """adb screenrecord in the background; stop() pulls the mp4 to `path`."""
+    """adb screenrecord in the background on the current phone; stop() pulls the mp4 to `path`."""
 
-    def __init__(self, path: Path) -> None:
-        self.path = path
-        self.proc = subprocess.Popen(["adb", "shell", "screenrecord", "--bit-rate", "6000000", "/sdcard/tour.mp4"])
+    def __init__(self, path: Path, remote: str = "/sdcard/tour.mp4") -> None:
+        self.path, self.remote = path, remote
+        self.proc = subprocess.Popen(["adb", "shell", "screenrecord", "--bit-rate", "6000000", remote])
 
     def stop(self) -> None:
         adb("shell", "pkill", "-INT", "screenrecord")
         self.proc.wait(timeout=20)
         time.sleep(1.5)
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        adb("pull", "/sdcard/tour.mp4", str(self.path))
+        adb("pull", self.remote, str(self.path))

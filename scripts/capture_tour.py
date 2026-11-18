@@ -4,12 +4,15 @@ so each iteration can be compared with the last: docs/media/<version>/.
 Needs: `source scripts/env.sh`, the emulator running (scripts/run_emulator.sh), and the backend running on the
 synthetic demo database (backend/scripts/seed_demo.py), with Gemma loaded.
 
-Usage: python3 scripts/capture_tour.py v0.2
+Usage: python3 scripts/capture_tour.py v0.4 data/demo.sqlite3
+(The database path lets the tour add a class starting in 20 minutes, so the before-class check-in is open.)
 """
 
+import sqlite3
 import subprocess
 import sys
 import time
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from PIL import Image
@@ -22,7 +25,15 @@ STUDENT = ("9800000002", "demo123")
 TEACHER = ("9800000001", "demo123")
 
 
-def main(version: str) -> None:
+def class_soon(db_path: Path) -> None:
+    """A Hatha class 20 minutes from now: the check-in opens an hour before class, whatever the time of the tour."""
+    start = (datetime.now(UTC) + timedelta(minutes=20)).replace(second=0).isoformat(timespec="seconds").replace("+00:00", "Z")
+    conn = sqlite3.connect(db_path)
+    conn.execute("INSERT OR IGNORE INTO class_sessions (class_key, starts_at, duration_min, updated_at) VALUES ('hatha', ?, 55, ?)", (start, start))
+    conn.commit()
+
+
+def main(version: str, db_path: Path) -> None:
     out = ROOT / "docs" / "media" / version
     out.mkdir(parents=True, exist_ok=True)
 
@@ -40,6 +51,7 @@ def main(version: str) -> None:
         p.tap("Log in", exact=True, last=True)  # the button under the form, not the switch above it
         time.sleep(3)
 
+    class_soon(db_path)
     p.adb("install", "-r", str(APK))
     p.adb("shell", "cmd", "alarm", "set-timezone", "Asia/Kolkata")
     p.demo_mode()
@@ -117,7 +129,14 @@ def main(version: str) -> None:
 
     for name in ("student_tour", "teacher_tour"):
         make_gif(out / f"{name}.mp4", out / f"{name}.gif")
+        make_small(out / f"{name}.mp4", out / f"{name}_small.mp4")
     print(f"saved to {out}")
+
+
+def make_small(video: Path, small: Path) -> None:
+    """A 540 px copy for the repository (the full recording stays local, see .gitignore)."""
+    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(video), "-vf", "scale=540:-2,fps=24", "-c:v", "libx264",
+                    "-crf", "30", "-preset", "slow", "-an", "-movflags", "+faststart", str(small)], check=True)
 
 
 def make_gif(video: Path, gif: Path) -> None:
@@ -127,4 +146,4 @@ def make_gif(video: Path, gif: Path) -> None:
 
 
 if __name__ == "__main__":
-    main(sys.argv[1])
+    main(sys.argv[1], Path(sys.argv[2]))
