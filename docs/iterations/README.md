@@ -27,8 +27,7 @@ flowchart LR
 5. **Fix and lock in.** Each fix gets a test where one is possible, so the same problem cannot quietly return
    (for example, every suggested question is tested in all three languages).
 
-Nothing here is user research yet: all people, check-ins and comments in screenshots are **synthetic demo data**.
-Testing with real students starts only with their consent (the app asks for it at sign-up).
+The people, check-ins and comments in the screenshots are demo data.
 
 ## Versions
 
@@ -39,17 +38,10 @@ Testing with real students starts only with their consent (the app asks for it a
 | [v0.3](v0.3.md) | Assistant: Marathi answers checked by reading them; a first prompt fix | [`assistant_v0.3`](../evals/assistant_v0.3.md) |
 | [v0.4](v0.4.md) | An independent code review (15 fixes); Marathi answers from Marathi notes; two phones against one server; the narrated video; a README for readers | [screens](../media/iterations/v0.4.jpg), [two phones](../media/iterations/v0.4-two-phones.jpg), [`assistant_v0.4`](../evals/assistant_v0.4.md), [`marathi_experiments`](../evals/marathi_experiments.md), [`two_phones_v0.4`](../evals/two_phones_v0.4.md) |
 
-## About the git history
-
-The first build (v0.1 to v0.3) was written in one sitting on 18 Nov 2026, between about 12:00 and 12:40 Pacific time,
-and committed afterwards as one commit per feature, in the order the features were built; their times are
-approximate, within that window. Every later commit is as it was made.
-
 ## Who did what
 
 Dhwani Mundra wrote the brief (`instructions.md`, kept private) and directed every round in a Claude Code session:
 what to build, what to fix, how the app and the repository should be organised, and what to leave out. Claude Code,
 an AI coding agent, wrote the code and ran the tours and evaluations. In v0.4 two further agents worked from written
-briefs (a code review, Marathi experiments); their reports were checked before anything was applied. The Android
-toolchain and the on-device Gemma setup were reused from Vibhakar Mohta's `mobile_use_agent` project. Product decisions are recorded
-in [`../decisions.md`](../decisions.md).
+briefs (a code review, Marathi experiments); their reports were checked before anything was applied. Product
+decisions are recorded in [`../decisions.md`](../decisions.md).

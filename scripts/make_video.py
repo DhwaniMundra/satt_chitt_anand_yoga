@@ -1,7 +1,7 @@
 """Renders docs/media/video/satt_chitt_anand_tour.mp4: a narrated tour of the app, about three minutes, to share with
 people and ask for their feedback.
 
-Made the way mobile_use_agent's make_paper_video.py makes its video: Kokoro-82M speaks each line of the script on this
+How it is made: Kokoro-82M speaks each line of the script on this
 laptop and reports when each word starts; every scene lasts as long as its lines; frames are drawn with Pillow and
 streamed to ffmpeg; a quiet synthesised pad sits under the voice (nothing to license); the mix is brought to -16 LUFS
 with one fixed gain from a measuring pass. Captions follow the voice word by word, so the video also works muted, as
@@ -646,7 +646,7 @@ def soundtrack(path: Path, total: float) -> None:
     wavfile.write(path, RATE, (np.clip(stereo, -1, 1) * 32767).astype(np.int16))
 
 
-# Speech peaks sit far above its average level, so one fixed gain under a peak ceiling (mobile_use_agent's way) stopped
+# Speech peaks sit far above its average level, so one fixed gain under a peak ceiling stopped
 # at -24 LUFS, too quiet on a phone speaker. Here: even the voice with a gentle compressor, measure, apply the gain to
 # reach -16 LUFS, and let a limiter after the gain hold the peaks under -1.5 dB.
 EVEN = "acompressor=threshold=0.05:ratio=4:attack=5:release=150:makeup=2"
