@@ -1,0 +1,128 @@
+"""The practice companion without the model: its tools, its routes, and the conversation it hands to Gemma (through
+a stand-in that calls a tool the way the runtime would)."""
+
+from datetime import timedelta
+from pathlib import Path
+
+import pytest
+from fastapi.testclient import TestClient
+
+from sca import db, studio as studio_mod
+from sca.app import Config, create_app
+from sca.assistant import Assistant
+from sca.companion import HISTORY_TURNS, Companion, practice_summary, tools_for
+
+BACKEND = Path(__file__).resolve().parents[1]
+STUDIO = studio_mod.load(BACKEND / "content" / "studio.json")
+
+
+@pytest.fixture
+def setup(tmp_path):
+    config = Config(db_path=tmp_path / "t.sqlite3", gemma="off", model_path=tmp_path / "none", cache_dir=tmp_path, teacher_code="T1")
+    with TestClient(create_app(config)) as client:
+        t = signup(client, "9000000001", "Teacher", role="teacher", code="T1")
+        code = client.get("/teacher/home", headers=t).json()["settings"]["group_code"]
+        yield client, tmp_path / "t.sqlite3", code
+
+
+def signup(client, phone, name, role="student", code=""):
+    r = client.post("/auth/signup", json={"name": name, "phone": phone, "password": "secret1", "role": role, "code": code})
+    assert r.status_code == 200, r.text
+    return {"Authorization": f"Bearer {r.json()['token']}"}
+
+
+def user_id(client, headers):
+    return client.get("/me", headers=headers).json()["user"]["id"]
+
+
+def attend(path, uid, class_key, days_ago, before, after):
+    conn = db.connect(path)
+    start = (db.now() - timedelta(days=days_ago)).replace(second=0, microsecond=0)
+    conn.execute("INSERT OR IGNORE INTO class_sessions (class_key, starts_at, duration_min, updated_at) VALUES (?, ?, 55, ?)",
+                 (class_key, db.iso(start), db.iso(start)))  # classmates share the day's session
+    sid = conn.execute("SELECT id FROM class_sessions WHERE starts_at = ?", (db.iso(start),)).fetchone()[0]
+    conn.execute("INSERT INTO checkins VALUES (?, ?, 'before', ?, ?)", (uid, sid, before, db.iso(start)))
+    if after is not None:
+        conn.execute("INSERT INTO checkins VALUES (?, ?, 'after', ?, ?)", (uid, sid, after, db.iso(start)))
+    conn.commit()
+
+
+def test_practice_summary_does_the_sums_for_one_student(setup):
+    client, path, code = setup
+    asha = user_id(client, signup(client, "9000000002", "Asha", code=code))
+    other = user_id(client, signup(client, "9000000003", "Ravi", code=code))
+    attend(path, asha, "hatha", 1, 3, 4)
+    attend(path, asha, "hatha", 3, 3, 5)
+    attend(path, asha, "pranayama", 2, 2, None)
+    attend(path, asha, "hatha", 20, 1, 1)  # outside the week
+    attend(path, other, "hatha", 1, 5, 5)  # someone else's
+    week = practice_summary(db.connect(path), STUDIO, asha, 7)
+    assert week["classes_joined"] == 3
+    assert week["average_mood_before"] == round(8 / 3, 1) and week["average_mood_after"] == 4.5
+    assert week["by_class"]["Hatha Yoga"] == {"times": 2, "average_mood_before": 3.0, "average_mood_after": 4.5}
+    assert week["by_class"]["Pranayama"]["average_mood_after"] is None
+
+
+def test_notes_belong_to_one_student(setup):
+    client, path, code = setup
+    asha = user_id(client, signup(client, "9000000002", "Asha", code=code))
+    ravi_headers = signup(client, "9000000003", "Ravi", code=code)
+    used = []
+    tools = {f.__name__: f for f in tools_for(path, STUDIO, Assistant(BACKEND / "knowledge" / "yoga_health.md", "x", "y"), asha, "en", used)}
+    tools["save_my_note"]("left knee hurts in Vajrasana")
+    assert tools["get_my_notes"]()["notes"][0]["note"] == "left knee hurts in Vajrasana"
+    assert used == ["save_my_note", "get_my_notes"]
+    assert client.get("/me/notes", headers=ravi_headers).json()["notes"] == []
+    note_id = db.connect(path).execute("SELECT id FROM companion_notes").fetchone()[0]
+    assert client.delete(f"/me/notes/{note_id}", headers=ravi_headers).status_code == 404  # not Ravi's to delete
+
+
+def test_chat_is_saved_private_and_clearable(setup):
+    client, path, code = setup
+    asha = signup(client, "9000000002", "Asha", code=code)
+    ravi = signup(client, "9000000003", "Ravi", code=code)
+    r = client.post("/chat", json={"message": "What should I eat before class?", "lang": "en"}, headers=asha)
+    assert r.status_code == 200 and r.json()["mode"] == "notes" and r.json()["tools"] == ["notes"]
+    messages = client.get("/chat", headers=asha).json()["messages"]
+    assert [m["role"] for m in messages] == ["student", "companion"] and messages[1]["tools"] == ["notes"]
+    assert client.get("/chat", headers=ravi).json()["messages"] == []
+    client.delete("/chat", headers=asha)
+    assert client.get("/chat", headers=asha).json()["messages"] == []
+
+
+def test_chat_urgent_and_pending(setup):
+    client, _, code = setup
+    asha = signup(client, "9000000002", "Asha", code=code)
+    assert client.post("/chat", json={"message": "I have chest pain", "lang": "hi"}, headers=asha).json()["mode"] == "urgent"
+    pending = signup(client, "9000000004", "Meera")
+    assert client.post("/chat", json={"message": "hello", "lang": "en"}, headers=pending).json()["detail"] == "pending"
+
+
+def test_chat_is_not_backed_up():
+    assert "chat_messages" not in db.BACKUP_TABLES and "companion_notes" not in db.BACKUP_TABLES
+
+
+def test_conversation_handed_to_gemma(setup):
+    client, path, code = setup
+    headers = signup(client, "9000000002", "Asha Kulkarni", code=code)
+    asha = db.connect(path).execute("SELECT * FROM users WHERE phone = '+919000000002'").fetchone()
+    attend(path, asha["id"], "hatha", 1, 3, 5)
+    seen = {}
+
+    class StandIn:
+        """Calls a tool the way LiteRT-LM's automatic tool calling would, then answers from it."""
+
+        def chat(self, system, preface, message, tools, ban_foreign_scripts=False):
+            seen.update(system=system, preface=preface, tools=[t.__name__ for t in tools], ban=ban_foreign_scripts)
+            practice = {t.__name__: t for t in tools}["get_my_practice"](7)
+            return f"You joined {practice['classes_joined']} class."
+
+    assistant = Assistant(BACKEND / "knowledge" / "yoga_health.md", "Satt Chitt Anand Yoga", "Ramit ji")
+    assistant.gemma = StandIn()
+    history = [("student", f"q{i}") if i % 2 == 0 else ("companion", f"a{i}") for i in range(10)]
+    reply = Companion(assistant, STUDIO, path).chat(asha, "How was my week?", "mr", history)
+    assert reply.text == "You joined 1 class." and reply.tools == ["get_my_practice"] and reply.mode == "companion"
+    assert len(seen["preface"]) == HISTORY_TURNS and seen["preface"][-1] == {"role": "assistant", "content": "a9"}
+    assert "Asha" in seen["system"] and "Marathi" in seen["system"] and seen["ban"] is True
+    assert seen["tools"] == ["get_my_practice", "get_upcoming_classes", "search_studio_notes", "save_my_note", "get_my_notes"]
+    assert headers  # the account exists for the route tests above

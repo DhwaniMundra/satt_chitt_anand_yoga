@@ -201,7 +201,7 @@ class Gemma:
         cache_dir.mkdir(parents=True, exist_ok=True)
         self._lm = litert_lm
         make_backend = litert_lm.Backend.GPU if backend == "gpu" else litert_lm.Backend.CPU
-        self._engine = litert_lm.Engine(str(model_path), backend=make_backend(), max_num_tokens=4096, cache_dir=str(cache_dir))
+        self._engine = litert_lm.Engine(str(model_path), backend=make_backend(), max_num_tokens=8192, cache_dir=str(cache_dir))  # room for tools and chat history
         self._lock = threading.Lock()
         self._foreign: list[int] | None = None
         self.name = f"{model_path.stem} ({backend})"
@@ -238,6 +238,28 @@ class Gemma:
                 conversation.close()
         return "".join(p.get("text", "") for p in answer.get("content", []) if isinstance(p, dict)).strip()
 
+    def chat(self, system: str, preface: list[dict], message: str, tools: list, max_output_tokens: int = 400,
+             ban_foreign_scripts: bool = False) -> str:
+        """One reply in a conversation that starts with `preface` (earlier messages) and may call `tools`, Python
+        functions the runtime runs for Gemma until it has its answer."""
+        with self._lock:
+            conversation = self._engine.create_conversation(
+                messages=preface or None,
+                tools=[self._lm.tool_from_function(f) for f in tools],
+                automatic_tool_calling=True,
+                max_output_tokens=max_output_tokens,
+                sampler_config=self._lm.SamplerConfig(top_k=1),
+                system_message=system,
+            )
+            try:
+                options = {"no_repeat_ngram_config": self._lm.NoRepeatNgramConfig(no_repeat_ngram_size=8)}
+                if ban_foreign_scripts:
+                    options["suppress_tokens_config"] = self._lm.SuppressTokensConfig(suppress_tokens=self.foreign_tokens())
+                answer = conversation.send_message(message, **options).to_json()
+            finally:
+                conversation.close()
+        return "".join(p.get("text", "") for p in answer.get("content", []) if isinstance(p, dict)).strip()
+
 
 class Assistant:
     def __init__(self, notes_path: Path, studio_name: str, teacher: str) -> None:
@@ -249,7 +271,7 @@ class Assistant:
         self.status = "off"  # off, loading, ready, failed
         # Questions allowed to wait for Gemma at once; beyond that, ask() raises Busy instead of tying up a server
         # thread for minutes (each waiting request holds one of the server's 40 worker threads).
-        self._slots = threading.BoundedSemaphore(4)
+        self.slots = threading.BoundedSemaphore(4)
 
     def load_gemma(self, model_path: Path, backend: str, cache_dir: Path) -> None:
         """Loads the model; meant to run on a background thread so the server answers meanwhile."""
@@ -282,10 +304,10 @@ class Assistant:
         )
         if translated:
             system += TRANSLATED_RULE.format(language=LANGUAGE_NAMES[lang])
-        if not self._slots.acquire(blocking=False):
+        if not self.slots.acquire(blocking=False):
             raise Busy
         try:
             text = self.gemma.reply(system, question, ban_foreign_scripts=lang in TRANSLATED_LANGS)
         finally:
-            self._slots.release()
+            self.slots.release()
         return Answer(text, sources, "gemma", time.perf_counter() - start)
