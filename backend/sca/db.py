@@ -55,9 +55,24 @@ CREATE TABLE IF NOT EXISTS questions (
   created_at TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS chat_messages (
+  id INTEGER PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id),
+  role TEXT NOT NULL CHECK (role IN ('student', 'companion')),
+  text TEXT NOT NULL,
+  tools TEXT NOT NULL DEFAULT '[]',
+  created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS companion_notes (
+  id INTEGER PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id),
+  text TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
 """
 
-# Tables copied to the backup, in an order that respects foreign keys. Login tokens are left out on purpose.
+# Tables copied to the backup, in an order that respects foreign keys. Left out on purpose: login tokens, and each
+# student's chat with the companion and the notes it keeps for them, which are theirs alone.
 BACKUP_TABLES = ["users", "class_sessions", "checkins", "feedback", "questions", "settings"]
 
 
