@@ -4,9 +4,10 @@
     <uses-permission android:name="android.permission.INTERNET" />
 
     <!-- usesCleartextTraffic: the backend runs on a laptop over plain HTTP (emulator or home Wi-Fi).
-         A hosted backend must use HTTPS, and then this flag goes. -->
+         A hosted backend must use HTTPS, and then this flag goes.
+         allowBackup false: the login token must not travel in device backups. -->
     <application
-        android:allowBackup="true"
+        android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:supportsRtl="true"

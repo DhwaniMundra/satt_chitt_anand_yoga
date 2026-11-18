@@ -109,6 +109,8 @@ private fun NextClassCard(vm: AppViewModel, s: ClassSession, now: Instant) {
     val context = LocalContext.current
     var askMood by rememberSaveable(s.id) { mutableStateOf(false) }
     val live = now >= s.startsAt && now < s.endsAt
+    // The "before" check-in opens an hour before class (as on the server); earlier, Join just opens the link.
+    val checkinOpen = now >= s.startsAt.minusSeconds(60 * 60) && now <= s.endsAt
     SectionCard(tint = Palette.moss) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Label(stringResource(R.string.next_class), Palette.mossLight)
@@ -135,7 +137,7 @@ private fun NextClassCard(vm: AppViewModel, s: ClassSession, now: Instant) {
                 TextButton(onClick = { askMood = false; openLink(context, link) }) { Text(stringResource(R.string.skip)) }
             }
             else -> Button(
-                onClick = { if (s.checkedIn) openLink(context, link) else askMood = true },
+                onClick = { if (s.checkedIn || !checkinOpen) openLink(context, link) else askMood = true },
                 colors = ButtonDefaults.buttonColors(containerColor = Palette.saffron),
                 modifier = Modifier.fillMaxWidth().height(56.dp),
             ) {

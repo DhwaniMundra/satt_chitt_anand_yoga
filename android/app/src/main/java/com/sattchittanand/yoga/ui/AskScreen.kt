@@ -50,6 +50,7 @@ import com.sattchittanand.yoga.R
 fun AskScreen(vm: AppViewModel) {
     var question by rememberSaveable { mutableStateOf("") }
     val list = rememberLazyListState()
+    val open = vm.user?.let { it.isTeacher || it.isApproved } ?: false
     LaunchedEffect(vm.chat.size, vm.asking) { if (vm.chat.isNotEmpty()) list.animateScrollToItem(vm.chat.size) }
 
     Column(Modifier.fillMaxSize()) {
@@ -65,7 +66,11 @@ fun AskScreen(vm: AppViewModel) {
                     Surface(color = Palette.saffronLight, shape = MaterialTheme.shapes.small) {
                         Text(stringResource(R.string.ask_disclaimer), Modifier.padding(12.dp), style = MaterialTheme.typography.bodyMedium)
                     }
-                    if (vm.chat.isEmpty()) {
+                    if (!open) {
+                        Surface(color = Palette.mossLight, shape = MaterialTheme.shapes.small) {
+                            Text(stringResource(R.string.err_pending), Modifier.padding(12.dp), style = MaterialTheme.typography.bodyLarge)
+                        }
+                    } else if (vm.chat.isEmpty()) {
                         val suggestions = listOf(R.string.sugg_1, R.string.sugg_2, R.string.sugg_3, R.string.sugg_4).map { stringResource(it) }
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             suggestions.forEach { s -> SuggestionChip(onClick = { vm.ask(s) }, label = { Text(s) }) }
@@ -90,7 +95,7 @@ fun AskScreen(vm: AppViewModel) {
             )
             FilledIconButton(
                 onClick = { vm.ask(question); question = "" },
-                enabled = question.isNotBlank() && !vm.asking,
+                enabled = open && question.isNotBlank() && !vm.asking,
                 modifier = Modifier.size(52.dp),
             ) { Icon(Icons.AutoMirrored.Filled.Send, stringResource(R.string.ask_send)) }
         }

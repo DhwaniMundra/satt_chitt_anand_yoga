@@ -7,4 +7,4 @@ export ANDROID_HOME="$ROOT/tools/android-sdk"
 export ANDROID_SDK_ROOT="$ANDROID_HOME"
 export ANDROID_AVD_HOME="$ROOT/tools/avd"
 export PATH="$JAVA_HOME/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$ANDROID_HOME/cmdline-tools/latest/bin:$PATH"
-export SCA_AVD="sca_phone"
+export SCA_AVD="${SCA_AVD:-sca_phone}"   # override to run the second phone: SCA_AVD=sca_phone_2

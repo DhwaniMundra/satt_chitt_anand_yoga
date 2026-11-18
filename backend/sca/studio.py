@@ -38,6 +38,20 @@ def clean_meet_link(raw: str) -> str:
     return link
 
 
+def clean_group_link(raw: str) -> str:
+    """A WhatsApp group invite link, with https:// added when it was left off.
+
+    Raises:
+        ValueError: if it is not a chat.whatsapp.com invite link.
+    """
+    link = raw.strip()
+    if not link.startswith("https://"):
+        link = "https://" + link.removeprefix("http://")
+    if not GROUP_LINK.match(link):
+        raise ValueError("group_link")
+    return link
+
+
 def ensure_week(conn: sqlite3.Connection, studio: dict, moment: datetime) -> None:
     """Makes sure a session row exists for each of the 7 days starting with `moment`'s IST date."""
     hour, minute = map(int, studio["class_start_ist"].split(":"))

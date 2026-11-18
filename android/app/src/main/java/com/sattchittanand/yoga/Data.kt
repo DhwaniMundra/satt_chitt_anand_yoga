@@ -60,8 +60,12 @@ class Api(private val prefs: Prefs) {
             val json = JSONObject(text)
             if (!ok) throw ApiError(json.optString("detail").takeIf { it.isNotEmpty() && !it.startsWith("[") } ?: "generic")
             json
+        } catch (e: ApiError) {
+            throw e
         } catch (e: IOException) {
             throw ApiError("network")
+        } catch (e: Exception) { // not JSON: a router page, a wrong port, a server error page
+            throw ApiError("generic")
         }
     }
 }

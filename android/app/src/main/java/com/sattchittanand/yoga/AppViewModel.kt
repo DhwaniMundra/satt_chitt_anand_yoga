@@ -41,6 +41,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 block()
             } catch (e: ApiError) {
                 if (e.code == "signed_out") signOutLocally() else error = e.code
+            } catch (e: org.json.JSONException) { // a reply missing a field the app expects
+                error = "generic"
             } finally {
                 busy = false
                 onDone()
@@ -135,6 +137,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 chat.add(ChatLine(reply.getString("answer"), fromStudent = false, mode = reply.getString("mode"), sources = sources))
             } catch (e: ApiError) {
                 error = e.code
+            } catch (e: org.json.JSONException) {
+                error = "generic"
             } finally {
                 asking = false
             }
@@ -192,6 +196,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun saveServer(address: String) {
         prefs.server = address
-        refresh()
+        if (user != null || prefs.token != null) launchCall { refreshAll() }
+    }
+
+    /** Coming back to the app (from Meet, say) reloads, so the after-class question appears when it is due. */
+    fun onResume() {
+        if (user != null && !busy) refresh()
     }
 }

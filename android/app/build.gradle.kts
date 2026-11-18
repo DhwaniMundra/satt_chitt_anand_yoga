@@ -12,8 +12,10 @@ android {
         targetSdk = 36
         versionCode = 1
         versionName = "0.1"
-        // The emulator's address for the laptop running the backend; change it in the app under Me > Server.
-        buildConfigField("String", "DEFAULT_SERVER", "\"http://10.0.2.2:8000\"")
+        // Where the app looks for the backend until changed in the app. 10.0.2.2 is the laptop as seen from the
+        // emulator; for phones on the same Wi-Fi build with -PscaServer=http://<laptop IP>:8000.
+        val server = providers.gradleProperty("scaServer").getOrElse("http://10.0.2.2:8000")
+        buildConfigField("String", "DEFAULT_SERVER", "\"$server\"")
     }
     buildTypes {
         release {

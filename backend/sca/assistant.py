@@ -66,6 +66,10 @@ Studio notes:
 {notes}"""
 
 
+class Busy(Exception):
+    """Too many questions are already waiting for Gemma; the caller should try again shortly."""
+
+
 @dataclass(frozen=True)
 class Section:
     title: str

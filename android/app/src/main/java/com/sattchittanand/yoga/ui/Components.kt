@@ -197,6 +197,11 @@ fun errorText(code: String): String = stringResource(
         "bad_group_link" -> R.string.err_bad_group_link
         "network" -> R.string.err_network
         "short_password" -> R.string.err_short_password
+        "pending" -> R.string.err_pending
+        "busy" -> R.string.err_busy
+        "too_many_attempts" -> R.string.err_too_many_attempts
+        "teacher_exists" -> R.string.err_teacher_exists
+        "checkin_closed" -> R.string.err_checkin_closed
         else -> R.string.err_generic
     },
 )
