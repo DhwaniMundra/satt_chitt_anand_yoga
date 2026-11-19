@@ -2,19 +2,17 @@
 so each iteration can be compared with the last: .local/visualization/tours/<version>/ (gitignored;
 scripts/make_figures.py turns the best of it into the committed GIFs and contact sheets in docs/media/).
 
-Needs: `source scripts/env.sh`, the emulator running (scripts/run_emulator.sh), and the backend running on the
-synthetic demo database (backend/scripts/seed_demo.py), with Gemma loaded.
+Needs: `source scripts/env.sh`, the 6 GB emulator running (SCA_AVD=sca_phone_big scripts/run_emulator.sh) with
+Gemma downloaded in Ask, and nothing else on port 8000. The tour starts the dev backend on a fresh copy of the
+synthetic demo (data/tour.json), adds a class starting in 20 minutes so the before-class check-in is open, and starts
+the app signed out with no chat or notes, so a second run shows the same screens.
 
-Usage: python3 scripts/capture_tour.py v0.5 data/demo.sqlite3
-(The database path lets the tour add a class starting in 20 minutes, so the before-class check-in is open, and
-start the demo student's chat afresh, so a second run shows the same screens.)
+Usage: python3 scripts/capture_tour.py v1
 """
 
-import sqlite3
 import subprocess
 import sys
 import time
-from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from PIL import Image
@@ -29,23 +27,13 @@ TEACHER = ("9800000001", "demo123")
 CLEAR_HI = "\u0938\u093e\u092b\u093c \u0915\u0930\u0947\u0902"  # "साफ़ करें" (Clear), spelt as in values-hi/strings.xml
 
 
-def class_soon(db_path: Path) -> None:
-    """A Hatha class 20 minutes from now: the check-in opens an hour before class, whatever the time of the tour."""
-    start = (datetime.now(UTC) + timedelta(minutes=20)).replace(second=0).isoformat(timespec="seconds").replace("+00:00", "Z")
-    conn = sqlite3.connect(db_path)
-    conn.execute("INSERT OR IGNORE INTO class_sessions (class_key, starts_at, duration_min, updated_at) VALUES ('hatha', ?, 55, ?)", (start, start))
-    conn.commit()
+def main(version: str) -> None:
+    with p.dev_backend(ROOT / "data" / "tour.json", demo=True):
+        p.add_class("hatha", 20)
+        tour(version)
 
 
-def fresh_chat(db_path: Path) -> None:
-    """No conversation and nothing remembered for the demo student, as after seeding."""
-    conn = sqlite3.connect(db_path)
-    for table in ("chat_messages", "companion_notes"):
-        conn.execute(f"DELETE FROM {table} WHERE user_id = (SELECT id FROM users WHERE phone = ?)", (f"+91{STUDENT[0]}",))
-    conn.commit()
-
-
-def main(version: str, db_path: Path) -> None:
+def tour(version: str) -> None:
     out = LOCAL / "tours" / version
     out.mkdir(parents=True, exist_ok=True)
 
@@ -63,12 +51,10 @@ def main(version: str, db_path: Path) -> None:
         p.tap("Log in", exact=True, last=True)  # the button under the form, not the switch above it
         time.sleep(3)
 
-    class_soon(db_path)
-    fresh_chat(db_path)
     p.adb("install", "-r", str(APK))
     p.adb("shell", "cmd", "alarm", "set-timezone", "Asia/Kolkata")
     p.demo_mode()
-    p.launch(clear=True)
+    p.launch(fresh=True)
 
     # ---- student ----
     video = p.Recording(LOCAL / f"student_tour_{version}.mp4")
@@ -84,11 +70,6 @@ def main(version: str, db_path: Path) -> None:
     p.launch()  # back from the Meet link in the browser
     p.tap("Week", exact=True)
     shot("05_week")
-    p.tap("Breathe", exact=True)
-    p.tap("Start", exact=True)
-    time.sleep(6)
-    shot("06_breathe")
-    p.tap("Stop", exact=True)
     p.tap("Ask", exact=True)
     shot("07_ask")
     p.tap("How was my practice this week?")
@@ -115,7 +96,7 @@ def main(version: str, db_path: Path) -> None:
 
     p.launch()
     p.tap("पूछें", exact=True)
-    p.tap(CLEAR_HI, exact=True)  # the server keeps the English conversation; cleared, the Hindi suggestions show
+    p.tap(CLEAR_HI, exact=True)  # the phone keeps the English conversation; cleared, the Hindi suggestions show
     p.tap("इस हफ्ते मेरी प्रैक्टिस कैसी रही?")
     p.find("आपका अभ्यास देखा", timeout=120)
     time.sleep(1)
@@ -171,4 +152,4 @@ def make_small(video: Path, small: Path) -> None:
 
 
 if __name__ == "__main__":
-    main(sys.argv[1], Path(sys.argv[2]))
+    main(sys.argv[1])
