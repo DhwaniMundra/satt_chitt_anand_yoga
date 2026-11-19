@@ -118,13 +118,13 @@ test('columns are found by name: the owner may move them and add her own', () =>
   users.data.forEach((line) => {
     const phone = line[2];
     line[2] = line === users.data[0] ? 'notes' : 'met at the park';
-    line[9] = phone;
+    line[10] = phone;
   });
   b.context.onEdit({});
   const s = signup(b, '9000000002', { code });
   assert.equal(b.call('POST', '/auth/login', { body: { phone: '9000000001', password: 'secret1' } }).status, 200);
   const last = users.rows()[users.getLastRow() - 1];
-  assert.equal(last[9], '+919000000002');
+  assert.equal(last[10], '+919000000002');
   assert.equal(last[2], '');
   assert.equal(b.call('GET', '/teacher/students', { token: t.token }).body.students[0].phone, s.user.phone);
 });
@@ -167,7 +167,8 @@ test('every write happens under the lock, which is always let go', () => {
   b.state.lockFree = false;
   const writes = b.ss.writes;
   assert.deepEqual(b.call('POST', '/feedback', { token: s.token, body: { screen: 'me', text: 'x' } }), { status: 503, body: { detail: 'busy' } });
-  assert.deepEqual(b.call('POST', '/auth/signup', { body: { name: 'x', phone: '9000000003', password: 'secret1' } }).body, { detail: 'busy' });
+  assert.deepEqual(b.call('POST', '/auth/signup', { body: { name: 'x', phone: '9000000003', password: 'secret1', code: setting(b, 'group_code') } }).body,
+    { detail: 'busy' });
   assert.equal(b.ss.writes, writes);
   assert.equal(b.call('GET', '/studio').status, 200); // reading needs no lock
   b.state.lockFree = true;
@@ -211,19 +212,19 @@ test('the cache: a token is looked up once, and forgotten at logout', () => {
 test('the cache: a hand edit or ten minutes and the Sheet is read again', () => {
   const b = freshBackend();
   const { t } = teacherAndCode(b);
-  const read = () => b.call('GET', '/teacher/home', { token: t.token }).body.settings.default_meet_link;
+  const read = () => b.call('GET', '/teacher/home', { token: t.token }).body.settings.group_link;
   assert.equal(read(), null);
   const sheet = b.ss.getSheetByName('settings');
-  const row = sheet.rows().findIndex((r) => r[0] === 'default_meet_link') + 1;
-  sheet.getRange(row, 2).setValue("'https://meet.google.com/aaa-bbbb-ccc");
+  const row = sheet.rows().findIndex((r) => r[0] === 'group_link') + 1;
+  sheet.getRange(row, 2).setValue("'https://chat.whatsapp.com/AAA");
   assert.equal(read(), null, 'cached');
   b.context.onEdit({});
-  assert.equal(read(), 'https://meet.google.com/aaa-bbbb-ccc');
-  sheet.getRange(row, 2).setValue("'https://meet.google.com/ddd-eeee-fff");
+  assert.equal(read(), 'https://chat.whatsapp.com/AAA');
+  sheet.getRange(row, 2).setValue("'https://chat.whatsapp.com/BBB");
   b.state.offsetMs += 601000;
-  assert.equal(read(), 'https://meet.google.com/ddd-eeee-fff');
+  assert.equal(read(), 'https://chat.whatsapp.com/BBB');
   b.cache.clear(); // an eviction loses nothing but speed
-  assert.equal(read(), 'https://meet.google.com/ddd-eeee-fff');
+  assert.equal(read(), 'https://chat.whatsapp.com/BBB');
 });
 
 test('a token row deleted by hand stops working within the cache time', () => {
@@ -239,10 +240,13 @@ test('setup: the Dashboard formulas point at the right columns', () => {
   const b = freshBackend();
   const dashboard = b.ss.getSheetByName('Dashboard');
   const formulas = dashboard.data.flatMap((line, r) => (line || []).map((v, c) => [r + 1, c + 1, v])).filter(([, , v]) => v && v.formula);
-  assert.equal(formulas.length, 9);
-  assert.equal(Object.keys(dashboard.notes).length, 9, 'each block title explains its block');
+  assert.equal(formulas.length, 11);
+  assert.equal(Object.keys(dashboard.notes).length, 11, 'each block title explains its block');
   const text = formulas.map(([, , v]) => v.formula).join('\n');
-  assert.match(text, /QUERY\(users!A1:H, "select E, count\(A\) where D = 'student' group by E/);
+  assert.match(text, /QUERY\(users!A1:J, "select E, count\(A\) where D = 'student' group by E/);
+  assert.match(text, /QUERY\(users!A1:J, "select I, count\(A\) where D = 'student' and E = 'approved' group by I/);
+  assert.match(text, /VLOOKUP\(batch_changes!B2:B, \{users!A2:A, users!B2:B\}, 2, FALSE\)/);
+  assert.match(text, /users!E2:E, users!I2:I, users!G2:G/);
   assert.match(text, /QUERY\(checkins!A1:G, "select G, F, count\(A\) where C = 'before' group by G, F order by G desc/);
   assert.match(text, /select F, avg\(D\) where A is not null group by F pivot C/);
   assert.match(text, /VLOOKUP\(feedback!B2:B, \{users!A2:A, users!B2:B\}, 2, FALSE\)/);
@@ -260,19 +264,22 @@ test('setup: the Dashboard formulas point at the right columns', () => {
   assert.equal(dashboard.getRange('Z1').getValue(), 'my own block', 'setup leaves an existing Dashboard alone');
 });
 
-test('setup: the data tabs warn before a hand edit, and the classes tab lists the week', () => {
+test('setup: the data tabs warn before a hand edit; the batches tab is seeded once and is the owner\'s', () => {
   const b = freshBackend();
-  for (const tab of ['users', 'checkins', 'settings']) {
+  for (const tab of ['users', 'checkins', 'settings', 'batch_changes']) {
     const protections = b.ss.getSheetByName(tab).getProtections();
-    assert.equal(protections.length, 1);
+    assert.equal(protections.length, 1, tab);
     assert.equal(protections[0].warningOnly, true);
   }
+  assert.equal(b.ss.getSheetByName('batches').getProtections().length, 0, 'no warning on the owner\'s own tab');
+  const batches = b.ss.getSheetByName('batches');
+  assert.deepEqual(batches.rows()[0], ['key', 'name', 'name_hi', 'name_mr', 'curriculum', 'days', 'time', 'duration_min', 'meet_link', 'about',
+    'about_hi', 'about_mr']);
+  batches.getRange(2, 2).setValue("'Foundations");
   b.context.setup();
   assert.equal(b.ss.getSheetByName('users').getProtections().length, 1);
-  const classes = b.ss.getSheetByName('classes').rows();
-  assert.deepEqual(classes[0], ['key', 'name', 'name_hi', 'name_mr', 'level', 'about', 'days']);
-  assert.deepEqual(classes.find((r) => r[0] === 'hatha').slice(1, 4).concat([classes.find((r) => r[0] === 'hatha')[6]]),
-    ['Hatha Yoga', 'हठ योग', 'हठयोग', 'Mon, Fri']);
+  assert.equal(batches.rows().length, 5);
+  assert.equal(batches.rows()[1][1], 'Foundations', 'setup leaves the owner\'s edits alone');
 });
 
 test('setup keeps a tab that is not empty, and fills an empty settings row', () => {

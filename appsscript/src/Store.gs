@@ -6,17 +6,25 @@
 // UTC ISO-8601 strings. Writes happen under the script lock; ids are the largest id + 1, worked out under that lock.
 
 const TABLES_ = {
+  // A student's batch (a key of the batches tab) and since when; empty until the teacher places them.
   users: [['id', 'int'], ['name', 'text'], ['phone', 'text'], ['role', 'text'], ['status', 'text'], ['pw_hash', 'text'],
-    ['lang', 'text'], ['created_at', 'time']],
+    ['lang', 'text'], ['created_at', 'time'], ['batch', 'text?'], ['batch_since', 'time']],
   tokens: [['token_hash', 'text'], ['user_id', 'int'], ['created_at', 'time']],
-  class_sessions: [['id', 'int'], ['class_key', 'text'], ['starts_at', 'time'], ['duration_min', 'int'], ['meet_link', 'text?'],
+  // A class of one batch; its own Meet link and curriculum, when set, win over the batch's.
+  class_sessions: [['id', 'int'], ['batch', 'text'], ['starts_at', 'time'], ['duration_min', 'int'], ['meet_link', 'text?'],
     ['curriculum', 'text?'], ['updated_at', 'time']],
-  // `class` and `class_date` copy the session's class name and India date, for the owner's queries; the app uses session_id.
+  // `class` and `class_date` copy the class's batch name and India date, for the owner's queries; the app uses session_id.
   checkins: [['user_id', 'int'], ['session_id', 'int'], ['phase', 'text'], ['mood', 'int'], ['created_at', 'time'],
     ['class', 'text'], ['class_date', 'date']],
   feedback: [['id', 'int'], ['user_id', 'int'], ['screen', 'text'], ['text', 'text'], ['created_at', 'time']],
   shared_notes: [['id', 'int'], ['user_id', 'int'], ['text', 'text'], ['created_at', 'time']],
   settings: [['key', 'text'], ['value', 'text?']],
+  // Each placement of a student in a batch, and each move between batches: the review history.
+  batch_changes: [['id', 'int'], ['student_id', 'int'], ['from', 'text?'], ['to', 'text'], ['note', 'text?'], ['created_at', 'time']],
+  // The batches: seeded by setup() from content/studio.json while the tab is empty, then the owner's to edit. `days`
+  // like "mon, tue, wed", `time` like "07:00" in India; `curriculum` is its classes' default.
+  batches: [['key', 'text'], ['name', 'text'], ['name_hi', 'text'], ['name_mr', 'text'], ['curriculum', 'text'], ['days', 'text'],
+    ['time', 'text'], ['duration_min', 'int'], ['meet_link', 'text?'], ['about', 'text'], ['about_hi', 'text'], ['about_mr', 'text']],
   // The curriculum: seeded by setup() from content/curriculum.json while the tabs are empty, then the owner's to edit.
   library: [['key', 'text'], ['type', 'text'], ['level', 'int'], ['sanskrit', 'text'], ['name', 'text'], ['english', 'text'],
     ['aliases', 'text'], ['source', 'text']],

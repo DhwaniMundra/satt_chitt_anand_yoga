@@ -29,11 +29,11 @@ const BODY_ = {
     name: F_.str({ min: 1, max: 80, nullable: true, def: null }),
     lang: F_.oneOf(LANGS_, { nullable: true, def: null }),
   },
-  code: { code: F_.str(REQUIRED_) },
   checkin: { phase: F_.oneOf(['before', 'after'], REQUIRED_), mood: F_.int({ required: true, ge: 1, le: 5 }) },
   feedback: { screen: F_.str({ required: true, max: 40 }), text: F_.str({ required: true, min: 1, max: 2000 }) },
   link: { meet_link: F_.str(REQUIRED_) },
-  settings: { group_link: F_.str({ nullable: true, def: null }), default_meet_link: F_.str({ nullable: true, def: null }) },
+  settings: { group_link: F_.str({ nullable: true, def: null }) },
+  place: { batch: F_.str({ required: true, min: 1, max: 40 }), note: F_.str({ nullable: true, def: null, max: 300 }) },
   status: { status: F_.oneOf(['approved', 'rejected'], REQUIRED_) },
   shared: { text: F_.str({ required: true, min: 1, max: 500 }) },
   curriculum: { curriculum: F_.str({ required: true, min: 1, max: 40 }) },
@@ -62,6 +62,7 @@ const QUERY_LANG_ = { lang: F_.oneOf(LANGS_, { def: 'en' }) };
 // A 422 names the parameter, so they carry their names.
 const PATH_SESSION_ = { session_id: F_.int(REQUIRED_) };
 const PATH_USER_ = { user_id: F_.int(REQUIRED_) };
+const PATH_BATCH_ = { key: F_.str({ required: true, min: 1, max: 40 }) };
 const PATH_ITEM_ = { item: F_.str({ required: true, min: 1, max: 40 }) };
 
 function validateBody_(fields, body, errors) {
