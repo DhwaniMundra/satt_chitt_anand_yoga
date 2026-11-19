@@ -76,6 +76,13 @@ const ASHA_NOTES = {
   'setu_bandhasana:3': 'Lower back tight; came down early',
   'padahastasana:6': 'Hamstrings still pull; bent knees',
 };
+// Today's 8:00 Intermediate class: the moods before and after of the two who have said how it went.
+const TODAY_MOODS = { 'Meera Iyer': [3, 5], 'Priya Menon': [2, 4] };
+// Health notes students shared with the teacher from their phones: (student by index, text).
+const SHARED = [
+  [3, 'Left knee aches after climbing stairs; the supported variations help.'],
+  [1, 'Lower back is stiff on cold mornings, better after the first rounds.'],
+];
 // Practice on one's own: (student by index, days ago, minutes, [item, seconds held, reaction, pain, note]).
 const SOLO = [
   [0, 11, 15, [['vajrasana', 45, 2, 1, 'Knee again after 45 seconds'], ['tadasana', 60, 3], ['bhujangasana', 20, 2]]],
@@ -147,8 +154,9 @@ function main(file) {
 
   // The last SPAN days of each batch's classes, each with its batch's curriculum; most students joining most of their
   // batch's classes and saying after class how most items went, each item along its own shape. Asha and Kavita join
-  // every class. Then today's Intermediate class at 8:00: all three of its students joined, and two have said how it
-  // went; Asha says it in the tour (scripts/capture_tour.py), so run that after the class and within 12 hours of it.
+  // every class. Then today's Intermediate class at 8:00, which Meera and Priya joined and said how it went; Asha joins
+  // it and says how it went in the tour (scripts/capture_tour.py), so run that after the class and within 12 hours of
+  // it. The moods differ from class to class, as days do.
   const plans = {};
   CURRICULUM.curricula.forEach((c) => {
     plans[c.key] = c.items.map((i) => i.item);
@@ -184,14 +192,17 @@ function main(file) {
       .find((r) => r[1] === batch.key && r[2] instanceof Date && r[2].getTime() === start);
     const sid = made ? made[0] : id++;
     if (!made) addRow(b, 'class_sessions', { id: sid, batch: batch.key, starts_at: start, duration_min: batch.duration_min, curriculum, updated_at: start });
+    const base = pick([2, 3, 3, 4]); // how the day's class began for most
     students.filter((s) => batchOn(s, ago) === batch.key).forEach((s) => {
+      if (now && s === asha) return; // she joins it in the tour
       if (!now && s !== asha && s !== kavita && rng() < 0.3) return;
-      const before = pick([2, 3, 3, 3, 4]);
+      const moods = now && TODAY_MOODS[s.name];
+      const before = moods ? moods[0] : Math.min(5, Math.max(1, base + pick([-1, 0, 0, 1])));
       const row = { user_id: s.user.id, session_id: sid, class: name, class_date: day * DAY - IST_MS };
       addRow(b, 'checkins', { ...row, phase: 'before', mood: before, created_at: start - 3 * MIN });
-      if (now && s === asha) return; // she says how it went in the tour
       if (!now && s !== asha && s !== kavita && rng() >= 0.8) return;
-      addRow(b, 'checkins', { ...row, phase: 'after', mood: Math.min(5, before + pick([0, 1, 1, 2])), created_at: start + 60 * MIN });
+      const after = moods ? moods[1] : Math.min(5, before + pick([0, 1, 1, 2]));
+      addRow(b, 'checkins', { ...row, phase: 'after', mood: after, created_at: start + 60 * MIN });
       plans[curriculum].forEach((item) => {
         const note = s === asha ? ASHA_NOTES[item + ':' + ago] : undefined;
         if (!note && rng() < (s === asha || s === kavita ? 0.1 : 0.25)) return; // not every item gets an answer
@@ -218,6 +229,7 @@ function main(file) {
   TEACHER_FEEDBACK.forEach(([who, item, ago, text], i) => {
     addRow(b, 'asana_feedback', { id: i + 1, student_id: students[who].user.id, item, text, created_at: b.clock() - ago * DAY });
   });
+  for (const [who, text] of SHARED) ok(b.call('POST', '/me/shared', { token: students[who].token, body: { text } }));
   for (const [name, text] of FEEDBACK) {
     ok(b.call('POST', '/feedback', { token: students.find((s) => s.name === name).token, body: { screen: 'me', text } }));
   }
