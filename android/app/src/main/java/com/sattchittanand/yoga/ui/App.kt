@@ -1,7 +1,9 @@
 package com.sattchittanand.yoga.ui
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Air
@@ -88,7 +90,9 @@ private fun Main(vm: AppViewModel, teacher: Boolean, onLanguage: (String) -> Uni
             }
         },
     ) { padding ->
-        Box(Modifier.padding(padding)) {
+        // The screen ends above the keyboard while it is open (edge to edge, adjustResize alone does not do it), so
+        // the Ask box and the other text fields stay in sight as the student types.
+        Box(Modifier.padding(padding).consumeWindowInsets(padding).imePadding()) {
             when (tab) {
                 "today" -> TodayScreen(vm)
                 "week" -> WeekScreen(vm)

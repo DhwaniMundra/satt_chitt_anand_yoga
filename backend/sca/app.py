@@ -22,6 +22,7 @@ from pydantic import BaseModel, Field
 
 from sca import auth, db, studio as studio_mod, whatsapp
 from sca.assistant import Assistant, Busy
+from sca.companion import Companion, tools_json
 from sca.backup import GitHubBackup
 from sca.studio import IST
 
@@ -101,6 +102,11 @@ class FeedbackIn(BaseModel):
 
 class AskIn(BaseModel):
     question: str = Field(min_length=1, max_length=1000)
+    lang: Lang = "en"
+
+
+class ChatIn(BaseModel):
+    message: str = Field(min_length=1, max_length=1000)
     lang: Lang = "en"
 
 
@@ -214,6 +220,7 @@ def create_app(config: Config) -> FastAPI:
 
     app = FastAPI(title="Satt Chitt Anand", lifespan=lifespan)
     app.state.assistant = assistant
+    companion = Companion(assistant, studio, config.db_path)
     logins = auth.Attempts()  # per phone number
     codes = auth.Attempts()  # per user entering a group code
 
@@ -444,6 +451,64 @@ def create_app(config: Config) -> FastAPI:
         conn.commit()
         return {"answer": answer.text, "sources": answer.sources, "mode": answer.mode, "latency_s": round(answer.latency_s, 2)}
 
+    # ---------- the practice companion ----------
+
+    def chat_rows(conn: sqlite3.Connection, user_id: int, limit: int) -> list[sqlite3.Row]:
+        rows = conn.execute(
+            "SELECT * FROM chat_messages WHERE user_id = ? ORDER BY id DESC LIMIT ?", (user_id, limit)
+        ).fetchall()
+        return rows[::-1]
+
+    @app.get("/chat")
+    def chat_history(user: sqlite3.Row = Depends(current_user), conn: sqlite3.Connection = Depends(get_db)) -> dict:
+        """This student's conversation with the companion, oldest first. Only they can read it."""
+        return {"messages": [{"role": r["role"], "text": r["text"], "tools": json.loads(r["tools"]), "mode": r["mode"],
+                              "created_at": r["created_at"]} for r in chat_rows(conn, user["id"], 60)]}
+
+    @app.post("/chat")
+    def chat(body: ChatIn, user: sqlite3.Row = Depends(current_user), conn: sqlite3.Connection = Depends(get_db)) -> dict:
+        if user["role"] == "student" and user["status"] != "approved":
+            raise HTTPException(403, "pending")
+        history = [(r["role"], r["text"]) for r in chat_rows(conn, user["id"], 12)]
+        try:
+            reply = companion.chat(user, body.message.strip(), body.lang, history)
+        except Busy:
+            raise HTTPException(503, "busy") from None
+        moment = db.iso(db.now())
+        conn.execute("INSERT INTO chat_messages (user_id, role, text, created_at) VALUES (?, 'student', ?, ?)",
+                     (user["id"], body.message.strip(), moment))
+        labels = tools_json(reply.tools)
+        conn.execute("INSERT INTO chat_messages (user_id, role, text, tools, mode, created_at) VALUES (?, 'companion', ?, ?, ?, ?)",
+                     (user["id"], reply.text, labels, reply.mode, moment))
+        # What the studio may see, as for /ask: without research consent, not the words, not the topic, not who asked.
+        consent = bool(user["research_consent"])
+        conn.execute(
+            "INSERT INTO questions (user_id, lang, question, sources, mode, latency_s, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (user["id"] if consent else None, body.lang, body.message if consent else None,
+             labels if consent else "[]", reply.mode, reply.latency_s, moment),
+        )
+        conn.commit()
+        return {"reply": reply.text, "tools": json.loads(labels), "mode": reply.mode, "latency_s": round(reply.latency_s, 2)}
+
+    @app.delete("/chat")
+    def clear_chat(user: sqlite3.Row = Depends(current_user), conn: sqlite3.Connection = Depends(get_db)) -> dict:
+        conn.execute("DELETE FROM chat_messages WHERE user_id = ?", (user["id"],))
+        conn.commit()
+        return {"ok": True}
+
+    @app.get("/me/notes")
+    def my_notes(user: sqlite3.Row = Depends(current_user), conn: sqlite3.Connection = Depends(get_db)) -> dict:
+        """What the companion remembers for this student."""
+        rows = conn.execute("SELECT id, text, created_at FROM companion_notes WHERE user_id = ? ORDER BY id", (user["id"],))
+        return {"notes": [dict(r) for r in rows]}
+
+    @app.delete("/me/notes/{note_id}")
+    def forget_note(note_id: int, user: sqlite3.Row = Depends(current_user), conn: sqlite3.Connection = Depends(get_db)) -> dict:
+        if conn.execute("DELETE FROM companion_notes WHERE id = ? AND user_id = ?", (note_id, user["id"])).rowcount == 0:
+            raise HTTPException(404, "no_note")
+        conn.commit()
+        return {"ok": True}
+
     # ---------- teacher ----------
 
     @app.get("/teacher/home")
@@ -571,7 +636,7 @@ def create_app(config: Config) -> FastAPI:
             "AND a.session_id = b.session_id AND a.phase = 'after' WHERE b.phase = 'before'"
         ).fetchone()
         counts = dict(conn.execute("SELECT status, COUNT(*) FROM users WHERE role = 'student' GROUP BY status").fetchall())
-        asked = conn.execute("SELECT COUNT(*), AVG(CASE WHEN mode = 'gemma' THEN latency_s END) FROM questions").fetchone()
+        asked = conn.execute("SELECT COUNT(*), AVG(CASE WHEN mode IN ('gemma', 'companion') THEN latency_s END) FROM questions").fetchone()
         notes = conn.execute(
             "SELECT f.screen, f.text, f.created_at, u.name FROM feedback f JOIN users u ON u.id = f.user_id "
             "ORDER BY f.created_at DESC LIMIT 20"

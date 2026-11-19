@@ -158,7 +158,7 @@ Keywords: blood pressure, BP, hypertension, heart, cardiac, रक्तचा�
 - Stop at once and get help if you feel chest pain, pressure, or severe breathlessness.
 
 ## Diabetes
-Keywords: diabetes, sugar, blood sugar, मधुमेह, शुगर, डायबिटीज, मधुमेह
+Keywords: diabetes, sugar, blood sugar, metformin, insulin, मधुमेह, शुगर, डायबिटीज
 
 - Regular yoga and activity support overall health alongside the treatment your doctor gives. Do not change or
   skip any medicine because of yoga.

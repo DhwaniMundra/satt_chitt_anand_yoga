@@ -22,15 +22,17 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var teacherHome by mutableStateOf<TeacherHome?>(null); private set
     var students by mutableStateOf<List<Student>>(emptyList()); private set
     var insights by mutableStateOf<Insights?>(null); private set
+    /** The conversation with the practice companion; the server keeps it, this is what is on screen. */
     val chat = mutableStateListOf<ChatLine>()
     var asking by mutableStateOf(false); private set
+    var notes by mutableStateOf<List<Note>>(emptyList()); private set
     var busy by mutableStateOf(false); private set
     var error by mutableStateOf<String?>(null)
     /** A one-off message for a snackbar; the screen clears it once shown. */
     var notice by mutableStateOf<String?>(null)
 
     init {
-        if (prefs.token == null) starting = false else launchCall(onDone = { starting = false }) { refreshAll() }
+        if (prefs.token == null) starting = false else launchCall(onDone = { starting = false }) { refreshAll(); fetchChat() }
     }
 
     private fun launchCall(onDone: () -> Unit = {}, block: suspend () -> Unit) {
@@ -69,6 +71,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val reply = api.post("/auth/login", JSONObject().put("phone", phone).put("password", password))
         prefs.token = reply.getString("token")
         refreshAll()
+        fetchChat()
     }
 
     fun signup(name: String, phone: String, password: String, teacher: Boolean, code: String, consent: Boolean) {
@@ -82,6 +85,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 .put("research_consent", consent)
             prefs.token = api.post("/auth/signup", body).getString("token")
             refreshAll()
+            fetchChat()
         }
     }
 
@@ -95,7 +99,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private fun signOutLocally() {
         prefs.token = null
         user = null; home = null; stats = null; teacherHome = null; insights = null
-        students = emptyList()
+        students = emptyList(); notes = emptyList()
         chat.clear()
     }
 
@@ -126,15 +130,19 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         home = Home.from(api.get("/home?lang=${prefs.lang}"))
     }
 
-    fun ask(question: String) {
+    /** Sends [question] to the companion: the student's line shows at once, the reply when it comes. If it fails, the
+     *  line comes off again (the server saved neither) and [onFailed] gets the words back, to send again. */
+    fun ask(question: String, onFailed: (String) -> Unit = {}) {
         if (question.isBlank() || asking) return
-        chat.add(ChatLine(question.trim(), fromStudent = true))
+        val line = ChatLine(question.trim(), fromStudent = true)
+        chat.add(line)
         asking = true
         viewModelScope.launch {
+            var answered = false
             try {
-                val reply = api.post("/ask", JSONObject().put("question", question.trim()).put("lang", prefs.lang))
-                val sources = reply.getJSONArray("sources").let { a -> (0 until a.length()).map { a.getString(it) } }
-                chat.add(ChatLine(reply.getString("answer"), fromStudent = false, mode = reply.getString("mode"), sources = sources))
+                val reply = api.post("/chat", JSONObject().put("message", line.text).put("lang", prefs.lang))
+                chat.add(ChatLine(reply.getString("reply"), fromStudent = false, tools = reply.getJSONArray("tools").strings(), mode = reply.getString("mode")))
+                answered = true
             } catch (e: ApiError) {
                 error = e.code
             } catch (e: org.json.JSONException) {
@@ -142,7 +150,39 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             } finally {
                 asking = false
             }
+            if (!answered && chat.lastOrNull() == line) {
+                chat.removeAt(chat.lastIndex)
+                onFailed(line.text)
+            }
         }
+    }
+
+    /** Loads the saved conversation, when the Ask tab opens. */
+    fun loadChat() {
+        if (!asking) launchCall { fetchChat() }
+    }
+
+    /** Keeps what is on screen when the server has the same messages; otherwise shows the server's, as when the
+     *  student also chats on another phone. */
+    private suspend fun fetchChat() {
+        val lines = api.get("/chat").getJSONArray("messages").map(ChatLine::from)
+        if (asking || lines == chat.toList()) return
+        chat.clear()
+        chat.addAll(lines)
+    }
+
+    fun clearChat() = launchCall {
+        api.delete("/chat")
+        chat.clear()
+    }
+
+    fun loadNotes() = launchCall {
+        notes = api.get("/me/notes").getJSONArray("notes").map(Note::from)
+    }
+
+    fun forgetNote(id: Int) = launchCall {
+        api.delete("/me/notes/$id")
+        notes = api.get("/me/notes").getJSONArray("notes").map(Note::from)
     }
 
     // ---------- teacher ----------

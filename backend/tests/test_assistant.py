@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from sca.assistant import Assistant, Busy, is_urgent, load_sections, load_translation, tokenize
+from sca.assistant import Assistant, Busy, is_foreign, is_urgent, load_sections, load_translation, tokenize
 
 NOTES = Path(__file__).resolve().parents[1] / "knowledge" / "yoga_health.md"
 
@@ -77,13 +77,16 @@ def test_suggested_questions_find_their_section(assistant, question, section):
     assert assistant.retriever.top(question)[0].title == section
 
 
-def test_suggestions_match_the_app():
+def test_note_suggestions_in_the_app_are_tested():
+    """The app's suggestions 2 and 4 are answered from the studio notes and must be among the tested questions above.
+    Suggestions 1 and 3 ask about the student's own practice and are covered by scripts/eval_companion.py."""
     root = Path(__file__).resolve().parents[2] / "android" / "app" / "src" / "main" / "res"
     shown = set()
     for folder in ("values", "values-hi", "values-mr"):
         text = (root / folder / "strings.xml").read_text(encoding="utf-8")
-        shown |= {line.split(">")[1].split("<")[0].replace("\\'", "'") for line in text.splitlines() if 'name="sugg_' in line}
-    assert shown == {q for q, _ in SUGGESTIONS}
+        shown |= {line.split(">")[1].split("<")[0].replace("\\'", "'") for line in text.splitlines()
+                  if 'name="sugg_2"' in line or 'name="sugg_4"' in line}
+    assert len(shown) == 6 and shown <= {q for q, _ in SUGGESTIONS}
 
 
 def test_marathi_notes_have_every_section():
@@ -102,6 +105,16 @@ def test_urgent_signs_however_they_are_written(question):
 @pytest.mark.parametrize("question", ["How do I breathe in cat-cow?", "Chest opening poses for posture?", "सांस कैसे लें?", "श्वास कसा घ्यावा?"])
 def test_ordinary_breathing_questions_are_not_urgent(question):
     assert not is_urgent(question)
+
+
+@pytest.mark.parametrize("text", ["8:০০", "ともに", "전에", "يكا", "٣", "０"])
+def test_other_scripts_letters_and_digits_are_banned_from_marathi_answers(text):
+    assert is_foreign(text)
+
+
+@pytest.mark.parametrize("text", ["8:00", "८:००", "सकाळी", "Hatha", "café", "॥", "—", "😊"])
+def test_latin_and_devanagari_letters_and_digits_are_allowed(text):
+    assert not is_foreign(text)
 
 
 def test_marathi_answers_from_marathi_notes_when_gemma_is_off(assistant):
