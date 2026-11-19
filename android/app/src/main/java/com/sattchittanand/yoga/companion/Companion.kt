@@ -4,6 +4,7 @@ import com.google.ai.edge.litertlm.Tool
 import com.google.ai.edge.litertlm.ToolParam
 import com.google.ai.edge.litertlm.ToolSet
 import java.time.Instant
+import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
@@ -103,10 +104,17 @@ class Tools(private val data: StudentData, private val notes: StudioNotes, priva
     fun getMyPractice(days: Int): Map<String, Any?> {
         used += "get_my_practice"
         return try {
-            data.practice(days.coerceIn(1, 90), lang)
+            withWeekdays(data.practice(days.coerceIn(1, 90), lang))
         } catch (e: Exception) {
             mapOf("error" to UNREACHABLE)
         }
+    }
+
+    /** The summary with each class's ISO date written out ("Monday 16 November"), so Gemma need not work out weekdays. */
+    private fun withWeekdays(summary: Map<String, Any?>): Map<String, Any?> {
+        @Suppress("UNCHECKED_CAST")
+        val classes = summary["classes"] as? List<Map<String, Any?>> ?: return summary
+        return summary + ("classes" to classes.map { c -> c + ("date" to DATE.format(LocalDate.parse(c["date"] as String))) })
     }
 
     fun getUpcomingClasses(): Map<String, Any?> {

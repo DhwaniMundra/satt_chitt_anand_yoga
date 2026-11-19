@@ -1,5 +1,6 @@
 package com.sattchittanand.yoga.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -41,9 +42,10 @@ import androidx.compose.ui.unit.dp
 import com.sattchittanand.yoga.AppViewModel
 import com.sattchittanand.yoga.ClassSession
 import com.sattchittanand.yoga.R
+import com.sattchittanand.yoga.Studio
+import com.sattchittanand.yoga.StudioWords
 import kotlinx.coroutines.delay
 import java.time.Instant
-import java.time.LocalDate
 
 /** The clock, ticking every 30 seconds, for countdowns. */
 @Composable
@@ -58,17 +60,32 @@ fun rememberNow(): Instant {
     return now
 }
 
+/** The student's day: how the last class went, the next class and its sequence, the week ahead, and the studio. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TodayScreen(vm: AppViewModel) {
     val home = vm.home ?: return
     val now = rememberNow()
+    val words = vm.words()
+    var afterClass by rememberSaveable { mutableStateOf(false) }
+    val after = home.afterCheckin
+    if (afterClass && after != null) {
+        BackHandler { afterClass = false }
+        AfterClassScreen(vm, after) { afterClass = false }
+        return
+    }
     PullToRefreshBox(isRefreshing = vm.busy, onRefresh = vm::refresh, modifier = Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Label(stringResource(R.string.brand_latin), Palette.saffron)
             Text(stringResource(R.string.greeting, home.user.name.substringBefore(' ')), style = MaterialTheme.typography.headlineSmall)
 
-            home.afterCheckin?.let { AfterClassCard(vm, it) }
+            if (after != null) {
+                SectionCard(tint = Palette.saffronLight) {
+                    Text(stringResource(R.string.how_did_it_go), style = MaterialTheme.typography.titleMedium)
+                    Text(after.info.name, style = MaterialTheme.typography.bodyMedium, color = Palette.muted)
+                    Button(onClick = { afterClass = true }) { Text(stringResource(R.string.tell_teacher, LocalTeacher.current)) }
+                }
+            }
             if (!home.user.isApproved) PendingCard(vm)
 
             home.sessions.firstOrNull()?.let { NextClassCard(vm, it, now) }
@@ -83,7 +100,9 @@ fun TodayScreen(vm: AppViewModel) {
             }
 
             if (home.sessions.size > 1) {
-                Label(stringResource(R.string.coming_up))
+                Text(words.week, style = MaterialTheme.typography.titleLarge)
+                Text(stringResource(R.string.week_time), style = MaterialTheme.typography.bodyMedium, color = Palette.muted)
+                Text(words.classes, style = MaterialTheme.typography.bodyMedium, color = Palette.muted)
                 SectionCard {
                     home.sessions.drop(1).forEachIndexed { i, s ->
                         if (i > 0) HorizontalDivider(color = Palette.line)
@@ -100,6 +119,8 @@ fun TodayScreen(vm: AppViewModel) {
                     }
                 }
             }
+            TheStudio(home.studio, words)
+            Spacer(Modifier.height(8.dp))
         }
     }
 }
@@ -133,7 +154,7 @@ private fun NextClassCard(vm: AppViewModel, s: ClassSession, now: Instant) {
             link == null -> Text(stringResource(R.string.link_soon), style = MaterialTheme.typography.bodyMedium, color = Palette.mossLight)
             askMood -> SectionCard(tint = Palette.paper) {
                 Text(stringResource(R.string.how_feel_before), style = MaterialTheme.typography.titleMedium)
-                MoodPicker(null) { mood -> vm.checkin(s.id, "before", mood) { askMood = false; openLink(context, link) } }
+                MoodPicker(null) { mood -> vm.checkInBefore(s.id, mood) { askMood = false; openLink(context, link) } }
                 TextButton(onClick = { askMood = false; openLink(context, link) }) { Text(stringResource(R.string.skip)) }
             }
             else -> Button(
@@ -147,14 +168,13 @@ private fun NextClassCard(vm: AppViewModel, s: ClassSession, now: Instant) {
             }
         }
     }
-}
-
-@Composable
-private fun AfterClassCard(vm: AppViewModel, s: ClassSession) {
-    SectionCard(tint = Palette.saffronLight) {
-        Text(stringResource(R.string.how_feel_after), style = MaterialTheme.typography.titleMedium)
-        Text(s.info.name, style = MaterialTheme.typography.bodyMedium, color = Palette.muted)
-        MoodPicker(null) { mood -> vm.checkin(s.id, "after", mood) }
+    vm.curricula?.let { curricula ->
+        curricula.find(s.curriculum)?.let { plan ->
+            SectionCard {
+                Label(stringResource(R.string.todays_sequence) + " · " + plan.name)
+                Sequence(plan, curricula, vm.prefs.lang, collapsed = 3)
+            }
+        }
     }
 }
 
@@ -163,7 +183,7 @@ private fun PendingCard(vm: AppViewModel) {
     var code by rememberSaveable { mutableStateOf("") }
     SectionCard(tint = Palette.saffronLight) {
         Text(stringResource(R.string.pending_title), style = MaterialTheme.typography.titleMedium)
-        Text(stringResource(R.string.pending_body), style = MaterialTheme.typography.bodyMedium)
+        Text(stringResource(R.string.pending_body, LocalTeacher.current), style = MaterialTheme.typography.bodyMedium)
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedTextField(code, { code = it.uppercase() }, singleLine = true, label = { Text(stringResource(R.string.group_code_label)) }, modifier = Modifier.weight(1f))
             Button(onClick = { vm.enterGroupCode(code) }, enabled = code.isNotBlank() && !vm.busy) { Text(stringResource(R.string.enter_code)) }
@@ -172,57 +192,26 @@ private fun PendingCard(vm: AppViewModel) {
     }
 }
 
-private val DAY_NAMES = mapOf(
-    "mon" to R.string.mon, "tue" to R.string.tue, "wed" to R.string.wed, "thu" to R.string.thu,
-    "fri" to R.string.fri, "sat" to R.string.sat, "sun" to R.string.sun,
-)
-
+/** The teacher and the meaning of the studio's name, in the studio's own words. */
 @Composable
-fun WeekScreen(vm: AppViewModel) {
-    val studio = vm.home?.studio ?: return
-    val words = vm.words()
-    val today = LocalDate.now().dayOfWeek.value - 1 // Monday is 0, as in the studio's list
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        Label(studio.tagline, Palette.saffron)
-        Text(words.week, style = MaterialTheme.typography.headlineSmall)
-        Text(stringResource(R.string.week_time), style = MaterialTheme.typography.bodyLarge, color = Palette.muted)
-        Text(words.classes, style = MaterialTheme.typography.bodyMedium, color = Palette.muted)
-        SectionCard {
-            studio.weekly.forEachIndexed { i, (day, info) ->
-                if (i > 0) HorizontalDivider(color = Palette.line)
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        stringResource(DAY_NAMES.getValue(day)),
-                        style = MaterialTheme.typography.titleMedium,
-                        color = if (i == today) Palette.saffron else Palette.ink,
-                        modifier = Modifier.width(64.dp),
-                    )
-                    Column(Modifier.weight(1f)) {
-                        Text(info.name, style = MaterialTheme.typography.bodyLarge)
-                        Text(info.about, style = MaterialTheme.typography.bodyMedium, color = Palette.muted)
-                    }
-                }
-            }
-        }
-        Text(words.teacher, style = MaterialTheme.typography.titleLarge)
-        SectionCard(tint = Palette.mossLight) {
-            Text(studio.teacherName, style = MaterialTheme.typography.titleLarge, color = Palette.moss)
-            Text(studio.teacherTitle, style = MaterialTheme.typography.labelLarge, color = Palette.muted)
-            Text(studio.teacherBio, style = MaterialTheme.typography.bodyLarge)
-        }
-        SectionCard(tint = Palette.cream) {
-            Text(words.nameIsAMap, style = MaterialTheme.typography.titleMedium, color = Palette.moss)
-            words.name.forEach { (devanagari, latin, meaning) ->
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(devanagari, style = MaterialTheme.typography.titleLarge, color = Palette.saffron, modifier = Modifier.width(80.dp))
-                    Column {
-                        Text(latin, style = MaterialTheme.typography.titleMedium)
-                        Text(meaning, style = MaterialTheme.typography.bodyMedium, color = Palette.muted)
-                    }
-                }
-            }
-        }
-        Pill(stringResource(R.string.first_class_free), Palette.saffronLight, Palette.saffron)
-        Spacer(Modifier.height(8.dp))
+private fun TheStudio(studio: Studio, words: StudioWords) {
+    Text(words.teacherHeading, style = MaterialTheme.typography.titleLarge)
+    SectionCard(tint = Palette.mossLight) {
+        Text(studio.teacherName, style = MaterialTheme.typography.titleLarge, color = Palette.moss)
+        Text(studio.teacherTitle, style = MaterialTheme.typography.labelLarge, color = Palette.muted)
+        Text(studio.teacherBio, style = MaterialTheme.typography.bodyLarge)
     }
+    SectionCard(tint = Palette.cream) {
+        Text(words.nameIsAMap, style = MaterialTheme.typography.titleMedium, color = Palette.moss)
+        words.name.forEach { (devanagari, latin, meaning) ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(devanagari, style = MaterialTheme.typography.titleLarge, color = Palette.saffron, modifier = Modifier.width(80.dp))
+                Column {
+                    Text(latin, style = MaterialTheme.typography.titleMedium)
+                    Text(meaning, style = MaterialTheme.typography.bodyMedium, color = Palette.muted)
+                }
+            }
+        }
+    }
+    Pill(stringResource(R.string.first_class_free), Palette.saffronLight, Palette.saffron)
 }

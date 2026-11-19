@@ -1,8 +1,11 @@
 package com.sattchittanand.yoga.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -19,6 +22,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -47,8 +51,10 @@ import java.util.Locale
 import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
+/** The teacher's day: the week's classes, each with its curriculum and its Meet link to share; the group settings; the
+ *  language and signing out. */
 @Composable
-fun TeacherClassesScreen(vm: AppViewModel, openStudents: () -> Unit) {
+fun TeacherTodayScreen(vm: AppViewModel, onLanguage: (String) -> Unit, openStudents: () -> Unit) {
     val home = vm.teacherHome ?: return
     // The soonest class is open by default, and again whenever a sooner one appears.
     var expanded by rememberSaveable(home.sessions.firstOrNull()?.id) { mutableStateOf(home.sessions.firstOrNull()?.id ?: -1) }
@@ -66,6 +72,9 @@ fun TeacherClassesScreen(vm: AppViewModel, openStudents: () -> Unit) {
                 SessionCard(vm, s, expanded == s.id, home.settings.defaultMeetLink) { expanded = if (expanded == s.id) -1 else s.id }
             }
             GroupCard(vm)
+            Label(stringResource(R.string.language))
+            LanguageChips(vm.prefs.lang, onLanguage)
+            OutlinedButton(onClick = vm::logout, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.logout)) }
             Spacer(Modifier.height(8.dp))
         }
     }
@@ -93,6 +102,7 @@ private fun SessionCard(vm: AppViewModel, s: ClassSession, open: Boolean, standi
             Text(status, style = MaterialTheme.typography.bodyMedium, color = Palette.muted)
         }
         if (open) {
+            Plan(vm, s)
             OutlinedTextField(
                 link, { link = it }, label = { Text(stringResource(R.string.meet_link)) },
                 placeholder = { Text("meet.google.com/abc-defg-hij") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
@@ -115,6 +125,25 @@ private fun SessionCard(vm: AppViewModel, s: ClassSession, open: Boolean, standi
             }
         }
     }
+}
+
+/** The class's curriculum, one tap to change, and its sequence. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun Plan(vm: AppViewModel, s: ClassSession) {
+    val curricula = vm.curricula ?: return
+    Label(stringResource(R.string.curriculum))
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        curricula.curricula.forEach { c ->
+            FilterChip(selected = s.curriculum == c.key, onClick = { if (s.curriculum != c.key) vm.setCurriculum(s.id, c.key) },
+                enabled = !vm.busy, label = { Text(c.name) })
+        }
+    }
+    curricula.find(s.curriculum)?.let { plan ->
+        Text(plan.about, style = MaterialTheme.typography.bodyMedium, color = Palette.muted)
+        Sequence(plan, curricula, vm.prefs.lang, collapsed = 3)
+    }
+    HorizontalDivider(color = Palette.line)
 }
 
 @Composable
@@ -209,6 +238,12 @@ fun StudentsScreen(vm: AppViewModel) {
 fun InsightsScreen(vm: AppViewModel) {
     LaunchedEffect(Unit) { vm.loadInsights() }
     val data = vm.insights
+    var reviewing by rememberSaveable { mutableStateOf<Int?>(null) }
+    data?.sessions?.firstOrNull { it.id == reviewing }?.let { session ->
+        BackHandler { reviewing = null }
+        ClassReviewScreen(vm, session)
+        return
+    }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text(stringResource(R.string.insights_title), style = MaterialTheme.typography.headlineSmall)
         if (data == null) return@Column
@@ -223,7 +258,7 @@ fun InsightsScreen(vm: AppViewModel) {
         val withCheckins = data.sessions.filter { it.joined > 0 }
         if (withCheckins.isEmpty()) Text(stringResource(R.string.no_data), color = Palette.muted)
         withCheckins.forEach { s ->
-            SectionCard {
+            SectionCard(Modifier.clickable { reviewing = s.id }) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text(s.className, style = MaterialTheme.typography.titleMedium)
@@ -233,6 +268,7 @@ fun InsightsScreen(vm: AppViewModel) {
                 }
                 MoodRow(stringResource(R.string.before), s.moodBefore, Palette.moss)
                 MoodRow(stringResource(R.string.after), s.moodAfter, Palette.saffron)
+                Text(stringResource(R.string.review_open), style = MaterialTheme.typography.labelLarge, color = Palette.moss)
             }
         }
 

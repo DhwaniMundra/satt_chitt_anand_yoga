@@ -5,7 +5,7 @@
     <string name="brand_latin" translatable="false">Satt Chitt Anand</string>
 
     <!-- Welcome and sign in -->
-    <string name="welcome_sub">Live yoga with Ramit ji, every morning at 8.</string>
+    <string name="welcome_sub">Live yoga with %1$s, every morning at 8.</string>
     <string name="language">Language</string>
     <string name="i_am_student">I\'m a student</string>
     <string name="i_am_teacher">I\'m the teacher</string>
@@ -15,11 +15,10 @@
     <string name="phone">WhatsApp number</string>
     <string name="password">Password (6 or more letters)</string>
     <string name="group_code">Group code (from the WhatsApp group)</string>
-    <string name="group_code_help">No code? Sign up anyway and Ramit ji will approve you.</string>
+    <string name="group_code_help">No code? Sign up anyway and %1$s will approve you.</string>
     <string name="teacher_code">Teacher code</string>
     <string name="back">Back</string>
     <string name="role_student">Student</string>
-    <string name="role_teacher">Teacher</string>
 
     <!-- Errors, by the code the server sends -->
     <string name="err_bad_phone">Please enter a valid WhatsApp number.</string>
@@ -32,7 +31,7 @@
     <string name="err_network">Cannot reach the studio server. Check your internet and try again.</string>
     <string name="err_short_password">The password needs at least 6 letters.</string>
     <string name="err_generic">Something went wrong. Please try again.</string>
-    <string name="err_pending">Ask opens once Ramit ji approves you. Have the group code? Enter it on the Today screen.</string>
+    <string name="err_pending">Ask opens once %1$s approves you. Have the group code? Enter it on the Today screen.</string>
     <string name="err_busy">The studio server is busy. Please try again in a minute.</string>
     <string name="err_too_many_attempts">Too many tries. Please wait 15 minutes and try again.</string>
     <string name="err_teacher_exists">This studio already has its teacher. Sign up as a student.</string>
@@ -40,17 +39,15 @@
 
     <!-- Tabs -->
     <string name="tab_today">Today</string>
-    <string name="tab_week">Week</string>
+    <string name="tab_practice">Practice</string>
     <string name="tab_ask">Ask</string>
     <string name="tab_me">Me</string>
-    <string name="tab_classes">Classes</string>
     <string name="tab_students">Students</string>
     <string name="tab_insights">Insights</string>
 
     <!-- Today -->
     <string name="greeting">Namaste, %1$s</string>
     <string name="next_class">Next class</string>
-    <string name="coming_up">Coming up</string>
     <string name="today">Today</string>
     <string name="tomorrow">Tomorrow</string>
     <string name="minutes">%1$d min</string>
@@ -60,11 +57,24 @@
     <string name="link_soon">The class link will appear here before class.</string>
     <string name="checked_in">You checked in ✓</string>
     <string name="pending_title">Waiting for approval</string>
-    <string name="pending_body">Ramit ji will approve you soon. Have the group code from the WhatsApp group? Enter it here.</string>
+    <string name="pending_body">%1$s will approve you soon. Have the group code from the WhatsApp group? Enter it here.</string>
     <string name="enter_code">Enter code</string>
     <string name="open_group">Open WhatsApp group</string>
     <string name="how_feel_before">How do you feel right now?</string>
     <string name="how_feel_after">Class done! How do you feel now?</string>
+    <string name="how_did_it_go">How did it go?</string>
+    <string name="tell_teacher">Tell %1$s</string>
+    <string name="after_class_help">One tap each; skip any.</string>
+    <string name="reaction_1">Not yet</string>
+    <string name="reaction_2">With effort</string>
+    <string name="reaction_3">Steady</string>
+    <string name="reaction_4">At ease</string>
+    <string name="pain_flag">Felt strain or pain</string>
+    <string name="add_note">Add a note</string>
+    <string name="done">Done</string>
+    <string name="todays_sequence">Today\'s sequence</string>
+    <string name="show_all">Show all %1$d</string>
+    <string name="show_less">Show less</string>
     <string name="mood_1">Very low</string>
     <string name="mood_2">Low</string>
     <string name="mood_3">Okay</string>
@@ -75,13 +85,6 @@
     <!-- Week -->
     <string name="week_time">8:00 – 8:55 AM India time, live on Google Meet</string>
     <string name="first_class_free">Your first class is free.</string>
-    <string name="mon">Mon</string>
-    <string name="tue">Tue</string>
-    <string name="wed">Wed</string>
-    <string name="thu">Thu</string>
-    <string name="fri">Fri</string>
-    <string name="sat">Sat</string>
-    <string name="sun">Sun</string>
 
 
     <!-- Ask -->
@@ -108,8 +111,8 @@
     <string name="mood_lift">Mood lift</string>
     <string name="mood_lift_help">How much better you feel after class, on average (−4 to +4).</string>
     <string name="memory_title">My health notes</string>
-    <string name="privacy">Your chat and health notes stay on this phone. Ramit ji sees your name and number, your check-ins and moods before and after class, your feedback, and any note you choose to share.</string>
-    <string name="memory_empty">No notes yet. Write one below, such as an old injury Ramit ji should know about.</string>
+    <string name="privacy">%1$s sees your name and number and your practice: check-ins, moods, how each item of a class went and your notes on it, and your feedback. Your Gemma chat and health notes stay on this phone unless you share one.</string>
+    <string name="memory_empty">No notes yet. Write one below, such as an old injury %1$s should know about.</string>
     <string name="note_hint">For example: my left knee hurts in Vajrasana</string>
     <string name="forget_note">Forget</string>
     <string name="feedback_title">What should we improve?</string>
@@ -153,6 +156,11 @@
     <string name="after">After</string>
     <string name="what_students_said">What students said</string>
     <string name="no_data">No check-ins yet.</string>
+    <string name="curriculum">Curriculum</string>
+    <string name="review_title">How the class went</string>
+    <string name="review_open">How each item went</string>
+    <string name="review_counts">%1$d joined · %2$d said how it went</string>
+    <string name="review_empty">No one has said how it went yet.</string>
     <!-- Gemma on the phone -->
     <string name="ask_thinking_phone">Thinking on your phone…</string>
     <string name="gemma_title">Gemma on your phone</string>
@@ -175,10 +183,10 @@
     <string name="try_again">Try again</string>
     <string name="gemma_download_title">Gemma for Satt Chitt Anand</string>
     <string name="gemma_download_note">The practice companion, for your phone (one time)</string>
-    <string name="share_note">Share with Ramit ji</string>
-    <string name="shared_note">Shared with Ramit ji</string>
-    <string name="share_confirm_title">Share with Ramit ji?</string>
-    <string name="share_confirm_body">Ramit ji will see this note on his Students screen. Forgetting it here later does not take it back.</string>
+    <string name="share_note">Share with %1$s</string>
+    <string name="shared_note">Shared with %1$s</string>
+    <string name="share_confirm_title">Share with %1$s?</string>
+    <string name="share_confirm_body">%1$s will see this note on the Students screen. Forgetting it here later does not take it back.</string>
     <string name="share">Share</string>
     <string name="shared_title">Shared with you</string>
     <string name="shared_help">Health notes students chose to share with you.</string>
@@ -194,5 +202,25 @@
     <plurals name="until_minutes">
         <item quantity="one">%d min</item>
         <item quantity="other">%d min</item>
+    </plurals>
+    <plurals name="dose_breaths">
+        <item quantity="one">%d breath</item>
+        <item quantity="other">%d breaths</item>
+    </plurals>
+    <plurals name="dose_seconds">
+        <item quantity="one">%d sec</item>
+        <item quantity="other">%d sec</item>
+    </plurals>
+    <plurals name="dose_minutes">
+        <item quantity="one">%d min</item>
+        <item quantity="other">%d min</item>
+    </plurals>
+    <plurals name="dose_rounds">
+        <item quantity="one">%d round</item>
+        <item quantity="other">%d rounds</item>
+    </plurals>
+    <plurals name="dose_strokes">
+        <item quantity="one">%d stroke</item>
+        <item quantity="other">%d strokes</item>
     </plurals>
 </resources>
