@@ -37,10 +37,13 @@ restores from the last backup.
 ## Test
 
 ```bash
-cd backend && .venv/bin/python -m pytest -q                        # 69 tests: API, retrieval, safety path, backup
+cd backend && .venv/bin/python -m pytest -q                        # 95 tests: API, retrieval, safety path, backup, companion
 .venv/bin/python -m scripts.eval_assistant ../docs/evals/next.md   # the assistant's question set; stop the server first
+.venv/bin/python -m scripts.eval_companion ../data/demo.sqlite3 ../docs/evals/next_companion.md  # the companion's conversations
 ```
-The evaluation's checks are coarse; read every answer in the report before trusting a pass.
+The companion's evaluation runs on a copy of the demo database; `SCA_MODEL=<path to a .litertlm>` picks the model
+(E4B by default; the reports compare E2B and E4B). Run one evaluation at a time, with the server stopped. The checks
+are coarse; read every answer in the report before trusting a pass.
 
 ## Tour it and make the media
 
@@ -66,10 +69,10 @@ on a fresh database started with `SCA_TEACHER_CODE`.
 | Path | What it is |
 |---|---|
 | `android/` | The app: `Data.kt` (HTTP and models), `AppViewModel.kt`, `ui/` (one file per screen), text in `res/values{,-hi,-mr}` |
-| `backend/sca/` | The server: `app.py` (API), `db.py`, `auth.py`, `studio.py`, `whatsapp.py`, `assistant.py`, `backup.py` |
+| `backend/sca/` | The server: `app.py` (API), `db.py`, `auth.py`, `studio.py`, `whatsapp.py`, `assistant.py` (notes and Gemma), `companion.py` (the chat and its tools), `backup.py` |
 | `backend/knowledge/` | The assistant's notes, in English and Marathi |
 | `backend/content/studio.json` | Classes, weekly rhythm and teacher, in three languages |
-| `backend/tests/`, `backend/evals/` | Tests; the assistant's question set |
+| `backend/tests/`, `backend/evals/` | Tests; the assistant's question set (the companion's conversations are in `backend/scripts/eval_companion.py`) |
 | `scripts/` | Run it (`demo.sh`, `run_backend.sh`, `build_app.sh`, `run_emulator.sh`), tour it (`capture_tour.py`, `two_phone_test.py`, `phone.py`), make media (`make_figures.py`, `make_diagrams.py`, `make_video.py`, `preview_readme.py`) |
 | `docs/` | `decisions.md`, `iterations/` (the log), `evals/` (every answer), `media/` (what the README shows) |
 | `.local/visualization/` | *Not committed.* Recordings on top; raw screenshots in `tours/`; build files in `work/` |
@@ -84,5 +87,6 @@ on a fresh database started with `SCA_TEACHER_CODE`.
 3. `avdmanager create avd -n sca_phone -k "system-images;android-36;google_apis_playstore;x86_64" -d pixel_6` with
    `ANDROID_AVD_HOME=tools/avd`.
 4. `gemma-4-E4B-it.litertlm` from Hugging Face (`litert-community/gemma-4-E4B-it-litert-lm`) into
-   `models/gemma-4-E4B-it/`.
+   `models/gemma-4-E4B-it/`; for the companion's E2B evaluation, the E2B file (`gemma-4-E2B-it.litertlm`) into
+   `models/gemma-4-E2B-it/`.
 5. `cd backend && uv venv .venv && uv pip install -e ".[dev]"`.
