@@ -76,6 +76,8 @@ const ASHA_NOTES = {
   'setu_bandhasana:3': 'Lower back tight; came down early',
   'padahastasana:6': 'Hamstrings still pull; bent knees',
 };
+// The classes in which Asha felt strain or pain, each with her note above: the knee twice, early on, and the back once.
+const ASHA_STRAIN = ['vajrasana:12', 'vajrasana:9', 'setu_bandhasana:3'];
 // Today's 8:00 Intermediate class: the moods before and after of the two who have said how it went.
 const TODAY_MOODS = { 'Meera Iyer': [3, 5], 'Priya Menon': [2, 4] };
 // Health notes students shared with the teacher from their phones: (student by index, text).
@@ -85,7 +87,7 @@ const SHARED = [
 ];
 // Practice on one's own: (student by index, days ago, minutes, [item, seconds held, reaction, pain, note]).
 const SOLO = [
-  [0, 11, 15, [['vajrasana', 45, 2, 1, 'Knee again after 45 seconds'], ['tadasana', 60, 3], ['bhujangasana', 20, 2]]],
+  [0, 11, 15, [['vajrasana', 45, 2], ['tadasana', 60, 3], ['bhujangasana', 20, 2]]],
   [0, 9, 20, [['vajrasana', 60, 2], ['tadasana', 60, 3], ['bhujangasana', 25, 3]]],
   [0, 6, 18, [['vajrasana', 80, 3], ['bhujangasana', 30, 3], ['trikonasana', 30, 2]]],
   [0, 4, 25, [['vajrasana', 100, 3, 0, 'Cushion, no pain'], ['bhujangasana', 30, 3], ['trikonasana', 30, 3], ['vrikshasana', 40, 2],
@@ -173,6 +175,11 @@ function main(file) {
   const asha = students[0];
   const kavita = students[3];
   const shapes = {};
+  // Asha's Surya Namaskar since she moved up to Intermediate: at ease, then steady in her latest class before today. In
+  // the tour it takes effort, with a strain in the wrists.
+  const intermediateDays = studio.batches.find((batch) => batch.key === 'intermediate').days;
+  const lastIntermediate = [1, 2, 3, 4, 5, 6, 7].find((ago) => intermediateDays.indexOf(days[(today - ago + 3) % 7]) >= 0);
+  const fixed = (s, item, ago) => (s === asha && item === 'surya_namaskar' ? (ago === lastIntermediate ? 3 : 4) : null);
   const shape = (s, item) => {
     const key = s.user.id + ':' + item;
     if (!shapes[key]) shapes[key] = (s === asha && ASHA_SHAPES[item]) || (s === kavita && KAVITA_SHAPES[item]) || pick(SHAPES);
@@ -209,9 +216,10 @@ function main(file) {
         const [first, latest] = shape(s, item);
         const reaction = Math.round(first + ((latest - first) * (SPAN - ago)) / (SPAN - 1) + (rng() - 0.5) * 0.6);
         const dipping = latest < first && ago <= 4;
-        const pain = s === asha ? (item === 'vajrasana' && ago >= 9) || (item === 'setu_bandhasana' && ago === 3)
+        const pain = s === asha ? ASHA_STRAIN.includes(item + ':' + ago)
           : s === kavita ? ['pavanamuktasana', 'setu_bandhasana'].includes(item) && ago >= 8 : (dipping && rng() < 0.4) || rng() < 0.01;
-        addRow(b, 'practice', { id: entry++, user_id: s.user.id, session_id: sid, item, reaction: Math.min(4, Math.max(1, reaction)),
+        const said = fixed(s, item, ago) || Math.min(4, Math.max(1, reaction));
+        addRow(b, 'practice', { id: entry++, user_id: s.user.id, session_id: sid, item, reaction: said,
           pain: pain ? 1 : 0, note, created_at: start + 60 * MIN, item_name: names[item], week: new Date(week) });
       });
     });

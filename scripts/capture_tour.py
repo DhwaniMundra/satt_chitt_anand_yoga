@@ -1,7 +1,8 @@
 """Walks through the app on the emulator and saves the same screenshots and two screen recordings every time,
 so each iteration can be compared with the last: screenshots in .local/visualization/viz_<major>/screens/<version>/,
-recordings and their small copies in viz_<major>/tours/ (gitignored; scripts/make_figures.py turns the best of it into
-the committed GIFs and contact sheets in docs/media/).
+each with the screen's UI dump beside it (<name>.xml, every element's bounds), and recordings and their small copies in
+viz_<major>/tours/ (gitignored; scripts/make_figures.py turns the best of it into the committed GIFs and contact sheets
+in docs/media/). It prints what the edges of a scrolling list cut through in any shot.
 
 Needs: `source scripts/env.sh`, the 6 GB emulator running (SCA_AVD=sca_phone_big scripts/run_emulator.sh) with
 Gemma downloaded in Ask, and nothing else on port 8000. The tour starts the dev backend on a fresh copy of the
@@ -13,8 +14,9 @@ chat or notes, so a second run shows the same screens.
 The story, in the order it is shot, each screen holding what came before it: Asha joins her class and says how it went
 (01-06); Neha, waiting to be placed, tells the teacher about herself (21-23b); the teacher shares a class, places Neha
 in the batch her answers point to, moves Rohan, reads the class's review and writes to Asha about the strain she felt
-(24-34); Neha placed (27b); then Asha's practice with the teacher's word, a practice on her own with the stopwatch, Ask
-about her own asana, Me with a health note shared, and Hindi and Marathi (07-20).
+(24-34); Neha placed (27b); then Asha's practice with the teacher's word, a practice on her own with the stopwatch and
+her practice after it, Ask about her own asana (asked again in a fresh chat if the answer misreads her data) and asked to
+remember her wrists, Me with that note shared, and Hindi and Marathi (07-20).
 
 Usage: python3 scripts/capture_tour.py v1.0
 """
@@ -50,6 +52,10 @@ def tour(version: str) -> None:
 
     def shot(name: str) -> None:
         p.screenshot(out / f"{name}.png")  # at the phone's own size, for the film's close-ups
+        xml = p.hierarchy()  # and beside it every element's bounds, for the film's checks of where rings and crops go
+        (out / f"{name}.xml").write_text(xml, encoding="utf-8")
+        for cut in p.cut_at_edges(xml):
+            print(f"{name}: {cut}")
 
     def log_in(number: str, password: str) -> None:
         p.tap("Log in", exact=True)
@@ -98,7 +104,7 @@ def tour(version: str) -> None:
     p.tap_under("Surya Namaskar", "Add a note")
     p.type_under("Surya Namaskar", "Wrists ached in the plank; rested after round three")
     p.tap_under("Virabhadrasana", "At ease")
-    card_to_top("Sectional")  # the first item's card starts the screen, the mood card above it out of sight
+    p.frame("Sectional", "Virabhadrasana")  # the first item's card starts the screen, the mood card above it out of sight
     shot("05a_after_class_items")
     tap_scrolling("Done", exact=True)
     time.sleep(2)
@@ -137,7 +143,7 @@ def tour(version: str) -> None:
     shot("26_teacher_batches")
     p.tap("Students", exact=True)
     time.sleep(2)
-    bring("Neha Rao", 250)  # her whole card, below the shared notes: her name down to the approve button
+    p.frame("Neha Rao", "New password")  # her whole card, below the shared notes
     shot("27_students_waiting")  # the waiting student's answers and the batch they point to
     p.tap("See all", exact=True)
     time.sleep(1)
@@ -146,17 +152,17 @@ def tour(version: str) -> None:
     p.hide_keyboard()
     tap_scrolling("Approve into")
     time.sleep(2)
-    p.scroll_to_top()
+    p.frame(None, "How each item has gone")  # the shared notes, then the first student's whole card
     shot("29_students_placed")  # each with a batch and since when
     p.tap_under("Rohan Desai", "Move to batch")
     p.tap_under("Rohan Desai", "Intermediate")
     p.type_under("Rohan Desai", "Steady now; ready for longer holds")
+    p.frame("Rohan Desai", "How each item has gone")
     shot("30_move_batch")
     p.tap_under("Rohan Desai", "Move to Intermediate")
     time.sleep(2)
     p.scroll_to_top()
-    find_scrolling("Rohan Desai")
-    bring("Rohan Desai", 450)
+    p.frame("Rohan Desai", "How each item has gone")
     shot("30b_rohan_moved")  # "Intermediate · since" today
     p.tap("Insights", exact=True)
     time.sleep(2)
@@ -193,6 +199,7 @@ def tour(version: str) -> None:
     log_in(*STUDENT)
     p.tap("Practice", exact=True)
     time.sleep(2)
+    p.frame(None, "Vajrasana")
     shot("07_practice")
     tap_scrolling("Surya Namaskar")
     time.sleep(2)
@@ -216,8 +223,9 @@ def tour(version: str) -> None:
     time.sleep(1)
     p.tap("Start the stopwatch")
     time.sleep(39)
+    shot_at = time.time()
     shot("10a_solo_running")  # about 0:40
-    time.sleep(50)  # a hold of about a minute and a half
+    time.sleep(50 - (time.time() - shot_at))  # a hold of about a minute and a half, the dump's seconds included
     p.tap("Stop", exact=True)
     p.tap("Steady", exact=True)
     p.type_into("Add a note", "Cushion under the ankles; no knee pain")
@@ -234,17 +242,26 @@ def tour(version: str) -> None:
     tap_scrolling("Vajrasana")
     time.sleep(2)
     shot("12_history_solo")  # this practice the latest
-    p.back()
+    p.back()  # to the Practice screen
+    time.sleep(2)
+    p.frame(None, "Vajrasana")
+    shot("12b_practice_after_solo")  # as 07, with this practice counted
 
     # ---- Asha: Ask and Me ----
     p.tap("Ask", exact=True)
     p.find("How is my", timeout=600)  # Gemma starts on the first visit
     shot("13_ask")
-    p.tap("How is my")  # the suggestion about her own asana that most needs attention
-    p.find("Looked at that asana", timeout=180)
-    time.sleep(1)
+    for attempt in range(1, 4):  # the answer must hold to her data; a wrong one is asked again in a fresh chat
+        p.tap("How is my")  # the suggestion about her own asana that most needs attention: Surya Namaskar
+        p.find("Looked at that asana", timeout=180)
+        answer = settled_answer()
+        wrong = misreadings(answer)
+        print(f"14_ask_asana, try {attempt}: {'holds' if not wrong else 'wrong: ' + '; '.join(wrong)}\n  {answer}")
+        if not wrong or attempt == 3:
+            break
+        p.tap("Clear", exact=True)
     shot("14_ask_asana")
-    p.type_into("Type your question", "Please remember that my left knee hurts in Vajrasana.")
+    p.type_into("Type your question", "Please remember that my wrists ache after planks.")
     shot("14a_ask_typing")  # the box stays above the keyboard
     p.tap("Send", exact=True)
     p.find("Saved a note", timeout=180)
@@ -252,7 +269,7 @@ def tour(version: str) -> None:
     time.sleep(1)
     shot("15_ask_remember")
     p.tap("Me", exact=True)
-    p.find("left knee hurts")  # under "My health notes"
+    p.find("plank")  # under "My health notes", in the words Gemma saved it in
     time.sleep(1)
     shot("16_me")
     p.tap(f"Share with {p.TEACHER_NAME}")
@@ -321,23 +338,43 @@ def bring(text: str, y: int) -> None:
     time.sleep(1)
 
 
-def card_to_top(text: str) -> None:
-    """Scrolls so the card holding `text` starts one list gap below the top of the scrolling content: the row above
-    it is out of sight, not cut through. A slow swipe, measured again and corrected."""
-    for _ in range(3):
-        found = p.nodes()
-        bounds = lambda n: [int(v) for v in re.findall(r"\d+", n.get("bounds"))]  # noqa: E731
-        top = min(bounds(n)[1] for n, _ in found if n.get("scrollable") == "true")
-        title = next(n for n, _ in found if text in (n.get("text") or ""))
-        # The card's top: its title less the card's padding (20 dp), at the phone's 2.625 pixels to the dp.
-        card = bounds(title)[1] - 54
-        gap = 31  # the list's 12 dp between rows
-        move = top + gap - card
-        if abs(move) < 4:
-            return
-        slop = 21 if move > 0 else -21  # the first 8 dp of a drag only start it
-        p.adb("shell", "input", "swipe", "540", "1500", "540", str(1500 + move + slop), "2000")
-        time.sleep(1)
+TOOLS = ("Looked at", "Checked the", "Read the studio", "Read your notes", "Saved a note")  # the pills under an answer
+
+
+def settled_answer() -> str:
+    """Gemma's answer on screen once it has stopped growing: the text between the question and the tools it used."""
+    answer = ""
+    for _ in range(20):
+        texts = [p.label(n) for n, _ in p.nodes() if p.label(n)]
+        asked = next(i for i, t in enumerate(texts) if t.startswith("How is my"))
+        words = []
+        for t in texts[asked + 1:]:
+            if t.startswith(TOOLS):
+                break
+            words.append(t)
+        if " ".join(words) == answer:
+            return answer
+        answer = " ".join(words)
+        time.sleep(2)
+    return answer
+
+
+def misreadings(answer: str) -> list[str]:
+    """Where an answer about Asha's Surya Namaskar parts from her data: at ease twice, then steady, then today with
+    effort and a strain in the wrists, and the teacher's word on it. Leaving one out is wrong, and so are words for the
+    strain that the data does not hold, and counts that do not add up. Empty when nothing is found; read it as well."""
+    text = answer.lower()
+    wrong = [f"leaves out {what}" for what, words in (
+        ("at ease", ("at ease",)), ("steady", ("steady",)), ("with effort", ("effort",)), ("the wrists", ("wrist",)),
+        ("the teacher's word", ("knuckle", "fingers", "knees down"))) if not any(w in text for w in words)]
+    wrong += [f"says '{w}'" for w in ("slight", "mild", "minor", "a little", "a bit", "small", "severe", "always") if w in text]
+    for sentence in re.split(r"(?<=[.!?])\s+", text):
+        if re.search(r"\b(two|twice|both|three|all)\b(?:(?!ease)[^.;]){0,40}\bsteady\b|\bsteady\b[^.;]{0,20}\b(twice|two times|both)\b",
+                     sentence):
+            wrong.append(f"counts steady more than once: '{sentence}'")
+        if re.search(r"\b(three|3|all|every)\b(?:(?!steady)[^.;]){0,40}\bat ease\b|\bat ease\b[^.;]{0,25}\b(three|3|all|every)\b", sentence):
+            wrong.append(f"counts at ease more than twice: '{sentence}'")
+    return wrong
 
 
 def make_small(video: Path, small: Path) -> None:
