@@ -10,7 +10,7 @@ from fastapi.testclient import TestClient
 from sca import db, studio as studio_mod
 from sca.app import Config, create_app
 from sca.assistant import Assistant
-from sca.companion import HISTORY_TURNS, Companion, practice_summary, tools_for
+from sca.companion import HISTORY_TURNS, Companion, practice_summary, save_if_asked, tools_for
 
 BACKEND = Path(__file__).resolve().parents[1]
 STUDIO = studio_mod.load(BACKEND / "content" / "studio.json")
@@ -94,6 +94,7 @@ def test_chat_urgent_and_pending(setup):
     client, _, code = setup
     asha = signup(client, "9000000002", "Asha", code=code)
     assert client.post("/chat", json={"message": "I have chest pain", "lang": "hi"}, headers=asha).json()["mode"] == "urgent"
+    assert client.get("/chat", headers=asha).json()["messages"][-1]["mode"] == "urgent"  # still red after a restart
     pending = signup(client, "9000000004", "Meera")
     assert client.post("/chat", json={"message": "hello", "lang": "en"}, headers=pending).json()["detail"] == "pending"
 
@@ -126,3 +127,60 @@ def test_conversation_handed_to_gemma(setup):
     assert "Asha" in seen["system"] and "Marathi" in seen["system"] and seen["ban"] is True
     assert seen["tools"] == ["get_my_practice", "get_upcoming_classes", "search_studio_notes", "save_my_note", "get_my_notes"]
     assert headers  # the account exists for the route tests above
+
+
+def test_matching_notes_are_handed_over_up_front():
+    from sca.companion import preloaded_notes
+
+    assistant = Assistant(BACKEND / "knowledge" / "yoga_health.md", "x", "y")
+    used = []
+    assert "पाठीवर" in preloaded_notes(assistant, "पाठदुखीसाठी योग?", "mr", used) and used == ["search_studio_notes"]
+    assert preloaded_notes(assistant, "How was my practice this week?", "en", []) == ""
+    assert "### Pregnancy" in preloaded_notes(assistant, "I am pregnant, can I join?", "en", [])
+    assert "### Diabetes" in preloaded_notes(assistant, "Can I lower my metformin dose?", "en", [])
+    # With the schedule handed over, "class" names no topic of its own; "back" still does.
+    assert preloaded_notes(assistant, "कल कौन सी कक्षा है?", "hi", [], schedule=True) == ""
+    assert "### Back pain" in preloaded_notes(assistant, "My lower back is stiff. Which class tomorrow?", "en", [], schedule=True)
+    # Matches on words of a section's text only, not its topic: no notes, and no "Read the studio notes" under the reply.
+    for message in ["How many classes did I join in the last 30 days?", "Do I usually feel better after class than before?",
+                    "What did I tell you about my knee?"]:
+        assert preloaded_notes(assistant, message, "en", []) == "", message
+
+
+def test_a_note_asked_for_is_saved_even_if_gemma_only_says_so(setup):
+    client, path, code = setup
+    headers = signup(client, "9000000002", "Asha Kulkarni", code=code)
+    asha = db.connect(path).execute("SELECT * FROM users WHERE phone = '+919000000002'").fetchone()
+
+    class SaysSaved:
+        def __init__(self, calls_tool):
+            self.calls_tool = calls_tool
+
+        def chat(self, system, preface, message, tools, ban_foreign_scripts=False):
+            if self.calls_tool:
+                {t.__name__: t for t in tools}["save_my_note"]("left knee hurts in Vajrasana")
+            return "I have saved that for you."
+
+    assistant = Assistant(BACKEND / "knowledge" / "yoga_health.md", "Satt Chitt Anand Yoga", "Ramit ji")
+    companion = Companion(assistant, STUDIO, path)
+    assistant.gemma = SaysSaved(calls_tool=False)
+    reply = companion.chat(asha, "Please remember that my left knee hurts in Vajrasana.", "en", [("student", "How was my week?")])
+    assert "save_my_note" in reply.tools
+    assistant.gemma = SaysSaved(calls_tool=True)  # Gemma saved it: not saved twice
+    companion.chat(asha, "Remember that my left knee hurts in Vajrasana", "en", [])
+    notes = [n["text"] for n in client.get("/me/notes", headers=headers).json()["notes"]]
+    assert notes == ["My left knee hurts in Vajrasana.", "left knee hurts in Vajrasana"]
+
+
+@pytest.mark.parametrize(("message", "note"), [
+    ("याद रखना कि मेरे घुटने में दर्द है", "मेरे घुटने में दर्द है"),
+    ("कृपया लक्षात ठेवा की माझा गुडघा दुखतो", "माझा गुडघा दुखतो"),
+    ("Do you remember that my knee hurts?", None),  # asking, not telling
+    ("What did I tell you about my knee?", None),
+])
+def test_the_words_the_app_teaches_for_saving(setup, message, note):
+    _, path, _ = setup
+    used = []
+    assert save_if_asked(path, 1, message, used) is (note is not None)
+    rows = [r[0] for r in db.connect(path).execute("SELECT text FROM companion_notes")]
+    assert rows == ([note] if note else [])
