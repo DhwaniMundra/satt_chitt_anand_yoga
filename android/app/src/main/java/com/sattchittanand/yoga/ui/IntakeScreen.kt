@@ -72,8 +72,10 @@ private fun IntakeForm(vm: AppViewModel, before: Intake?, close: () -> Unit) {
     val thanks = stringResource(R.string.intake_thanks, teacher)
     val number = KeyboardOptions(keyboardType = KeyboardType.Number)
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text(stringResource(R.string.intake_title), style = MaterialTheme.typography.headlineSmall)
+        BackHeader(stringResource(R.string.intake_title), close)
         Text(stringResource(R.string.intake_help, teacher), style = MaterialTheme.typography.bodyMedium, color = Palette.muted)
+        // Who sees these answers, before any is given.
+        Text(stringResource(R.string.intake_consent, teacher), style = MaterialTheme.typography.bodyMedium)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedTextField(age, { age = it.filter(Char::isDigit).take(3) }, label = { Text(stringResource(R.string.age)) }, singleLine = true,
                 keyboardOptions = number, modifier = Modifier.weight(1f))
@@ -107,7 +109,6 @@ private fun IntakeForm(vm: AppViewModel, before: Intake?, close: () -> Unit) {
                     colors = FilterChipDefaults.filterChipColors(selectedContainerColor = Palette.danger, selectedLabelColor = Color.White))
             }
         }
-        Text(stringResource(R.string.intake_consent, teacher), style = MaterialTheme.typography.bodyMedium)
         val ready = age.toIntOrNull() != null && height.toIntOrNull() != null && weight.toIntOrNull() != null && food != null
         Button(
             onClick = {

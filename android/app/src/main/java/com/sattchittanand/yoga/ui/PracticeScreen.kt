@@ -39,6 +39,12 @@ import java.util.Locale
 fun PracticeScreen(vm: AppViewModel) {
     var open by rememberSaveable { mutableStateOf<String?>(null) }
     var choosing by rememberSaveable { mutableStateOf(false) }
+    var aboutMe by rememberSaveable { mutableStateOf(false) }
+    if (aboutMe) return IntakeScreen(vm) { aboutMe = false }
+    if (vm.user?.isApproved != true) { // nothing to show, nor to send, until the teacher places them
+        Column(Modifier.fillMaxSize().padding(20.dp)) { PendingCard { aboutMe = true } }
+        return
+    }
     vm.solo?.let {
         SoloPractise(vm, it)
         return
@@ -49,7 +55,7 @@ fun PracticeScreen(vm: AppViewModel) {
     }
     open?.let { item ->
         BackHandler { open = null }
-        ItemHistoryScreen(vm, item, null)
+        ItemHistoryScreen(vm, item, null) { open = null }
         return
     }
     LaunchedEffect(Unit) {
@@ -68,22 +74,13 @@ fun PracticeScreen(vm: AppViewModel) {
         Text(stringResource(R.string.mood_lift_help), style = MaterialTheme.typography.bodyMedium, color = Palette.muted)
         Label(stringResource(R.string.each_item))
         ItemList(vm, vm.items, teacherViewing = false, reload = { vm.loadItems() }, collapsed = 6) { open = it }
-        val days = (vm.practice.map { it.date } + vm.soloSessions.map { it.date }).distinct().sortedDescending()
-        if (days.isNotEmpty()) {
+        val history = (vm.practice.map { it.at to it } + vm.soloSessions.map { it.at to it }).sortedByDescending { it.first }
+        if (history.isNotEmpty()) {
             Label(stringResource(R.string.last_two_weeks))
             SectionCard {
-                var first = true
-                days.forEach { day ->
-                    vm.soloSessions.filter { it.date == day }.forEach { // in the evening, after the day's class
-                        if (!first) HorizontalDivider(color = Palette.line)
-                        first = false
-                        SoloDay(it)
-                    }
-                    vm.practice.filter { it.date == day }.forEach {
-                        if (!first) HorizontalDivider(color = Palette.line)
-                        first = false
-                        ClassMoods(it)
-                    }
+                history.forEachIndexed { i, (_, entry) ->
+                    if (i > 0) HorizontalDivider(color = Palette.line)
+                    if (entry is SoloSession) SoloDay(entry) else ClassMoods(entry as JoinedClass)
                 }
             }
         }
@@ -94,7 +91,7 @@ fun PracticeScreen(vm: AppViewModel) {
 private fun SoloDay(s: SoloSession) {
     Column {
         Text(stringResource(R.string.solo_row, stringResource(R.string.minutes, s.minutes)), style = MaterialTheme.typography.bodyLarge)
-        Text(dayLabel(s.date) + " · " + s.items.joinToString(", "), style = MaterialTheme.typography.bodyMedium, color = Palette.muted,
+        Text(dayLabel(s.at) + " · " + s.items.joinToString(", "), style = MaterialTheme.typography.bodyMedium, color = Palette.muted,
             maxLines = 2, overflow = TextOverflow.Ellipsis)
     }
 }
@@ -106,7 +103,7 @@ private fun ClassMoods(c: JoinedClass) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             Text(c.name, style = MaterialTheme.typography.bodyLarge)
-            Text(dayLabel(c.date), style = MaterialTheme.typography.bodyMedium, color = Palette.muted)
+            Text(dayLabel(c.at), style = MaterialTheme.typography.bodyMedium, color = Palette.muted)
         }
         Text("${MOODS[c.moodBefore - 1]} → ${c.moodAfter?.let { MOODS[it - 1] } ?: "–"}", fontSize = 22.sp, modifier = Modifier.semantics { contentDescription = spoken })
     }

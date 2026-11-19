@@ -123,10 +123,10 @@ data class User(val id: Int, val name: String, val phone: String, val role: Stri
     }
 }
 
-/** A batch: its name and words in the chosen language, its days ("mon"…) and start in India ("07:00"). */
-data class BatchInfo(val key: String, val name: String, val about: String, val days: List<String>, val time: String?) {
+/** A batch: its name and words in the chosen language, and its start in India ("07:00"). */
+data class BatchInfo(val key: String, val name: String, val about: String, val time: String?) {
     companion object {
-        fun from(o: JSONObject) = BatchInfo(o.getString("key"), o.getString("name"), o.getString("about"), o.getJSONArray("days").strings(), o.str("time"))
+        fun from(o: JSONObject) = BatchInfo(o.getString("key"), o.getString("name"), o.getString("about"), o.str("time"))
     }
 }
 
@@ -227,16 +227,16 @@ data class ItemSummary(val item: String, val inClass: Int, val solo: Int, val tr
 /** One item's history for one student (GET /me/asanas/{item}): each time, newest first, the holds timed solo, and the
  *  teacher's feedback. */
 data class ItemHistory(val item: String, val inClass: Int, val solo: Int, val first: LocalDate?, val trend: Trend?, val holds: Holds?,
-    val painTimes: Int, val entries: List<ItemEntry>, val feedback: List<Pair<LocalDate, String>>) {
+    val painTimes: Int, val entries: List<ItemEntry>, val feedback: List<Pair<Instant, String>>) {
     companion object {
         fun from(o: JSONObject) = ItemHistory(
             o.getString("item"), o.getInt("in_class"), o.getInt("solo"), o.date("first"), Trend.from(o, "reaction_trend"),
             if (o.isNull("holds")) null else o.getJSONObject("holds").let { Holds(it.getInt("recent_seconds"), it.getInt("longest_seconds")) },
             o.getJSONObject("strain_or_pain").getInt("times"),
             o.getJSONArray("entries").map {
-                ItemEntry(LocalDate.parse(it.getString("date")), it.getString("kind") == "solo", it.intOrNull("hold_s"), it.intOrNull("reaction"), it.getInt("pain") == 1, it.str("note"))
+                ItemEntry(Instant.parse(it.getString("at")), it.getString("kind") == "solo", it.intOrNull("hold_s"), it.intOrNull("reaction"), it.getInt("pain") == 1, it.str("note"))
             },
-            o.getJSONArray("feedback").map { LocalDate.parse(it.getString("date")) to it.getString("text") },
+            o.getJSONArray("feedback").map { Instant.parse(it.getString("at")) to it.getString("text") },
         )
     }
 }
@@ -270,7 +270,7 @@ data class SoloRun(val startedAt: Long, val curriculum: String?, val said: List<
 /** The stopwatch's holds, in seconds: the latest and the longest. */
 data class Holds(val recent: Int, val longest: Int)
 
-data class ItemEntry(val date: LocalDate, val solo: Boolean, val heldSeconds: Int?, val reaction: Int?, val pain: Boolean, val note: String?)
+data class ItemEntry(val at: Instant, val solo: Boolean, val heldSeconds: Int?, val reaction: Int?, val pain: Boolean, val note: String?)
 
 /** How a class went, item by item, for the teacher (GET /teacher/sessions/{id}/practice). */
 data class ClassReview(val curriculum: String?, val joined: Int, val answered: Int, val items: List<ItemReview>) {
@@ -356,18 +356,18 @@ data class Stats(val classesJoined: Int, val streakDays: Int, val moodChange: Do
     }
 }
 
-/** A class the student joined, from GET /me/practice: its date in India, its name, and the moods (1 to 5). */
-data class JoinedClass(val date: LocalDate, val name: String, val curriculum: String?, val moodBefore: Int, val moodAfter: Int?) {
+/** A class the student joined, from GET /me/practice: when, its name, and the moods (1 to 5). */
+data class JoinedClass(val at: Instant, val name: String, val curriculum: String?, val moodBefore: Int, val moodAfter: Int?) {
     companion object {
         fun from(o: JSONObject) =
-            JoinedClass(LocalDate.parse(o.getString("date")), o.getString("class"), o.str("curriculum"), o.getInt("mood_before"), o.intOrNull("mood_after"))
+            JoinedClass(Instant.parse(o.getString("at")), o.getString("class"), o.str("curriculum"), o.getInt("mood_before"), o.intOrNull("mood_after"))
     }
 }
 
-/** A session of practice on one's own (GET /me/practice): its day, how long, and its items' names. */
-data class SoloSession(val date: LocalDate, val minutes: Int, val items: List<String>) {
+/** A session of practice on one's own (GET /me/practice): when it began, how long, and its items' names. */
+data class SoloSession(val at: Instant, val minutes: Int, val items: List<String>) {
     companion object {
-        fun from(o: JSONObject) = SoloSession(LocalDate.parse(o.getString("date")), o.getInt("minutes"), o.getJSONArray("items").let { a -> List(a.length()) { a.getString(it) } })
+        fun from(o: JSONObject) = SoloSession(Instant.parse(o.getString("at")), o.getInt("minutes"), o.getJSONArray("items").let { a -> List(a.length()) { a.getString(it) } })
     }
 }
 

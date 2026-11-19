@@ -69,7 +69,7 @@ fun TodayScreen(vm: AppViewModel) {
     val words = vm.words()
     var afterClass by rememberSaveable { mutableStateOf(false) }
     var aboutMe by rememberSaveable { mutableStateOf(false) }
-    if (aboutMe) return IntakeScreen(vm) { aboutMe = false }
+    if (aboutMe || vm.askIntake) return IntakeScreen(vm) { aboutMe = false; vm.askIntake = false }
     val after = home.afterCheckin
     if (afterClass && after != null) {
         BackHandler { afterClass = false }
@@ -180,15 +180,16 @@ private fun NextClassCard(vm: AppViewModel, s: ClassSession, now: Instant) {
     vm.curricula?.let { curricula ->
         curricula.find(s.curriculum)?.let { plan ->
             SectionCard {
-                Label(stringResource(R.string.todays_sequence) + " · " + plan.name)
+                Label(stringResource(R.string.sequence) + " · " + plan.name)
                 Sequence(plan, curricula, vm.prefs.lang, collapsed = 3)
             }
         }
     }
 }
 
+/** For a student still waiting to be placed: Today and Practice say so, and offer the intake. */
 @Composable
-private fun PendingCard(tellAbout: () -> Unit) {
+fun PendingCard(tellAbout: () -> Unit) {
     SectionCard(tint = Palette.saffronLight) {
         Text(stringResource(R.string.pending_title, LocalTeacher.current), style = MaterialTheme.typography.titleMedium)
         Text(stringResource(R.string.pending_body, LocalTeacher.current), style = MaterialTheme.typography.bodyMedium)

@@ -6,6 +6,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.Instant
+import java.time.ZoneId
 
 /** The companion's conversation without the model: what Gemma is handed up front, its tools and the "Remember that…"
  *  rule. */
@@ -64,7 +65,7 @@ class CompanionTest {
         UpcomingClass(Instant.parse("2026-11-25T02:30:00Z"), "Intermediate", "For a steady practice."),
     )
 
-    private fun tools(server: StudentData = Server(week), lang: String = "en") = Tools(server, NOTES, lang) { now }
+    private fun tools(server: StudentData = Server(week), lang: String = "en") = Tools(server, NOTES, lang, ZoneId.of("Asia/Kolkata")) { now }
 
     @Test fun matchingNotesAreHandedOverUpFront() {
         val used = mutableListOf<String>()
@@ -242,6 +243,20 @@ class CompanionTest {
         assertEquals("या आठवड्यात नितंब अर्ध्या पातळीवर खाली करा.", withoutGlosses("या आठवड्यात नितंब (hips) अर्ध्या पातळीवर खाली करा."))
         assertEquals("सेतुबन्धासन कसे चालले आहे", withoutGlosses("सेतुबन्धासन (Bridge pose) कसे चालले आहे"))
         assertEquals("८:०० वाजता (भारतीय वेळ)", withoutGlosses("८:०० वाजता (भारतीय वेळ)")) // Devanagari in brackets stays
+    }
+
+    /** A student in New York: a Monday 7:00 class in India is on their Sunday evening, "today", at their own time too. */
+    @Test fun theScheduleIsOnTheStudentsOwnCalendar() {
+        val newYork = ZoneId.of("America/New_York")
+        val monday7India = Instant.parse("2026-11-23T01:30:00Z")
+        val sundayEvening = Instant.parse("2026-11-23T01:00:00Z") // 8:00 PM on Sunday in New York, 6:30 AM on Monday in India
+        val abroad = Tools(Server(listOf(UpcomingClass(monday7India, "Beginner", "Gentle"))), NOTES, "en", newYork) { sundayEvening }
+        val schedule = abroad.getUpcomingClasses()
+        assertEquals("Sunday 22 November", schedule["today_is"])
+        assertEquals("today, Sunday 22 November, at 8:30 PM your time (7:00 AM India time)", schedule["next_class"])
+        assertEquals(0L, com.sattchittanand.yoga.ui.daysFromToday(monday7India, sundayEvening, newYork))
+        assertEquals(1L, com.sattchittanand.yoga.ui.daysFromToday(monday7India, Instant.parse("2026-11-22T02:00:00Z"), newYork)) // Saturday evening
+        assertEquals(0L, com.sattchittanand.yoga.ui.daysFromToday(monday7India, sundayEvening, ZoneId.of("Asia/Kolkata")))
     }
 }
 

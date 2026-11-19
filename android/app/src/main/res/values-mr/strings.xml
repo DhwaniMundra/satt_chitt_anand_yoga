@@ -28,7 +28,7 @@
     <string name="err_network">स्टुडिओ सर्व्हरशी जोडता येत नाही. इंटरनेट तपासा आणि पुन्हा प्रयत्न करा.</string>
     <string name="err_short_password">पासवर्डमध्ये किमान 6 अक्षरे हवीत.</string>
     <string name="err_generic">काहीतरी चुकले. कृपया पुन्हा प्रयत्न करा.</string>
-    <string name="err_pending">%1$s यांच्या मंजुरीनंतर तुम्ही प्रश्न विचारू शकाल. ग्रुप कोड आहे? आजच्या स्क्रीनवर टाका.</string>
+    <string name="err_pending">%1$s यांनी तुम्हाला बॅचमध्ये ठेवल्यावर हे उघडेल.</string>
     <string name="err_busy">स्टुडिओचा सर्व्हर व्यस्त आहे. कृपया एका मिनिटाने पुन्हा प्रयत्न करा.</string>
     <string name="err_too_many_attempts">खूप प्रयत्न झाले. कृपया 15 मिनिटांनी पुन्हा प्रयत्न करा.</string>
     <string name="err_teacher_exists">या स्टुडिओचे शिक्षक आधीच आहेत. विद्यार्थी म्हणून साइन अप करा.</string>
@@ -109,7 +109,7 @@
     <string name="pain_flag">ताण किंवा वेदना जाणवली</string>
     <string name="add_note">नोंद जोडा</string>
     <string name="done">झाले</string>
-    <string name="todays_sequence">आजचा क्रम</string>
+    <string name="sequence">क्रम</string>
     <string name="show_all">सर्व %1$d पाहा</string>
     <string name="show_less">कमी दाखवा</string>
     <string name="mood_1">खूप वाईट</string>
@@ -146,7 +146,7 @@
     <string name="mood_lift">मूडमध्ये सुधारणा</string>
     <string name="mood_lift_help">वर्गानंतर सरासरी तुम्हाला किती बरे वाटते (−4 ते +4).</string>
     <string name="memory_title">माझ्या आरोग्याच्या नोंदी</string>
-    <string name="privacy">%1$s तुमचे नाव आणि नंबर, तुमच्याबद्दलची उत्तरे (वय, उंची, वजन, आहार, वेदना), आणि तुमचा सराव पाहतात: चेक-इन, मूड, वर्गात आणि स्वतः सरावात प्रत्येक आसन कसे झाले आणि त्यावरच्या तुमच्या नोंदी, आणि तुमच्या सूचना. तुमची Gemma चॅट आणि आरोग्याच्या नोंदी याच फोनवर राहतात, जोपर्यंत तुम्ही एखादी नोंद शेअर करत नाही.</string>
+    <string name="privacy">%1$s तुमचे नाव आणि नंबर, तुमच्याबद्दलची उत्तरे (वय, उंची, वजन, आहार, वेदना, आणि आसने कशी वाटली), आणि तुमचा सराव पाहतात: चेक-इन, मूड, वर्गात आणि स्वतः सरावात प्रत्येक आसन कसे झाले आणि त्यावरच्या तुमच्या नोंदी, आणि तुमच्या सूचना. तुमची Gemma चॅट आणि आरोग्याच्या नोंदी याच फोनवर राहतात, जोपर्यंत तुम्ही एखादी नोंद शेअर करत नाही. स्टुडिओच्या डॅशबोर्डवर ही उत्तरे फक्त संख्येत दिसतात.</string>
     <string name="memory_empty">अजून नोंदी नाहीत. खाली लिहा, जसे एखादी जुनी दुखापत जी %1$s यांना माहीत असावी.</string>
     <string name="note_hint">उदा.: वज्रासनात माझा डावा गुडघा दुखतो</string>
     <string name="forget_note">विसरा</string>
@@ -258,6 +258,12 @@
     <string name="gemma_download_failed">डाउनलोड थांबले. इंटरनेट तपासा आणि पुन्हा प्रयत्न करा.</string>
     <string name="gemma_start_failed">Gemma या फोनवर सुरू होऊ शकले नाही.</string>
     <string name="try_again">पुन्हा प्रयत्न करा</string>
+    <string name="ok">ठीक आहे</string>
+    <string name="new_password_ask">%1$s साठी नवीन पासवर्ड?</string>
+    <string name="new_password_why">यामुळे %1$s प्रत्येक फोनवरून साइन आउट होतील. त्यांना नवीन पासवर्ड द्या.</string>
+    <string name="closed_account">%1$s यांनी हे खाते बंद केले आहे.</string>
+    <string name="unreachable">स्टुडिओशी जोडता आले नाही</string>
+    <string name="unreachable_help">इंटरनेट तपासा, मग पुन्हा प्रयत्न करा. तुम्ही साइन इन राहाल.</string>
     <string name="gemma_download_title">सत्·चित्·आनन्दसाठी Gemma</string>
     <string name="gemma_download_note">तुमच्या फोनसाठी सराव सोबती (एकदाच)</string>
     <string name="share_note">%1$s यांना शेअर करा</string>

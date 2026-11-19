@@ -14,15 +14,20 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.TextAutoSize
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
@@ -51,6 +56,8 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.time.format.DecimalStyle
+import java.time.temporal.ChronoUnit
 import java.util.Locale
 
 /** The studio's name in Devanagari over its Latin spelling. */
@@ -227,26 +234,40 @@ fun Bar(fraction: Float, color: Color, modifier: Modifier = Modifier) {
 @Composable
 fun locale(): Locale = LocalConfiguration.current.locales[0]
 
-/** "Today", "Tomorrow" or "Mon 24 Nov", in the phone's time zone. */
-@Composable
-fun dayLabel(at: Instant): String = dayLabel(at.atZone(ZoneId.systemDefault()).toLocalDate())
+private val IST = ZoneId.of("Asia/Kolkata")
 
+/** A date or time pattern in the chosen language, its digits as that language writes them (Devanagari in Marathi, as
+ *  the app's other numbers are). */
 @Composable
-fun dayLabel(day: LocalDate): String {
-    val today = LocalDate.now()
-    return when (day) {
-        today -> stringResource(R.string.today)
-        today.plusDays(1) -> stringResource(R.string.tomorrow)
-        else -> DateTimeFormatter.ofPattern("EEE d MMM", locale()).format(day)
-    }
+fun dateFormat(pattern: String): DateTimeFormatter = locale().let { DateTimeFormatter.ofPattern(pattern, it).withDecimalStyle(DecimalStyle.of(it)) }
+
+/** How many days [at] is from [now], both taken in [zone]: 0 the same day, 1 the next, -1 the one before. */
+fun daysFromToday(at: Instant, now: Instant, zone: ZoneId): Long =
+    ChronoUnit.DAYS.between(now.atZone(zone).toLocalDate(), at.atZone(zone).toLocalDate())
+
+/** "Today", "Tomorrow" or "Mon 24 Nov" for a moment, on the student's own calendar (the phone's time zone): a class at
+ *  7:00 in India on a Monday is "Today" on a Sunday evening in New York. */
+@Composable
+fun dayLabel(at: Instant): String {
+    val zone = ZoneId.systemDefault()
+    return dayName(daysFromToday(at, Instant.now(), zone), at.atZone(zone).toLocalDate())
 }
 
-private val IST = ZoneId.of("Asia/Kolkata")
+/** The same for a day the server gives only as a date in India (an item's first time), against today in India. */
+@Composable
+fun indiaDayLabel(day: LocalDate): String = dayName(ChronoUnit.DAYS.between(LocalDate.now(IST), day), day)
+
+@Composable
+private fun dayName(fromToday: Long, day: LocalDate): String = when (fromToday) {
+    0L -> stringResource(R.string.today)
+    1L -> stringResource(R.string.tomorrow)
+    else -> dateFormat("EEE d MMM").format(day)
+}
 
 /** "8:00 AM"; on a phone outside India, the class's India time too: "7:30 PM · 8:00 AM IST". */
 @Composable
 fun timeLabel(at: Instant): String {
-    val format = DateTimeFormatter.ofPattern("h:mm a", locale())
+    val format = dateFormat("h:mm a")
     val here = ZoneId.systemDefault()
     val local = format.format(at.atZone(here))
     return if (here.rules.getOffset(at) == IST.rules.getOffset(at)) local else "$local · ${format.format(at.atZone(IST))} IST"
@@ -310,3 +331,14 @@ fun errorText(code: String): String = stringResource(
     },
     LocalTeacher.current, // for the messages that name the teacher
 )
+
+/** A sub-screen's title with an arrow back, so leaving it never depends on the phone's Back alone. */
+@Composable
+fun BackHeader(title: String, back: () -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        IconButton(onClick = back, modifier = Modifier.offset(x = (-12).dp)) {
+            Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back))
+        }
+        Text(title, Modifier.offset(x = (-8).dp), style = MaterialTheme.typography.headlineSmall)
+    }
+}

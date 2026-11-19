@@ -191,16 +191,17 @@ fun StudentsScreen(vm: AppViewModel) {
     LaunchedEffect(Unit) { vm.loadStudents() }
     // (name, new password). Saveable: the server has already changed the password, so it must survive rotation.
     var shownPassword by rememberSaveable { mutableStateOf<Pair<String, String>?>(null) }
+    var askingPassword by rememberSaveable { mutableStateOf<Int?>(null) } // a new password signs the student out everywhere: ask first
     var openStudent by rememberSaveable { mutableStateOf<Int?>(null) }
     var openItem by rememberSaveable { mutableStateOf<String?>(null) }
     vm.students.firstOrNull { it.user.id == openStudent }?.let { student ->
         val item = openItem
         if (item != null) {
             BackHandler { openItem = null }
-            ItemHistoryScreen(vm, item, student)
+            ItemHistoryScreen(vm, item, student) { openItem = null }
         } else {
             BackHandler { openStudent = null }
-            StudentPractice(vm, student) { openItem = it }
+            StudentPractice(vm, student, back = { openStudent = null }) { openItem = it }
         }
         return
     }
@@ -257,7 +258,7 @@ fun StudentsScreen(vm: AppViewModel) {
                         Button(onClick = { vm.setStudentStatus(student.id, "approved") }) { Text(stringResource(R.string.take_back)) }
                     }
                     if (student.status != "rejected") OutlinedButton(onClick = { vm.setStudentStatus(student.id, "rejected") }) { Text(stringResource(R.string.remove)) }
-                    TextButton(onClick = { vm.resetPassword(student.id) { shownPassword = student.name to it } }) { Text(stringResource(R.string.new_password)) }
+                    TextButton(onClick = { askingPassword = student.id }) { Text(stringResource(R.string.new_password)) }
                 }
                 if (student.status == "approved") {
                     TextButton(onClick = { openStudent = student.id }) { Text(stringResource(R.string.each_item) + " ›") }
@@ -265,10 +266,24 @@ fun StudentsScreen(vm: AppViewModel) {
             }
         }
     }
+    vm.students.firstOrNull { it.user.id == askingPassword }?.let { student ->
+        val name = student.user.name
+        AlertDialog(
+            onDismissRequest = { askingPassword = null },
+            title = { Text(stringResource(R.string.new_password_ask, name)) },
+            text = { Text(stringResource(R.string.new_password_why, name.substringBefore(' '))) },
+            confirmButton = {
+                TextButton(onClick = { askingPassword = null; vm.resetPassword(student.user.id) { shownPassword = name to it } }) {
+                    Text(stringResource(R.string.new_password))
+                }
+            },
+            dismissButton = { TextButton(onClick = { askingPassword = null }) { Text(stringResource(R.string.cancel)) } },
+        )
+    }
     shownPassword?.let { (name, password) ->
         AlertDialog(
             onDismissRequest = { shownPassword = null },
-            confirmButton = { TextButton(onClick = { shownPassword = null }) { Text("OK") } },
+            confirmButton = { TextButton(onClick = { shownPassword = null }) { Text(stringResource(R.string.ok)) } },
             text = { Text(stringResource(R.string.new_password_is, name, password), style = MaterialTheme.typography.titleMedium) },
         )
     }
@@ -318,10 +333,10 @@ private fun BatchPicker(vm: AppViewModel, student: User, preselect: String?, act
 
 /** One student's practice per item, for the teacher; each item opens its history and the box for feedback on it. */
 @Composable
-private fun StudentPractice(vm: AppViewModel, student: Student, open: (String) -> Unit) {
+private fun StudentPractice(vm: AppViewModel, student: Student, back: () -> Unit, open: (String) -> Unit) {
     LaunchedEffect(student.user.id) { vm.loadItems(student.user.id) }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text(student.user.name, style = MaterialTheme.typography.headlineSmall)
+        BackHeader(student.user.name, back)
         Text("${student.user.phone} · ${pluralStringResource(R.plurals.joined_count, student.joined, student.joined)}", color = Palette.muted)
         Label(stringResource(R.string.each_item))
         ItemList(vm, vm.items, teacherViewing = true, reload = { vm.loadItems(student.user.id) }, open = open)
@@ -335,7 +350,7 @@ fun InsightsScreen(vm: AppViewModel) {
     var reviewing by rememberSaveable { mutableStateOf<Int?>(null) }
     data?.sessions?.firstOrNull { it.id == reviewing }?.let { session ->
         BackHandler { reviewing = null }
-        ClassReviewScreen(vm, session)
+        ClassReviewScreen(vm, session) { reviewing = null }
         return
     }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -347,7 +362,7 @@ fun InsightsScreen(vm: AppViewModel) {
         StatTiles(
             data.approved.toString() to stringResource(R.string.students_title),
             (data.moodChange?.let { String.format(Locale.US, "%+.1f", it) } ?: "–") to stringResource(R.string.avg_lift),
-            vm.sharedNotes.size.toString() to stringResource(R.string.notes_shared),
+            vm.sharedCount.toString() to stringResource(R.string.notes_shared),
         )
         if (data.moodPairs > 0) Text(pluralStringResource(R.plurals.pairs, data.moodPairs, data.moodPairs), style = MaterialTheme.typography.bodyMedium, color = Palette.muted)
 

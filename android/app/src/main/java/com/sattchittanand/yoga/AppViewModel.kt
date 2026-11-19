@@ -55,6 +55,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var error by mutableStateOf<String?>(null)
     /** A one-off message for a snackbar; the screen clears it once shown. */
     var notice by mutableStateOf<String?>(null)
+    /** Signed in on this phone (a saved token), whether or not the studio could be reached yet. */
+    var signedIn by mutableStateOf(prefs.token != null); private set
+    /** A new student: the intake opens before anything else. */
+    var askIntake by mutableStateOf(false)
+    /** How many notes students have shared in all; the list holds the newest. */
+    var sharedCount by mutableStateOf(0); private set
 
     init {
         if (prefs.token == null) loadStudio() else launchCall { refreshAll() }
@@ -107,6 +113,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun login(phone: String, password: String) = launchCall {
         val reply = api.post("/auth/login", JSONObject().put("phone", phone).put("password", password))
         prefs.token = reply.getString("token")
+        signedIn = true
         refreshAll()
     }
 
@@ -119,6 +126,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             val body = JSONObject().put("name", name).put("phone", phone).put("password", password)
                 .put("role", if (teacher) "teacher" else "student").put("code", code).put("lang", prefs.lang)
             prefs.token = api.post("/auth/signup", body).getString("token")
+            signedIn = true
+            askIntake = !teacher
             refreshAll()
         }
     }
@@ -132,6 +141,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun signOutLocally() {
         prefs.token = null
+        signedIn = false
+        askIntake = false
         user = null; home = null; stats = null; teacherHome = null; insights = null; review = null
         practice = emptyList(); soloSessions = emptyList(); solo = null; students = emptyList(); notes = emptyList(); sharedNotes = emptyList()
         items = emptyList(); itemHistory = null; intake = null; intakeRead = false
@@ -167,9 +178,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         loadStudio()
     }
 
-    fun sendFeedback(text: String, thanks: String) = launchCall {
+    /** Sends feedback to the studio; [sent] runs only once it is through, so a failed send keeps the text. */
+    fun sendFeedback(text: String, thanks: String, sent: () -> Unit) = launchCall {
         api.post("/feedback", JSONObject().put("screen", "me").put("text", text))
         notice = thanks
+        sent()
     }
 
     // ---------- student ----------
@@ -306,7 +319,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private suspend fun loadSharedNotes() {
-        sharedNotes = api.get("/teacher/shared").getJSONArray("shared").map(SharedNote::from)
+        val shared = api.get("/teacher/shared")
+        sharedNotes = shared.getJSONArray("shared").map(SharedNote::from)
+        sharedCount = shared.getInt("count")
     }
 
     /** The student's own intake, read when its screen opens ([intakeRead] then true; [intake] null if never filled). */
@@ -365,10 +380,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** The teacher's word to one student on one item; the student sees it with that item's history. */
-    fun sendItemFeedback(studentId: Int, item: String, text: String, sent: String) = launchCall {
+    /** The teacher's feedback on one student's item; [done] runs only once it is through, so a failed send keeps the text. */
+    fun sendItemFeedback(studentId: Int, item: String, text: String, sent: String, done: () -> Unit) = launchCall {
         api.post("/teacher/students/$studentId/feedback", JSONObject().put("item", item).put("text", text))
         itemHistory = ItemHistory.from(api.get(itemsPath(studentId) + "/$item"))
         notice = sent
+        done()
     }
 
     fun loadReview(sessionId: Int) = launchCall {
@@ -383,7 +400,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Coming back to the app (from Meet, say) reloads, so the after-class question appears when it is due. */
     fun onResume() {
-        if (user != null && !busy) refresh()
+        if (signedIn && !busy) refresh() // signed in, or signed in but the studio was out of reach: try again
         gemma.refresh(loadModel = false) // a download that went on, or finished, while the app was away
     }
 }
