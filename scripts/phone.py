@@ -17,6 +17,7 @@ from pathlib import Path
 
 PACKAGE = "com.sattchittanand.yoga"
 ROOT = Path(__file__).resolve().parents[1]
+TEACHER_NAME = json.loads((ROOT / "content" / "studio.json").read_text(encoding="utf-8"))["teacher"]["short"]["en"]
 BACKEND = "http://localhost:8000"  # the dev backend as this laptop sees it; the emulator reaches it at 10.0.2.2:8000
 
 
