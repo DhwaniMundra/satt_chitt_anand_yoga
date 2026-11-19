@@ -101,7 +101,8 @@ androidComponents {
 }
 
 tasks.matching { it.name == "preReleaseBuild" }.configureEach {
-    doFirst { check(server.isPresent && signing != null) { "build the release with scripts/build_app.sh --release" } }
+    val ready = server.isPresent && signing != null // worked out here: the configuration cache cannot keep the script
+    doFirst { check(ready) { "build the release with scripts/build_app.sh --release" } }
 }
 
 dependencies {

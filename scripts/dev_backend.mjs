@@ -8,8 +8,8 @@
 // else the one setup() made, printed at start. SCA_DELAY_MS holds each answer back that long, as the live web app takes
 // a second or more, to see the app's loading states.
 //
-// For the tour scripts, never the app: POST /dev/class {"class_key": "hatha", "minutes_from_now": -47} adds a 55-minute
-// class at that time (here, one under way), so the check-ins are open whatever the time of day.
+// For the tour scripts, never the app: POST /dev/class {"batch": "intermediate", "minutes_from_now": -47} adds a
+// 55-minute class of that batch at that time (here, one under way), so the check-ins are open whatever the time of day.
 import { randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
@@ -64,8 +64,8 @@ function serve(b, host, port) {
       const writes = b.ss.writes;
       let reply;
       if (url.pathname === '/dev/class') {
-        const { class_key: key, minutes_from_now: minutes } = JSON.parse(text);
-        reply = JSON.stringify({ id: classStarted(b, -minutes, key) });
+        const { batch, minutes_from_now: minutes } = JSON.parse(text);
+        reply = JSON.stringify({ id: classStarted(b, -minutes, batch) });
         b.context.onEdit({});
       } else {
         reply = b.context.doPost({ postData: { contents: text, type: 'application/json' } }).getContent();
