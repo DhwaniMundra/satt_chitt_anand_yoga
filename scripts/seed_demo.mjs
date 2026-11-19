@@ -14,6 +14,18 @@ import { open } from './dev_backend.mjs';
 const PASSWORD = 'demo123';
 const SPAN = 20; // days of classes before today, since the students were placed
 const STUDENTS = ['Asha Kulkarni', 'Meera Iyer', 'Rohan Desai', 'Kavita Joshi', 'Sunil Patil', 'Neha Rao']; // the last waits
+// Each student's intake, by index in STUDENTS: [age, cm, kg, food, meals, pain areas, pain note, self-assessment as
+// tadasana, vrikshasana, trikonasana, vajrasana, bhujangasana, paschimottanasana, each a reaction (1 not yet to 4 at
+// ease, a trailing ! for strain or pain)]. Neha, still waiting, names a knee: her answers point to Pain management.
+const INTAKES = [
+  [46, 158, 62, 'vegetarian', 'Poha or upma; dal, rice and sabzi; two rotis at night', 'knee', 'Left knee stiff when kneeling', '3 2 2 1! 2 1'],
+  [38, 165, 58, 'vegetarian', 'Idli or dosa; rice, sambar and vegetables', null, null, '4 3 4 3 3 3'],
+  [29, 175, 80, 'non_vegetarian', 'Eggs and toast; rice with chicken curry', null, null, '3 2 3 3 2 2'],
+  [61, 155, 70, 'vegetarian', 'Thepla and tea; dal, rice and kadhi', 'knee, back', 'Knee pain on stairs; lower back stiff in the mornings', '3 1 2 1! 2 1!'],
+  [44, 172, 70, 'eggetarian', 'Oats; rotis, dal and a salad', null, null, '4 4 4 3 4 3'],
+  [35, 162, 64, 'vegan', 'Poha; rice, dal and greens', 'knee', 'Right knee clicks when I squat', '4 3 3 2! 3 2'],
+];
+const ASSESSMENT = ['tadasana', 'vrikshasana', 'trikonasana', 'vajrasana', 'bhujangasana', 'paschimottanasana'];
 // The teacher's placements and moves: (student by index, days ago, to, note). Asha moved up after a review.
 const PLACEMENTS = [
   [0, 20, 'beginner', 'New to yoga; knees stiff in kneeling poses.'],
@@ -104,6 +116,11 @@ function main(file) {
   });
   const students = STUDENTS.map((name, i) =>
     ({ name, ...signup(name, '98000000' + String(i + 2).padStart(2, '0'), 'student', groupCode, i % 3 ? 'en' : 'hi') }));
+  INTAKES.forEach(([age, cm, kg, food, meals, pain, note, self], i) => {
+    const ratings = self.split(' ').map((v, j) => ({ item: ASSESSMENT[j], reaction: Number(v[0]), pain: v.endsWith('!') ? 1 : 0 }));
+    ok(b.call('PUT', '/me/intake', { token: students[i].token,
+      body: { age, height_cm: cm, weight_kg: kg, food, meals, pain, pain_note: note, ratings } }));
+  });
   const today = Math.floor((b.clock() + IST_MS) / DAY);
   const evening = (ago) => (today - ago) * DAY - IST_MS + 19 * 60 * MIN;
   PLACEMENTS.forEach(([who, ago, to, note], i) => {

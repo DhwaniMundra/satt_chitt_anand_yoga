@@ -136,6 +136,58 @@ const STUDIO = {
       }
     }
   ],
+  "intake": {
+    "assessment": [
+      {
+        "item": "tadasana",
+        "how": {
+          "en": "Stand tall, feet together, arms by your sides, for five breaths.",
+          "hi": "सीधे खड़े हों, पैर साथ, हाथ बगल में, पाँच साँस तक।",
+          "mr": "ताठ उभे राहा, पाय जवळ, हात बाजूला, पाच श्वास."
+        }
+      },
+      {
+        "item": "vrikshasana",
+        "how": {
+          "en": "Near a wall, stand on one leg with the other foot on the calf; five breaths each side.",
+          "hi": "दीवार के पास, एक पैर पर खड़े हों, दूसरा पैर पिंडली पर; दोनों ओर पाँच साँस।",
+          "mr": "भिंतीजवळ, एका पायावर उभे राहा, दुसरा पाय पोटरीवर; दोन्ही बाजूंनी पाच श्वास."
+        }
+      },
+      {
+        "item": "trikonasana",
+        "how": {
+          "en": "Feet wide, reach down the front leg only as far as is easy; each side.",
+          "hi": "पैर चौड़े, आगे के पैर पर उतना ही झुकें जितना आसान हो; दोनों ओर।",
+          "mr": "पाय रुंद, पुढच्या पायावर जितके सहज तितकेच वाका; दोन्ही बाजूंनी."
+        }
+      },
+      {
+        "item": "vajrasana",
+        "how": {
+          "en": "Kneel and sit back on your heels, a cushion between if needed; a few breaths.",
+          "hi": "घुटनों के बल बैठकर एड़ियों पर बैठें, ज़रूरत हो तो बीच में गद्दी; कुछ साँस।",
+          "mr": "गुडघ्यांवर बसून टाचांवर बसा, गरज असल्यास मध्ये उशी; काही श्वास."
+        }
+      },
+      {
+        "item": "bhujangasana",
+        "how": {
+          "en": "Lying on your belly, lift the chest a little with the back, hands light; three breaths.",
+          "hi": "पेट के बल लेटकर, पीठ से छाती थोड़ी उठाएँ, हाथों पर ज़ोर न दें; तीन साँस।",
+          "mr": "पोटावर झोपून, पाठीने छाती थोडी उचला, हातांवर जोर नको; तीन श्वास."
+        }
+      },
+      {
+        "item": "paschimottanasana",
+        "how": {
+          "en": "Seated, legs straight, fold forward without pulling; the knees may bend.",
+          "hi": "बैठकर, पैर सीधे, बिना खींचे आगे झुकें; घुटने मोड़ सकते हैं।",
+          "mr": "बसून, पाय सरळ, न ओढता पुढे वाका; गुडघे वाकवू शकता."
+        }
+      }
+    ]
+  },
   "words": {
     "blessing": {
       "sa": "ॐ सर्वेषां स्वस्तिर्भवतु। सर्वेषां शान्तिर्भवतु।\nसर्वेषां पूर्णं भवतु। सर्वेषां मङ्गलं भवतु।\nॐ शान्तिः शान्तिः शान्तिः॥",
@@ -1662,6 +1714,8 @@ function routes_() {
     ['POST', '/auth/logout', logout_],
     ['GET', '/me', me_],
     ['POST', '/me', updateMe_, LOCK_],
+    ['GET', '/me/intake', myIntake_],
+    ['PUT', '/me/intake', saveIntake_, LOCK_],
     ['GET', '/me/practice', myPractice_],
     ['POST', '/me/solo', soloPractice_, LOCK_],
     ['GET', '/me/asanas', myItems_],
@@ -1809,6 +1863,20 @@ const BODY_ = {
   link: { meet_link: F_.str(REQUIRED_) },
   settings: { group_link: F_.str({ nullable: true, def: null }) },
   place: { batch: F_.str({ required: true, min: 1, max: 40 }), note: F_.str({ nullable: true, def: null, max: 300 }) },
+  intake: {
+    age: F_.int({ required: true, ge: 5, le: 100 }),
+    height_cm: F_.int({ required: true, ge: 80, le: 230 }),
+    weight_kg: F_.int({ required: true, ge: 15, le: 250 }),
+    food: F_.oneOf(['vegetarian', 'eggetarian', 'non_vegetarian', 'vegan'], REQUIRED_),
+    meals: F_.str({ nullable: true, def: null, max: 300 }),
+    pain: F_.str({ nullable: true, def: null, max: 100 }),
+    pain_note: F_.str({ nullable: true, def: null, max: 300 }),
+    ratings: F_.list({
+      item: F_.str({ required: true, min: 1, max: 40 }),
+      reaction: F_.int({ nullable: true, def: null, ge: 1, le: 4 }),
+      pain: F_.int({ def: 0, ge: 0, le: 1 }),
+    }, { required: true, max: 20 }),
+  },
   status: { status: F_.oneOf(['approved', 'rejected'], REQUIRED_) },
   shared: { text: F_.str({ required: true, min: 1, max: 500 }) },
   curriculum: { curriculum: F_.str({ required: true, min: 1, max: 40 }) },
@@ -1969,6 +2037,12 @@ const TABLES_ = {
   feedback: [['id', 'int'], ['user_id', 'int'], ['screen', 'text'], ['text', 'text'], ['created_at', 'time']],
   shared_notes: [['id', 'int'], ['user_id', 'int'], ['text', 'text'], ['created_at', 'time']],
   settings: [['key', 'text'], ['value', 'text?']],
+  // A student's answers about themselves, for the teacher to place them in a batch: health data, hidden, and on the
+  // Dashboard only as counts. `pain` like "knee, back".
+  intake: [['user_id', 'int'], ['age', 'int'], ['height_cm', 'int'], ['weight_kg', 'int'], ['food', 'text'], ['meals', 'text?'],
+    ['pain', 'text?'], ['pain_note', 'text?'], ['updated_at', 'time']],
+  // The intake's self-assessment: how each assessment asana went, 1 (not yet) to 4 (at ease), pain 1 for strain or pain.
+  intake_ratings: [['user_id', 'int'], ['item', 'text'], ['reaction', 'int'], ['pain', 'int']],
   // Each placement of a student in a batch, and each move between batches: the review history.
   batch_changes: [['id', 'int'], ['student_id', 'int'], ['from', 'text?'], ['to', 'text'], ['note', 'text?'], ['created_at', 'time']],
   // The batches: seeded by setup() from content/studio.json while the tab is empty, then the owner's to edit. `days`
@@ -3030,6 +3104,73 @@ function itemFeedback_(ctx) {
   return { ok: true, id: row.id };
 }
 
+// ---------- Intake: a student's answers about themselves, for the teacher to place them in a batch ----------
+// Age, height, weight, food habits, pain or conditions, and a self-assessment of a few asanas (in content/studio.json).
+// Health data: only the student and the teacher read it, its tabs are hidden, and the Dashboard shows it only as
+// counts.
+
+const PAIN_AREAS_ = ['knee', 'back', 'neck', 'shoulder', 'hip', 'other'];
+
+/** A student's intake for the app, with the batch it points to; null before they fill it. */
+function intakeOf_(ctx, userId) {
+  const row = ctx.db.t('intake').rows.filter((r) => r.user_id === userId)[0];
+  if (!row) return null;
+  const ratings = ctx.db.t('intake_ratings').rows.filter((r) => r.user_id === userId)
+    .map((r) => ({ item: r.item, reaction: r.reaction, pain: r.pain }));
+  const pain = painAreas_(row.pain);
+  return {
+    age: row.age, height_cm: row.height_cm, weight_kg: row.weight_kg, food: row.food, meals: row.meals, pain: pain, pain_note: row.pain_note,
+    ratings: ratings, updated_at: isoTime_(row.updated_at), suggested_batch: suggestedBatch_(ctx, pain, ratings),
+  };
+}
+
+function painAreas_(text) {
+  return String(text || '').split(',').map((a) => a.trim().toLowerCase()).filter((a) => a);
+}
+
+/** The batch the answers point to, for the teacher to confirm: any pain, Pain management; most of the
+ * self-assessment steady or at ease (four or more answered), Intermediate; else Beginner. Never Advanced, which is
+ * the teacher's call. The first batch when the owner has renamed these. */
+function suggestedBatch_(ctx, pain, ratings) {
+  const batches = batches_(ctx);
+  const said = ratings.filter((r) => r.reaction !== null);
+  const easy = said.filter((r) => r.reaction >= 3).length;
+  const key = pain.length || ratings.some((r) => r.pain === 1) ? 'pain_management'
+    : said.length >= 4 && easy * 2 > said.length ? 'intermediate' : 'beginner';
+  return batches[key] ? key : Object.keys(batches)[0] || null;
+}
+
+function myIntake_(ctx) {
+  return { intake: intakeOf_(ctx, currentUser_(ctx).id) };
+}
+
+/** A student's intake, after sign-up (pending) or later from Me; a second send replaces the first. */
+function saveIntake_(ctx) {
+  const user = currentUser_(ctx);
+  if (user.role !== 'student') throw new HttpError_(403, 'students_only');
+  const { body } = ctx.check({ body: BODY_.intake });
+  const pain = painAreas_(body.pain);
+  if (pain.some((a) => PAIN_AREAS_.indexOf(a) < 0)) throw new HttpError_(400, 'bad_pain_area');
+  const asked = STUDIO.intake.assessment.map((a) => a.item);
+  const byItem = {};
+  body.ratings.forEach((r) => {
+    if (asked.indexOf(r.item) < 0) throw new HttpError_(400, 'unknown_item');
+    byItem[r.item] = r;
+  });
+  const trimmed = (text) => (text === null ? null : text.trim() || null);
+  const values = { age: body.age, height_cm: body.height_cm, weight_kg: body.weight_kg, food: body.food, meals: trimmed(body.meals),
+    pain: pain.join(', ') || null, pain_note: trimmed(body.pain_note), updated_at: ctx.now };
+  const table = ctx.db.t('intake');
+  const row = table.rows.filter((r) => r.user_id === user.id)[0];
+  if (row) table.update(row, values);
+  else table.insert([Object.assign({ user_id: user.id }, values)]);
+  const ratings = ctx.db.t('intake_ratings');
+  ratings.remove(ratings.rows.filter((r) => r.user_id === user.id));
+  ratings.insert(Object.keys(byItem).map((k) => byItem[k]).filter((r) => r.reaction !== null || r.pain === 1)
+    .map((r) => ({ user_id: user.id, item: r.item, reaction: r.reaction, pain: r.pain })));
+  return { intake: intakeOf_(ctx, user.id) };
+}
+
 // ---------- Routes: one function per route ----------
 // Each checks who is asking first, then the inputs, then the rules: a signed-out request is a 401 whatever its inputs,
 // and a bad input is a 422 before any rule is applied. Routes marked LOCK_ in routes_() run entirely under the script
@@ -3340,7 +3481,8 @@ function students_(ctx) {
   const rows = ctx.db.t('users').rows
     .filter((u) => u.role === 'student')
     .sort((a, b) => (b.status === 'pending') - (a.status === 'pending') || b.created_at - a.created_at || a.id - b.id);
-  return { students: rows.map((u) => Object.assign(userJson_(u), { joined: joined[u.id] || 0, created_at: isoTime_(u.created_at) })) };
+  return { students: rows.map((u) => Object.assign(userJson_(u), { joined: joined[u.id] || 0, created_at: isoTime_(u.created_at),
+    intake: intakeOf_(ctx, u.id) })) };
 }
 
 /** Removes a student, or takes a removed one back into their batch; placing a new student is placeInBatch_. */
@@ -3451,11 +3593,11 @@ function sharedNotes_(ctx) {
 // Run setup() once from the script editor (it asks for permission the first time). Running it again is safe: it adds
 // what is missing and leaves the data, the codes, the batches, the curriculum and an existing Dashboard alone.
 
-const DATA_TABS_ = ['users', 'class_sessions', 'checkins', 'practice', 'solo_sessions', 'asana_feedback', 'batch_changes', 'feedback',
-  'shared_notes', 'tokens', 'settings'];
+const DATA_TABS_ = ['users', 'class_sessions', 'checkins', 'practice', 'solo_sessions', 'asana_feedback', 'batch_changes', 'intake',
+  'intake_ratings', 'feedback', 'shared_notes', 'tokens', 'settings'];
 const CURRICULUM_TABS_ = ['library', 'curricula', 'curriculum_items'];
 const OWNER_TABS_ = ['batches'].concat(CURRICULUM_TABS_); // the owner's to edit: no warning on hand edits
-const HIDDEN_TABS_ = ['tokens', 'settings']; // login-token hashes and the codes: nothing to browse
+const HIDDEN_TABS_ = ['intake', 'intake_ratings', 'tokens', 'settings']; // health answers, login-token hashes, the codes
 const SETTING_NOTES_ = [
   ['teacher_code', 'The one-time code the teacher signs up with. It stops working once the teacher has an account.'],
   ['group_code', 'Students sign up with this code, from the class\'s WhatsApp invite; the teacher then places them in a batch. The teacher can change it in the app.'],
@@ -3622,6 +3764,7 @@ function dashboardBlocks_(ss) {
   const n = columnLetters_(ss, 'shared_notes');
   const p = columnLetters_(ss, 'practice');
   const m = columnLetters_(ss, 'batch_changes');
+  const k = columnLetters_(ss, 'intake');
   const users = 'users!A1:' + u._last;
   const checkins = 'checkins!A1:' + c._last;
   const col = (tab, letter) => tab + '!' + letter + '2:' + letter;
@@ -3639,6 +3782,9 @@ function dashboardBlocks_(ss) {
         col('batch_changes', m.to), col('batch_changes', m.note)].join(', ') + "}, \"select Col1, Col2, Col3, Col4, Col5 where Col1 is not " +
         "null order by Col1 desc limit 8 label Col1 'when', Col2 'student', Col3 'from', Col4 'to', Col5 'note'\", 0), \"No batch changes yet\")",
       { 'K6:K13': 'yyyy-mm-dd' }],
+    ['Q5', 'Pain areas', 'How many students named each in their intake. Counts only: the answers themselves stay in the hidden tabs.',
+      '=IFERROR(QUERY({' + PAIN_AREAS_.map((a) => '"' + a + '", COUNTIF(' + col('intake', k.pain) + ', "*' + a + '*")').join('; ') +
+        "}, \"select Col1, Col2 label Col1 'pain area', Col2 'students'\", 0), \"No intake yet\")", {}],
     ['D5', 'Mood per class', 'Average mood after and before class, all classes so far. 1 very low to 5 great.',
       '=IFERROR(QUERY(' + checkins + ', "select ' + c.class + ', avg(' + c.mood + ') where ' + c.user_id + ' is not null group by ' +
         c.class + ' pivot ' + c.phase + '", 1), "No check-ins yet")', { 'E6:F13': '0.0' }],

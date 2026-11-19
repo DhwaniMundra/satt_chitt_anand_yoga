@@ -22,6 +22,16 @@
     {"key": "pain_management", "name": {"en": "Pain management", "hi": "दर्द प्रबंधन", "mr": "वेदना व्यवस्थापन"}, "curriculum": "pain_management", "days": ["mon", "wed", "fri"], "time": "17:30", "duration_min": 45,
      "about": {"en": "Gentle and supported, for knee, back and neck pain: easier variants, the breath and deep rest.", "hi": "कोमल और सहारे के साथ, घुटने, पीठ और गर्दन के दर्द के लिए: आसान रूप, साँस और गहरा विश्राम।", "mr": "सौम्य आणि आधारासह, गुडघा, पाठ आणि मानदुखीसाठी: सोपे प्रकार, श्वास आणि खोल विश्रांती."}}
   ],
+  "intake": {
+    "assessment": [
+      {"item": "tadasana", "how": {"en": "Stand tall, feet together, arms by your sides, for five breaths.", "hi": "सीधे खड़े हों, पैर साथ, हाथ बगल में, पाँच साँस तक।", "mr": "ताठ उभे राहा, पाय जवळ, हात बाजूला, पाच श्वास."}},
+      {"item": "vrikshasana", "how": {"en": "Near a wall, stand on one leg with the other foot on the calf; five breaths each side.", "hi": "दीवार के पास, एक पैर पर खड़े हों, दूसरा पैर पिंडली पर; दोनों ओर पाँच साँस।", "mr": "भिंतीजवळ, एका पायावर उभे राहा, दुसरा पाय पोटरीवर; दोन्ही बाजूंनी पाच श्वास."}},
+      {"item": "trikonasana", "how": {"en": "Feet wide, reach down the front leg only as far as is easy; each side.", "hi": "पैर चौड़े, आगे के पैर पर उतना ही झुकें जितना आसान हो; दोनों ओर।", "mr": "पाय रुंद, पुढच्या पायावर जितके सहज तितकेच वाका; दोन्ही बाजूंनी."}},
+      {"item": "vajrasana", "how": {"en": "Kneel and sit back on your heels, a cushion between if needed; a few breaths.", "hi": "घुटनों के बल बैठकर एड़ियों पर बैठें, ज़रूरत हो तो बीच में गद्दी; कुछ साँस।", "mr": "गुडघ्यांवर बसून टाचांवर बसा, गरज असल्यास मध्ये उशी; काही श्वास."}},
+      {"item": "bhujangasana", "how": {"en": "Lying on your belly, lift the chest a little with the back, hands light; three breaths.", "hi": "पेट के बल लेटकर, पीठ से छाती थोड़ी उठाएँ, हाथों पर ज़ोर न दें; तीन साँस।", "mr": "पोटावर झोपून, पाठीने छाती थोडी उचला, हातांवर जोर नको; तीन श्वास."}},
+      {"item": "paschimottanasana", "how": {"en": "Seated, legs straight, fold forward without pulling; the knees may bend.", "hi": "बैठकर, पैर सीधे, बिना खींचे आगे झुकें; घुटने मोड़ सकते हैं।", "mr": "बसून, पाय सरळ, न ओढता पुढे वाका; गुडघे वाकवू शकता."}}
+    ]
+  },
   "words": {
     "blessing": {
       "sa": "ॐ सर्वेषां स्वस्तिर्भवतु। सर्वेषां शान्तिर्भवतु।\nसर्वेषां पूर्णं भवतु। सर्वेषां मङ्गलं भवतु।\nॐ शान्तिः शान्तिः शान्तिः॥",
