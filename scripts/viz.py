@@ -42,8 +42,8 @@ def fresh_screens(version: str) -> Path:
 
 
 def keep_screens(version: str) -> None:
-    """Swaps the run's screens in for the old set, carrying over the old set's files the run did not make (the
-    release's screens, say). A failed run never gets here, and the old set stays as it was."""
+    """Swaps the run's screens in for the set before, carrying over that set's files the run did not make (the
+    release's screens, say). A failed run never gets here, and the set before stays as it was."""
     old = screens(version)
     new = old.with_name(version + ".new")
     if old.exists():
