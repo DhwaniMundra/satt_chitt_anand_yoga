@@ -3,16 +3,15 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
 
-    <!-- usesCleartextTraffic: the backend runs on a laptop over plain HTTP (emulator or home Wi-Fi), and a test build
-         can download Gemma from the laptop (-PmodelUrl=http://10.0.2.2:...).
-         A hosted backend must use HTTPS, and then this flag goes.
-         allowBackup false: the login token, and the companion's chat and notes, must not travel in device backups. -->
+    <!-- usesCleartextTraffic: true in debug builds only, for the dev backend on the laptop over plain HTTP; release
+         builds speak HTTPS to the live web app.
+         allowBackup false: the login token, the chat and the health notes must not travel in device backups. -->
     <application
         android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:supportsRtl="true"
-        android:usesCleartextTraffic="true"
+        android:usesCleartextTraffic="${cleartext}"
         android:localeConfig="@xml/locales_config"
         android:theme="@style/Theme.SattChittAnand">
         <!-- Gemma on the GPU, where the phone has one LiteRT-LM can use (else the app runs it on the CPU). -->

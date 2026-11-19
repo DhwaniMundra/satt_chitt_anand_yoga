@@ -42,11 +42,12 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.sattchittanand.yoga.AppViewModel
+import com.sattchittanand.yoga.BuildConfig
 import com.sattchittanand.yoga.R
 
-/** The studio server's address, folded away under a small link: needed on a real phone before signing in. */
+/** The server address, folded away under a small link: a debug build can be pointed at a laptop on the Wi-Fi. */
 @Composable
-fun ServerAddress(vm: AppViewModel) {
+private fun ServerAddress(vm: AppViewModel) {
     var open by rememberSaveable { mutableStateOf(false) }
     var address by rememberSaveable { mutableStateOf(vm.prefs.server) }
     TextButton(onClick = { open = !open }) {
@@ -109,7 +110,7 @@ fun WelcomeScreen(vm: AppViewModel, onLanguage: (String) -> Unit) {
                 Spacer(Modifier.padding(4.dp))
                 Text(stringResource(R.string.i_am_teacher))
             }
-            ServerAddress(vm)
+            if (BuildConfig.DEBUG) ServerAddress(vm)
             return@Column
         }
 
