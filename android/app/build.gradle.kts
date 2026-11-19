@@ -46,8 +46,8 @@ android {
         applicationId = "com.sattchittanand.yoga"
         minSdk = 26
         targetSdk = 36
-        versionCode = 3
-        versionName = "1.0"
+        versionCode = 4
+        versionName = "0.9"
         // Where the phone downloads Gemma 4 E2B from: the studio's Google Drive copy, unless built with -PmodelUrl=<url>
         // (a laptop serving the file to the emulator, say). The public Hugging Face copy is the fallback (GemmaFile).
         // confirm=t: without it, Drive answers a large file with an HTML page ("can't scan for viruses").
