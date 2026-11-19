@@ -392,11 +392,31 @@ data class TeacherHome(val sessions: List<ClassSession>, val batches: List<Batch
     }
 }
 
-data class Student(val user: User, val joined: Int) {
+data class Student(val user: User, val joined: Int, val intake: Intake?) {
     companion object {
-        fun from(o: JSONObject) = Student(User.from(o), o.getInt("joined"))
+        fun from(o: JSONObject) = Student(User.from(o), o.getInt("joined"), if (o.isNull("intake")) null else Intake.from(o.getJSONObject("intake")))
     }
 }
+
+/** A student's answers about themselves, for the teacher to place them in a batch ([suggestedBatch], from the server). */
+data class Intake(val age: Int, val heightCm: Int, val weightKg: Int, val food: String, val meals: String?, val pain: List<String>, val painNote: String?,
+    val ratings: List<IntakeRating>, val suggestedBatch: String?) {
+    fun json(): JSONObject = JSONObject().put("age", age).put("height_cm", heightCm).put("weight_kg", weightKg).put("food", food)
+        .put("meals", meals ?: JSONObject.NULL).put("pain", pain.joinToString(", ").ifEmpty { null } ?: JSONObject.NULL)
+        .put("pain_note", painNote ?: JSONObject.NULL)
+        .put("ratings", JSONArray(ratings.map { JSONObject().put("item", it.item).put("reaction", it.reaction ?: JSONObject.NULL).put("pain", if (it.pain) 1 else 0) }))
+
+    companion object {
+        fun from(o: JSONObject) = Intake(
+            o.getInt("age"), o.getInt("height_cm"), o.getInt("weight_kg"), o.getString("food"), o.str("meals"), o.getJSONArray("pain").strings(),
+            o.str("pain_note"), o.getJSONArray("ratings").map { IntakeRating(it.getString("item"), it.intOrNull("reaction"), it.getInt("pain") == 1) },
+            o.str("suggested_batch"),
+        )
+    }
+}
+
+/** How one assessment asana went in the intake: 1 (not yet) to 4 (at ease), and strain or pain. */
+data class IntakeRating(val item: String, val reaction: Int?, val pain: Boolean)
 
 data class SessionInsight(val id: Int, val startsAt: Instant, val className: String, val joined: Int, val moodBefore: Double?, val moodAfter: Double?)
 data class Feedback(val name: String, val text: String)

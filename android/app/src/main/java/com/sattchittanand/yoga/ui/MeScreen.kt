@@ -43,6 +43,8 @@ import com.sattchittanand.yoga.R
 fun MeScreen(vm: AppViewModel, onLanguage: (String) -> Unit) {
     val user = vm.user ?: return
     var feedback by rememberSaveable { mutableStateOf("") }
+    var aboutMe by rememberSaveable { mutableStateOf(false) }
+    if (aboutMe) return IntakeScreen(vm) { aboutMe = false }
     val thanks = stringResource(R.string.feedback_thanks)
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -51,6 +53,8 @@ fun MeScreen(vm: AppViewModel, onLanguage: (String) -> Unit) {
             Text(user.phone, color = Palette.muted)
             Pill(stringResource(R.string.role_student))
         }
+
+        OutlinedButton(onClick = { aboutMe = true }, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.about_me, LocalTeacher.current)) }
 
         HealthNotes(vm)
 
