@@ -82,6 +82,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** The studio's own words (its blessing, the meaning of its name, its headings), in the chosen language. */
     fun words() = StudioWords.from(studioFile, prefs.lang)
 
+    /** The intake's assessment asanas and how to try each safely, in the chosen language, from the studio content. */
+    fun assessment(): List<Pair<String, String>> = studioFile.getJSONObject("intake").getJSONArray("assessment")
+        .map { a -> a.getString("item") to a.getJSONObject("how").let { it.optString(prefs.lang).ifEmpty { it.getString("en") } } }
+
     private suspend fun refreshAll() {
         val me = api.get("/me")
         val account = User.from(me.getJSONObject("user"))
@@ -130,7 +134,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         prefs.token = null
         user = null; home = null; stats = null; teacherHome = null; insights = null; review = null
         practice = emptyList(); soloSessions = emptyList(); solo = null; students = emptyList(); notes = emptyList(); sharedNotes = emptyList()
-        items = emptyList(); itemHistory = null
+        items = emptyList(); itemHistory = null; intake = null; intakeRead = false
         chat.clear()
         store = null // the chat and notes stay on the phone, under this account, for its next sign-in
         loadStudio()
@@ -303,6 +307,22 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     private suspend fun loadSharedNotes() {
         sharedNotes = api.get("/teacher/shared").getJSONArray("shared").map(SharedNote::from)
+    }
+
+    /** The student's own intake, read when its screen opens ([intakeRead] then true; [intake] null if never filled). */
+    var intake by mutableStateOf<Intake?>(null); private set
+    var intakeRead by mutableStateOf(false); private set
+
+    fun loadIntake() = launchCall {
+        val o = api.get("/me/intake")
+        intake = if (o.isNull("intake")) null else Intake.from(o.getJSONObject("intake"))
+        intakeRead = true
+    }
+
+    fun saveIntake(answers: Intake, thanks: String, done: () -> Unit) = launchCall {
+        intake = Intake.from(api.put("/me/intake", answers.json()).getJSONObject("intake"))
+        notice = thanks
+        done()
     }
 
     /** Places a student in a batch: approving a new one, or moving one after a review, with the teacher's note. */
