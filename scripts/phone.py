@@ -72,6 +72,14 @@ def add_class(batch: str, minutes_from_now: int) -> int:
         return json.load(answer)["id"]
 
 
+def join_class(phone: str, starts_at: str, mood: int) -> int:
+    """Has the student with this number join their batch's class that began at `starts_at` (ISO, UTC), as if they had
+    checked in before it with `mood`, so they can say how it went."""
+    body = json.dumps({"phone": phone, "starts_at": starts_at, "mood": mood}).encode()
+    with urllib.request.urlopen(urllib.request.Request(BACKEND + "/dev/joined", data=body), timeout=10) as answer:
+        return json.load(answer)["session_id"]
+
+
 def adb(*args: str, capture: bool = True) -> str:
     return subprocess.run(["adb", *args], check=True, capture_output=capture, text=True).stdout if capture else ""
 
@@ -212,10 +220,15 @@ def launch(fresh: bool = False) -> None:
 
 
 def demo_mode() -> None:
-    """A clean status bar for screenshots: fixed clock, full battery, no notifications."""
+    """A clean status bar for screenshots: a fixed clock, a full battery, full Wi-Fi with no "!" (an emulator's network
+    counts as unvalidated), no mobile signal and no notifications."""
     adb("shell", "settings", "put", "global", "sysui_demo_allowed", "1")
+    for command in (["exit"], ["enter"]):  # afresh; the bar takes a moment to enter demo mode, or it drops what follows
+        adb("shell", "am", "broadcast", "-a", "com.android.systemui.demo", "-e", "command", *command)
+        time.sleep(1)
     for command in (["clock", "-e", "hhmm", "0750"], ["battery", "-e", "level", "100", "-e", "plugged", "false"],
-                    ["network", "-e", "wifi", "show", "-e", "level", "4"], ["notifications", "-e", "visible", "false"]):
+                    ["network", "-e", "wifi", "show", "-e", "level", "4", "-e", "fully", "true"], ["network", "-e", "mobile", "hide"],
+                    ["notifications", "-e", "visible", "false"]):
         adb("shell", "am", "broadcast", "-a", "com.android.systemui.demo", "-e", "command", *command)
 
 
