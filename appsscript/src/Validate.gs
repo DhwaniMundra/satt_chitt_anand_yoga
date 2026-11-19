@@ -37,6 +37,7 @@ const BODY_ = {
   status: { status: F_.oneOf(['approved', 'rejected'], REQUIRED_) },
   shared: { text: F_.str({ required: true, min: 1, max: 500 }) },
   curriculum: { curriculum: F_.str({ required: true, min: 1, max: 40 }) },
+  itemFeedback: { item: F_.str({ required: true, min: 1, max: 40 }), text: F_.str({ required: true, min: 1, max: 1000 }) },
   practice: {
     entries: F_.list({
       item: F_.str({ required: true, min: 1, max: 40 }),
@@ -51,6 +52,7 @@ const QUERY_LANG_ = { lang: F_.oneOf(LANGS_, { def: 'en' }) };
 // A 422 names the parameter, so they carry their names.
 const PATH_SESSION_ = { session_id: F_.int(REQUIRED_) };
 const PATH_USER_ = { user_id: F_.int(REQUIRED_) };
+const PATH_ITEM_ = { item: F_.str({ required: true, min: 1, max: 40 }) };
 
 function validateBody_(fields, body, errors) {
   if (body === null || body === undefined) {

@@ -37,7 +37,7 @@ test('setup builds the tabs, makes the codes once, and can run again', () => {
   const names = b.ss.getSheets().map((s) => s.getName());
   assert.equal(names[0], 'Dashboard');
   for (const tab of ['users', 'class_sessions', 'checkins', 'feedback', 'shared_notes', 'tokens', 'settings', 'classes', 'practice',
-    'library', 'curricula', 'curriculum_items']) {
+    'asana_feedback', 'library', 'curricula', 'curriculum_items']) {
     assert.ok(names.includes(tab), tab);
   }
   assert.ok(!names.includes('Sheet1'), 'the empty first tab is removed');
