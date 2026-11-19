@@ -332,8 +332,8 @@ class PracticeCompanion(val notes: StudioNotes, private val studioName: String, 
         val base = SYSTEM.replace("{studio}", studioName).replace("{name}", firstName).replace("{teacher}", teacher)
             .replace("{language}", LANGUAGE_NAMES.getValue(lang)).replace("{script}", if (lang == "en") "" else DEVANAGARI_ONLY)
         val placed = batch?.let {
-            "\n\n$firstName practises in the $it batch; their classes are that batch's. A move to another batch is $teacher's to decide, " +
-                "and $firstName can ask $teacher about one."
+            "\n\n$firstName practises in the $it batch, and only its classes are theirs. If they ask about another batch's class, " +
+                "say they are in the $it batch, give their next class, and say a move is $teacher's to decide: they can ask $teacher."
         }.orEmpty()
         val progress = preloadedProgress(message, tools)
         val schedule = preloadedSchedule(message, tools)
@@ -380,6 +380,10 @@ class PracticeCompanion(val notes: StudioNotes, private val studioName: String, 
  * The note to save when [message] starts with the words the app teaches ("Remember that…") and Gemma did not call
  * save_my_note, which it sometimes skips while saying it has saved. Null when there is nothing to save.
  */
+/** A Hindi or Marathi reply without the English glosses Gemma adds in brackets ("नितंब (hips)"), which the prompt's rule
+ *  alone does not stop: it translates the teacher's English feedback and keeps the word it started from. */
+fun withoutGlosses(reply: String): String = reply.replace(Regex("[ \\t]*\\([A-Za-z][A-Za-z ,'/-]*\\)"), "")
+
 fun noteToSave(message: String, used: List<String>): String? {
     val match = REMEMBER.find(message) ?: return null
     val note = message.substring(match.range.last + 1).trim().take(500)

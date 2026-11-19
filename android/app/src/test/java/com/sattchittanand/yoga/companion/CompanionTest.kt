@@ -215,7 +215,7 @@ class CompanionTest {
     @Test fun theSystemMessageNamesTheStudentsBatch() {
         val placed = companion.system("Asha", "Hello", "en", tools(), "Intermediate")
         assertTrue("Asha practises in the Intermediate batch" in placed)
-        assertTrue("A move to another batch is Teacher One's to decide, and Asha can ask Teacher One about one." in placed)
+        assertTrue("say a move is Teacher One's to decide: they can ask Teacher One." in placed)
         assertFalse("batch;" in companion.system("Neha", "Hello", "en", tools()))
     }
 
@@ -236,4 +236,11 @@ class CompanionTest {
         assertTrue("If something hurts in practice, say to stop and to tell Teacher One." in en)
         assertTrue("You cannot reach Teacher One or anyone else" in en)
     }
+
+    @Test fun englishGlossesLeaveHindiAndMarathiReplies() {
+        assertEquals("या आठवड्यात नितंब अर्ध्या पातळीवर खाली करा.", withoutGlosses("या आठवड्यात नितंब (hips) अर्ध्या पातळीवर खाली करा."))
+        assertEquals("सेतुबन्धासन कसे चालले आहे", withoutGlosses("सेतुबन्धासन (Bridge pose) कसे चालले आहे"))
+        assertEquals("८:०० वाजता (भारतीय वेळ)", withoutGlosses("८:०० वाजता (भारतीय वेळ)")) // Devanagari in brackets stays
+    }
 }
+

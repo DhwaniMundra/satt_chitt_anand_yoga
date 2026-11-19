@@ -14,6 +14,7 @@ import com.sattchittanand.yoga.companion.URGENT_REPLY
 import com.sattchittanand.yoga.companion.UpcomingClass
 import com.sattchittanand.yoga.companion.isUrgent
 import com.sattchittanand.yoga.companion.noteToSave
+import com.sattchittanand.yoga.companion.withoutGlosses
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -45,7 +46,8 @@ class PhoneCompanion(context: Context, private val api: Api, studio: JSONObject)
             val firstName = user.name.trim().split(Regex("\\s+")).first()
             val system = withContext(Dispatchers.IO) { companion.system(firstName, message, lang, tools, batch) }
             val earlier = history.takeLast(HISTORY_TURNS).map { it.fromStudent to it.text }
-            val text = gemma.reply(system, earlier, message, tools.toolSets(), banForeign = lang == "mr")
+            val reply = gemma.reply(system, earlier, message, tools.toolSets(), banForeign = lang == "mr")
+            val text = if (lang == "en") reply else withoutGlosses(reply)
             check(text.isNotBlank()) { "empty reply" }
             noteToSave(message, tools.used)?.let { store.addNote(it); tools.used += "save_my_note" }
             ChatLine(text, fromStudent = false, tools = tools.used.distinct())
