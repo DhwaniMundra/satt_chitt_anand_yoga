@@ -98,9 +98,9 @@ function normalizePhone_(raw) {
   return '+' + digits;
 }
 
-// After ATTEMPT_LIMIT_ failures for one key (a phone number, the teacher code, a user entering a group code) within
-// the window, that key is refused until the window has passed. Kept in CacheService: an eviction only forgets recent
-// failures. Callers hold the script lock.
+// After ATTEMPT_LIMIT_ failures for one key (a phone number logging in, the teacher code, a number signing up with a
+// group code) within the window, that key is refused until the window has passed. Kept in CacheService: an eviction
+// only forgets recent failures. Callers hold the script lock.
 
 function attempts_(key) {
   const raw = cache_().get('fail:' + key);

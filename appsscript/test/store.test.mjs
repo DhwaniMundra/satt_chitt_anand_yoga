@@ -13,14 +13,14 @@ test('the envelope: what a bad one gets', () => {
   assert.equal(post(b, JSON.stringify({ method: 'PATCH', path: '/me' })).body.detail, 'bad_envelope');
   assert.equal(post(b, JSON.stringify({ method: 'GET', path: 'home' })).body.detail, 'bad_envelope');
   assert.equal(JSON.parse(b.context.doPost({}).getContent()).status, 400); // no body at all
-  assert.deepEqual(post(b, JSON.stringify({ method: 'get', path: '/health' })), { status: 200, body: { ok: true, assistant: 'off', model: null } });
+  assert.deepEqual(post(b, JSON.stringify({ method: 'get', path: '/health' })), { status: 200, body: { ok: true } });
 });
 
 test('the envelope: query in the path or apart, the token with or without "Bearer"', () => {
   const b = freshBackend();
   const s = signup(b, '9000000002');
   assert.equal(post(b, JSON.stringify({ method: 'GET', path: '/studio?lang=hi' })).body.name, 'सत्·चित्·आनन्द योग');
-  assert.equal(post(b, JSON.stringify({ method: 'GET', path: '/studio?lang=hi', query: { lang: 'mr' } })).body.tagline, 'सत्य · चैतन्य · आनंद');
+  assert.equal(post(b, JSON.stringify({ method: 'GET', path: '/studio?lang=hi', query: { lang: 'mr' } })).body.tagline, 'सत्य · चैतन्य · आनन्द');
   assert.equal(post(b, JSON.stringify({ method: 'GET', path: '/me', token: 'Bearer ' + s.token })).status, 200);
   assert.equal(post(b, JSON.stringify({ method: 'GET', path: '/me', token: s.token })).status, 200);
   assert.equal(post(b, JSON.stringify({ method: 'GET', path: '/me/practice', query: { days: 30 }, token: s.token })).body.detail, 'pending');

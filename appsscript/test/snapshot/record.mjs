@@ -2,7 +2,7 @@
 // recorded.json, and commit the two together. One answer per line, spaced as ", " and ": ", so the diff shows what
 // changed.
 //
-//   node appsscript/test/parity/record.mjs
+//   node appsscript/test/snapshot/record.mjs
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { answers, HERE } from './run.mjs';
