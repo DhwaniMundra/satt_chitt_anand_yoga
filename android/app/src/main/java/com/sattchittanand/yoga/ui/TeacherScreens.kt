@@ -47,6 +47,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.sattchittanand.yoga.AppViewModel
 import com.sattchittanand.yoga.ClassSession
+import com.sattchittanand.yoga.Intake
 import com.sattchittanand.yoga.R
 import com.sattchittanand.yoga.User
 import com.sattchittanand.yoga.Student
@@ -220,7 +221,7 @@ fun StudentsScreen(vm: AppViewModel) {
         if (vm.students.isEmpty()) {
             if (vm.busy || vm.error != null) Waiting(vm, { vm.loadStudents() }, Modifier.fillMaxWidth()) else Text(stringResource(R.string.no_students), color = Palette.muted)
         }
-        vm.students.forEach { (student, joined) ->
+        vm.students.forEach { (student, joined, intake) ->
             var placing by rememberSaveable(student.id) { mutableStateOf(false) }
             val batch = vm.teacherHome?.batch(student.batch)
             SectionCard(tint = if (student.status == "pending") Palette.saffronLight else Palette.paper) {
@@ -243,9 +244,10 @@ fun StudentsScreen(vm: AppViewModel) {
                         ),
                     )
                 }
+                IntakeSummary(vm, intake, placed = student.batch != null)
                 if (student.batch == null) {
                     Label(stringResource(R.string.place_in_batch))
-                    BatchPicker(vm, student, preselect = "beginner", action = R.string.approve_into)
+                    BatchPicker(vm, student, preselect = intake?.suggestedBatch ?: "beginner", action = R.string.approve_into)
                 } else if (placing) {
                     BatchPicker(vm, student, preselect = student.batch, action = R.string.move_to) { placing = false }
                 }
@@ -269,6 +271,33 @@ fun StudentsScreen(vm: AppViewModel) {
             confirmButton = { TextButton(onClick = { shownPassword = null }) { Text("OK") } },
             text = { Text(stringResource(R.string.new_password_is, name, password), style = MaterialTheme.typography.titleMedium) },
         )
+    }
+}
+
+/** A student's answers about themselves, for the teacher: a summary line, pain, the batch they point to while the
+ *  student waits to be [placed], and the rest ("See all"): meals, the pain note, each self-assessment asana. */
+@Composable
+private fun IntakeSummary(vm: AppViewModel, intake: Intake?, placed: Boolean) {
+    if (intake == null) return Text(stringResource(R.string.intake_none), style = MaterialTheme.typography.bodyMedium, color = Palette.muted)
+    var all by rememberSaveable(intake) { mutableStateOf(false) }
+    val food = FOODS.firstOrNull { it.first == intake.food }?.let { stringResource(it.second) } ?: intake.food
+    Text(stringResource(R.string.intake_line, intake.age, intake.heightCm, intake.weightKg, food), style = MaterialTheme.typography.bodyMedium)
+    if (intake.pain.isNotEmpty()) {
+        val areas = intake.pain.map { area -> PAIN_AREAS.firstOrNull { it.first == area }?.let { stringResource(it.second) } ?: area }
+        Text(stringResource(R.string.intake_pain, areas.joinToString(", ")), style = MaterialTheme.typography.bodyMedium, color = Palette.danger)
+    }
+    if (!placed) vm.teacherHome?.batch(intake.suggestedBatch)?.let {
+        Text(stringResource(R.string.intake_suggests, it.info.name), style = MaterialTheme.typography.labelLarge, color = Palette.moss)
+    }
+    TextButton(onClick = { all = !all }) { Text(stringResource(if (all) R.string.show_less else R.string.see_all)) }
+    if (all) {
+        intake.meals?.let { Text(stringResource(R.string.intake_meals, it), style = MaterialTheme.typography.bodyMedium) }
+        intake.painNote?.let { Text("“$it”", style = MaterialTheme.typography.bodyMedium) }
+        intake.ratings.forEach { r ->
+            val title = vm.curricula?.library?.get(r.item)?.title(vm.prefs.lang) ?: r.item
+            val said = listOfNotNull(r.reaction?.let { stringResource(REACTIONS[it - 1]) }, stringResource(R.string.pain_flag).takeIf { r.pain })
+            Text("$title: ${said.joinToString(" · ")}", style = MaterialTheme.typography.bodyMedium, color = if (r.pain) Palette.danger else Palette.ink)
+        }
     }
 }
 

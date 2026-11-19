@@ -308,7 +308,8 @@ function students_(ctx) {
   const rows = ctx.db.t('users').rows
     .filter((u) => u.role === 'student')
     .sort((a, b) => (b.status === 'pending') - (a.status === 'pending') || b.created_at - a.created_at || a.id - b.id);
-  return { students: rows.map((u) => Object.assign(userJson_(u), { joined: joined[u.id] || 0, created_at: isoTime_(u.created_at) })) };
+  return { students: rows.map((u) => Object.assign(userJson_(u), { joined: joined[u.id] || 0, created_at: isoTime_(u.created_at),
+    intake: intakeOf_(ctx, u.id) })) };
 }
 
 /** Removes a student, or takes a removed one back into their batch; placing a new student is placeInBatch_. */
