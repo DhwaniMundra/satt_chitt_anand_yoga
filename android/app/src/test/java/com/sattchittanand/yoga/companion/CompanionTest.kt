@@ -88,7 +88,7 @@ class CompanionTest {
 
     @Test fun aMessageAboutClassesGetsTheScheduleWithUnambiguousDays() {
         val t = tools()
-        val system = companion.system("Asha", "Which class suits me tomorrow?", "en", t)
+        val system = companion.system("Asha", "When is my next class?", "en", t)
         assertTrue(system, "Today is Thursday 19 November. This student's coming classes, in their batch. Answer from them:\n" +
             "- today, Thursday 19 November: Intermediate at 8:00 AM India time\n" +
             "- tomorrow, Friday 20 November: Intermediate at 8:00 AM India time\n" +
@@ -98,14 +98,14 @@ class CompanionTest {
         assertFalse("### About the studio and classes" in system)
         assertEquals(listOf("get_upcoming_classes"), t.used)
         assertTrue(system.startsWith("You are the practice companion in the Lotus Yoga app, talking with one student, Asha."))
-        assertTrue(system.contains("tell\n   Teacher One before class") && system.contains("6. Reply only in English."))
+        assertTrue(system.contains("tell\n   Teacher One before class") && system.contains("7. Reply only in English."))
     }
 
     @Test fun otherMessagesGetNoSchedule() {
         val t = tools()
         val system = companion.system("Asha", "How was my practice this week?", "hi", t)
         assertFalse("Today is" in system)
-        assertTrue(system.endsWith("6. Reply only in Hindi (हिन्दी, Devanagari script). Write every word in Devanagari, the names of asanas, " +
+        assertTrue(system.endsWith("7. Reply only in Hindi (हिन्दी, Devanagari script). Write every word in Devanagari, the names of asanas, " +
             "batches and the teacher too. Add no English words, and no English in brackets after a word."))
         assertEquals(emptyList<String>(), t.used)
     }
@@ -199,7 +199,8 @@ class CompanionTest {
         for ((message, lang) in listOf("How has my Vajrasana been?" to "en", "मेरा वज्रासन कैसा चल रहा है?" to "hi", "माझे वज्रासन कसे चालले आहे?" to "mr")) {
             val t = tools(lang = lang)
             val system = companion.system("Asha", message, lang, t)
-            assertTrue(message, "How Vajrasana (वज्रासन, Thunderbolt pose) has gone for this student (asana_progress)" in system)
+            val name = if (lang == "en") "Vajrasana (वज्रासन, Thunderbolt pose)" else "वज्रासन" // Hindi and Marathi: no English to copy
+            assertTrue(message, "How $name has gone for this student (asana_progress)" in system)
             assertTrue("- teacher_said: {date=Monday 16 November, text=Much steadier this week.}" in system)
             assertEquals(listOf("asana_progress"), t.used)
         }
@@ -231,6 +232,8 @@ class CompanionTest {
     @Test fun hindiAndMarathiRepliesAreAllDevanagari() {
         for (lang in listOf("hi", "mr")) assertTrue(lang, "Add no English words" in companion.system("Asha", "Hello", lang, tools(lang = lang)))
         assertFalse("Add no English words" in companion.system("Asha", "Hello", "en", tools()))
-        assertTrue("If something hurts in practice, say to stop and to tell Teacher One." in companion.system("Asha", "Hello", "en", tools()))
+        val en = companion.system("Asha", "Hello", "en", tools())
+        assertTrue("If something hurts in practice, say to stop and to tell Teacher One." in en)
+        assertTrue("You cannot reach Teacher One or anyone else" in en)
     }
 }
