@@ -4,8 +4,6 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -22,7 +20,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -41,12 +38,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.sattchittanand.yoga.AppViewModel
 import com.sattchittanand.yoga.ClassSession
 import com.sattchittanand.yoga.R
+import com.sattchittanand.yoga.Student
 import java.util.Locale
 import kotlin.math.roundToInt
 
@@ -64,8 +63,8 @@ fun TeacherTodayScreen(vm: AppViewModel, onLanguage: (String) -> Unit, openStude
             Text(stringResource(R.string.classes_title), style = MaterialTheme.typography.headlineSmall)
             if (home.pendingStudents > 0) {
                 SectionCard(Modifier.clickable(onClick = openStudents), tint = Palette.saffronLight) {
-                    Text("${home.pendingStudents} · ${stringResource(R.string.waiting)}", style = MaterialTheme.typography.titleMedium)
-                    Text(stringResource(R.string.students_title), color = Palette.muted)
+                    Text(pluralStringResource(R.plurals.students_waiting, home.pendingStudents, home.pendingStudents),
+                        style = MaterialTheme.typography.titleMedium)
                 }
             }
             home.sessions.forEach { s ->
@@ -128,16 +127,13 @@ private fun SessionCard(vm: AppViewModel, s: ClassSession, open: Boolean, standi
 }
 
 /** The class's curriculum, one tap to change, and its sequence. */
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun Plan(vm: AppViewModel, s: ClassSession) {
     val curricula = vm.curricula ?: return
     Label(stringResource(R.string.curriculum))
-    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        curricula.curricula.forEach { c ->
-            FilterChip(selected = s.curriculum == c.key, onClick = { if (s.curriculum != c.key) vm.setCurriculum(s.id, c.key) },
-                enabled = !vm.busy, label = { Text(c.name) })
-        }
+    val keys = curricula.curricula.map { it.key }
+    Choices(curricula.curricula.map { it.name }, keys.indexOf(s.curriculum).takeIf { it >= 0 }, enabled = !vm.busy) { i ->
+        if (s.curriculum != keys[i]) vm.setCurriculum(s.id, keys[i])
     }
     curricula.find(s.curriculum)?.let { plan ->
         Text(plan.about, style = MaterialTheme.typography.bodyMedium, color = Palette.muted)
@@ -185,6 +181,19 @@ fun StudentsScreen(vm: AppViewModel) {
     LaunchedEffect(Unit) { vm.loadStudents() }
     // (name, new password). Saveable: the server has already changed the password, so it must survive rotation.
     var shownPassword by rememberSaveable { mutableStateOf<Pair<String, String>?>(null) }
+    var openStudent by rememberSaveable { mutableStateOf<Int?>(null) }
+    var openItem by rememberSaveable { mutableStateOf<String?>(null) }
+    vm.students.firstOrNull { it.user.id == openStudent }?.let { student ->
+        val item = openItem
+        if (item != null) {
+            BackHandler { openItem = null }
+            ItemHistoryScreen(vm, item, student)
+        } else {
+            BackHandler { openStudent = null }
+            StudentPractice(vm, student) { openItem = it }
+        }
+        return
+    }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text(stringResource(R.string.students_title), style = MaterialTheme.typography.headlineSmall)
         if (vm.sharedNotes.isNotEmpty()) { // what students chose to share from their companion, one note at a time
@@ -222,6 +231,9 @@ fun StudentsScreen(vm: AppViewModel) {
                     if (student.status != "rejected") OutlinedButton(onClick = { vm.setStudentStatus(student.id, "rejected") }) { Text(stringResource(R.string.remove)) }
                     TextButton(onClick = { vm.resetPassword(student.id) { shownPassword = student.name to it } }) { Text(stringResource(R.string.new_password)) }
                 }
+                if (student.status == "approved") {
+                    TextButton(onClick = { openStudent = student.id }) { Text(stringResource(R.string.each_item) + " ›") }
+                }
             }
         }
     }
@@ -231,6 +243,18 @@ fun StudentsScreen(vm: AppViewModel) {
             confirmButton = { TextButton(onClick = { shownPassword = null }) { Text("OK") } },
             text = { Text(stringResource(R.string.new_password_is, name, password), style = MaterialTheme.typography.titleMedium) },
         )
+    }
+}
+
+/** One student's practice per item, for the teacher; each item opens its history and the box for feedback on it. */
+@Composable
+private fun StudentPractice(vm: AppViewModel, student: Student, open: (String) -> Unit) {
+    LaunchedEffect(student.user.id) { vm.loadItems(student.user.id) }
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text(student.user.name, style = MaterialTheme.typography.headlineSmall)
+        Text("${student.user.phone} · ${stringResource(R.string.joined_count, student.joined)}", color = Palette.muted)
+        Label(stringResource(R.string.each_item))
+        ItemList(vm, vm.items, teacherViewing = true, open = open)
     }
 }
 
