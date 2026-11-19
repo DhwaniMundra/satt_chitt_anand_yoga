@@ -24,12 +24,12 @@ import com.sattchittanand.yoga.SessionInsight
 
 /** How one class went, item by item: how many said each reaction, who felt strain or pain (first), and the notes. */
 @Composable
-fun ClassReviewScreen(vm: AppViewModel, session: SessionInsight) {
+fun ClassReviewScreen(vm: AppViewModel, session: SessionInsight, back: () -> Unit) {
     LaunchedEffect(session.id) { vm.loadReview(session.id) }
     val review = vm.review
     val curricula = vm.curricula
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text(stringResource(R.string.review_title), style = MaterialTheme.typography.headlineSmall)
+        BackHeader(stringResource(R.string.review_title), back)
         Text("${session.className} · ${dayLabel(session.startsAt)} · ${timeLabel(session.startsAt)}", color = Palette.muted)
         if (review == null || curricula == null) {
             Waiting(vm, { vm.loadReview(session.id) }, Modifier.fillMaxWidth())

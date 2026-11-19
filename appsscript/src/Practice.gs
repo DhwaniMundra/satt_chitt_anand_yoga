@@ -187,9 +187,9 @@ function itemProgress_(item, rows, feedback, when) {
     strain_or_pain: { times: pains.length, last: pains.length ? istDate_(pains[pains.length - 1].at) : null },
     teacher_said: latest ? { date: istDate_(latest.created_at), text: latest.text } : null,
     your_notes: entries.filter((e) => e.note).slice(-5).map((e) => ({ date: istDate_(e.at), text: e.note })),
-    entries: entries.slice().reverse().map((e) => ({ date: istDate_(e.at), kind: e.solo ? 'solo' : 'class', hold_s: e.hold,
+    entries: entries.slice().reverse().map((e) => ({ date: istDate_(e.at), at: isoTime_(e.at), kind: e.solo ? 'solo' : 'class', hold_s: e.hold,
       reaction: e.reaction, pain: e.pain ? 1 : 0, note: e.note })),
-    feedback: said.slice().reverse().map((f) => ({ date: istDate_(f.created_at), text: f.text })),
+    feedback: said.slice().reverse().map((f) => ({ date: istDate_(f.created_at), at: isoTime_(f.created_at), text: f.text })),
   };
 }
 

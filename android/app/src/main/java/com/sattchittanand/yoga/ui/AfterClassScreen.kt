@@ -50,7 +50,7 @@ fun AfterClassScreen(vm: AppViewModel, session: ClassSession, before: Said?, clo
     ) {
         item {
             Column {
-                Text(stringResource(R.string.how_did_it_go), style = MaterialTheme.typography.headlineSmall)
+                BackHeader(stringResource(R.string.how_did_it_go), close)
                 Text(session.batch.name, style = MaterialTheme.typography.bodyLarge, color = Palette.muted)
             }
         }

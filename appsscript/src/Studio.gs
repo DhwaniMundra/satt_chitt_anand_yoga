@@ -3,7 +3,6 @@
 const IST_OFFSET_MS_ = 330 * 60000; // India is UTC+5:30 all year
 const DAY_MS_ = 86400000;
 const DAYS_ = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
-const WEEKDAY_NAMES_ = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const MONTH_NAMES_ = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const CHECKIN_BEFORE_MIN_ = 60; // how early before class the "before" check-in opens
 const MEET_LINK_ = /^https:\/\/(meet\.google\.com\/[a-z]{3}-[a-z]{4}-[a-z]{3}|([\w-]+\.)?zoom\.us\/j\/\d+(\?pwd=[\w.-]+)?)$/;
@@ -289,7 +288,8 @@ function practiceSummary_(ctx, userId, days, lang) {
   const plan = sessionCurricula_(ctx);
   rows.forEach((r) => {
     const name = batchJson_(batches[r.session.batch], r.session.batch, lang).name;
-    classes.push({ date: istDate_(r.session.starts_at), class: name, curriculum: plan[r.session.id], mood_before: r.before, mood_after: r.after });
+    classes.push({ date: istDate_(r.session.starts_at), at: isoTime_(r.session.starts_at), class: name, curriculum: plan[r.session.id],
+      mood_before: r.before, mood_after: r.after });
     const entry = byClass[name] || (byClass[name] = { times: 0, before: [], after: [] });
     entry.times += 1;
     entry.before.push(r.before);
@@ -309,36 +309,40 @@ function practiceSummary_(ctx, userId, days, lang) {
   const solo = mySolo
     .filter((s) => s.started_at >= from && s.started_at <= ctx.now)
     .sort((a, b) => a.started_at - b.started_at)
-    .map((s) => ({ date: istDate_(s.started_at), minutes: Math.round((s.ended_at - s.started_at) / 60000),
+    .map((s) => ({ date: istDate_(s.started_at), at: isoTime_(s.started_at), minutes: Math.round((s.ended_at - s.started_at) / 60000),
       items: (itemsBySolo[s.id] || []).sort((a, b) => a.id - b.id).map((p) => itemTitle_(library[p.item], p.item, lang)) }));
-  // The items practised most in the period, in class and on one's own: how often, the average reaction, strain or pain.
+  // The items practised most in the period, in class and on one's own apart, so neither is taken for the other: how
+  // often, the average reaction, strain or pain.
   const soloById = {};
   mySolo.forEach((s) => {
     soloById[s.id] = s;
   });
-  const byItem = {};
+  const inClass = {};
+  const onOwn = {};
   ctx.db.t('practice').rows.forEach((p) => {
     if (p.user_id !== userId) return;
-    const at = p.solo_id !== null ? (soloById[p.solo_id] || {}).started_at : (sessions[p.session_id] || {}).starts_at;
+    const alone = p.solo_id !== null;
+    const at = alone ? (soloById[p.solo_id] || {}).started_at : (sessions[p.session_id] || {}).starts_at;
     if (at === undefined || at < from || at > ctx.now) return;
+    const byItem = alone ? onOwn : inClass;
     const e = byItem[p.item] || (byItem[p.item] = { times: 0, reactions: [], pain: 0 });
     e.times += 1;
     if (p.reaction !== null) e.reactions.push(p.reaction);
     e.pain += p.pain;
   });
-  const topItems = Object.keys(byItem).sort((a, b) => byItem[b].times - byItem[a].times || a.localeCompare(b)).slice(0, 5)
+  const most = (byItem) => Object.keys(byItem).sort((a, b) => byItem[b].times - byItem[a].times || a.localeCompare(b)).slice(0, 5)
     .map((item) => ({ asana: itemTitle_(library[item], item, lang), times: byItem[item].times,
       average_reaction: average1_(byItem[item].reactions), pain_times: byItem[item].pain }));
   return {
     period_days: days,
     classes_joined: classes.length,
-    mood_scale: '1 very low to 5 great',
     average_mood_before: average1_(rows.map((r) => r.before)),
     average_mood_after: average1_(rows.filter((r) => r.after !== null).map((r) => r.after)),
     by_class: summary,
     classes: classes,
     solo: solo,
-    top_items: topItems,
+    items_in_class: most(inClass),
+    items_on_own: most(onOwn),
   };
 }
 
@@ -348,14 +352,13 @@ function itemTitle_(entry, key, lang) {
   return lang === 'en' ? entry.name : entry.sanskrit;
 }
 
-/** The WhatsApp message for one session, its wa.me link, and the group to post it in. */
+/** The WhatsApp message for one session. */
 function shareFor_(ctx, row, lang) {
   const batch = batches_(ctx)[row.batch];
   const link = row.meet_link || (batch && batch.meet_link);
   if (!link) throw new HttpError_(400, 'no_link');
   const name = batchJson_(batch, row.batch, lang).name;
-  const text = classMessage_(name, row.starts_at, row.duration_min, link, lang);
-  return { text: text, url: shareUrl_(text), group_link: ctx.db.setting('group_link') };
+  return { text: classMessage_(name, row.starts_at, row.duration_min, link, lang) };
 }
 
 // ---------- WhatsApp messages ----------
@@ -392,12 +395,4 @@ function classMessage_(className, startsAt, minutes, link, lang) {
 
 function inviteMessage_(code, lang) {
   return fill_(pick_(TEXT_.invite, lang), { studio: pick_(STUDIO.name, lang), code: code });
-}
-
-/** A wa.me link that opens WhatsApp with `text` ready to send: every character but letters, digits and _.-~/ escaped. */
-function shareUrl_(text) {
-  const quoted = encodeURIComponent(text)
-    .replace(/[!'()*]/g, (c) => '%' + c.charCodeAt(0).toString(16).toUpperCase())
-    .replace(/%2F/g, '/');
-  return 'https://wa.me/?text=' + quoted;
 }

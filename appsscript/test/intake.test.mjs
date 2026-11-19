@@ -28,7 +28,7 @@ test('a waiting student fills the intake; the teacher sees it, with the batch it
   assert.equal(b.ss.getSheetByName('intake').rows().length, 2, 'one row per student');
 });
 
-test('the batch the answers point to: pain, Pain management; mostly steady, Intermediate; else Beginner; never Advanced', () => {
+test('the batch the answers point to: pain, Pain management; four poses steady, Intermediate; else Beginner; never Advanced', () => {
   const b = freshBackend();
   teacherAndCode(b);
   const s = signup(b, '9000000002');
@@ -37,7 +37,10 @@ test('the batch the answers point to: pain, Pain management; mostly steady, Inte
     .map((item) => ({ item, reaction, pain }));
   assert.equal(suggest({ ratings: all(4) }), 'intermediate');
   assert.equal(suggest({ ratings: all(2) }), 'beginner');
-  assert.equal(suggest({ ratings: all(3).slice(0, 3) }), 'beginner', 'too few answered to say');
+  assert.equal(suggest({ ratings: all(3).slice(0, 3) }), 'beginner', 'three steady are not enough');
+  const some = (reactions) => all(null).map((r, i) => Object.assign(r, { reaction: reactions[i] === undefined ? null : reactions[i] }));
+  assert.equal(suggest({ ratings: some([3, 4, 3, 2]) }), 'beginner', '3 of 4 steady or at ease');
+  assert.equal(suggest({ ratings: some([3, 4, 3, 4, 2, 1]) }), 'intermediate', '4 of 6');
   assert.equal(suggest({ ratings: all(4, 1) }), 'pain_management', 'strain or pain in the self-assessment');
   assert.equal(suggest({ pain: 'neck', ratings: all(4) }), 'pain_management');
 });

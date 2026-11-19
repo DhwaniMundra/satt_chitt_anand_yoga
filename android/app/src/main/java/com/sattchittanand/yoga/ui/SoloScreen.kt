@@ -57,7 +57,7 @@ fun SoloChoose(vm: AppViewModel, close: () -> Unit) {
         chosen = curricula.find(key)?.items?.map { it.item }.orEmpty()
     }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text(stringResource(R.string.practise_alone), style = MaterialTheme.typography.headlineSmall)
+        BackHeader(stringResource(R.string.practise_alone), close)
         Text(stringResource(R.string.solo_help), style = MaterialTheme.typography.bodyMedium, color = Palette.muted)
         vm.practice.firstOrNull { it.curriculum != null }?.let { last ->
             OutlinedButton(onClick = { repeat(last.curriculum!!) }, modifier = Modifier.fillMaxWidth()) {

@@ -52,7 +52,6 @@ MOSS, MOSS_LIGHT, SAFFRON, SAFFRON_LIGHT, DANGER = (63, 91, 69), (221, 230, 216)
 
 # Kokoro's own guesses for these were wrong ("Sat Chit Ann-and", "Hath-a"); spoken as written in IPA instead.
 SATT = "[Satt Chitt Anand](/sˈʌt ʧˈɪt ɑnˈʌnd/)"
-RAMIT = "[Ramit ji](/ɹˈʌmɪt ʤˈi/)"
 HATHA = "[Hatha](/hˈʌtə/)"
 SATSANG = "[Satsang](/sˈʌtsʌŋ/)"
 MARATHI = "[Marathi](/məɹˈɑti/)"
@@ -107,7 +106,7 @@ SCENES = (
     ), (Shot(0, "v0.4/04_checkin_before.png", focus=(0.07, 0.355, 0.93, 0.565)),
         Shot(1, "v0.4-two-phones/04_student_after_class.png", focus=(0.03, 0.115, 0.97, 0.315)))),
     Scene("week", "Students", "Students", "The week", (
-        f"Week shows the studio's rhythm, from {HATHA} to Sunday {SATSANG}, and introduces the teacher, {RAMIT}.",
+        f"Week shows the studio's rhythm, from {HATHA} to Sunday {SATSANG}, and introduces the teacher.",
     ), (Shot(0, "v0.4/05_week.png"),)),
     Scene("breathe", "Students", "Students", "Breathe", (
         "Breathe is a circle that grows as you breathe in, and shrinks as you breathe out.",

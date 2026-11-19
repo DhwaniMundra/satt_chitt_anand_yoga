@@ -1,6 +1,6 @@
 {
   "name": {"en": "Satt Chitt Anand Yoga", "hi": "सत्·चित्·आनन्द योग", "mr": "सत्·चित्·आनन्द योग"},
-  "tagline": {"en": "Truth · Consciousness · Bliss", "hi": "सत्य · चेतना · आनंद", "mr": "सत्य · चैतन्य · आनंद"},
+  "tagline": {"en": "Truth · Consciousness · Bliss", "hi": "सत्य · चेतना · आनन्द", "mr": "सत्य · चैतन्य · आनन्द"},
   "since": 1994,
   "teacher": {
     "name": "Ramit M Tippannavar",
@@ -48,7 +48,7 @@
       "parts": [
         {"sa": "सत्", "name": "Satt", "meaning": {"en": "Truth · Being", "hi": "सत्य · अस्तित्व", "mr": "सत्य · अस्तित्व"}},
         {"sa": "चित्", "name": "Chitt", "meaning": {"en": "Consciousness · Awareness", "hi": "चेतना · जागरूकता", "mr": "चैतन्य · जाणीव"}},
-        {"sa": "आनन्द", "name": "Anand", "meaning": {"en": "Bliss · Joy", "hi": "आनंद · प्रसन्नता", "mr": "आनंद · प्रसन्नता"}}
+        {"sa": "आनन्द", "name": "Anand", "meaning": {"en": "Bliss · Joy", "hi": "आनन्द · प्रसन्नता", "mr": "आनन्द · प्रसन्नता"}}
       ]
     },
     "week": {
