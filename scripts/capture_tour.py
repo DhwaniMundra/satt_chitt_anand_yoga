@@ -1,5 +1,5 @@
 """Walks through the app on the emulator and saves the same screenshots and two screen recordings every time,
-so each iteration can be compared with the last: .local/visualization/tours/<version>/ (gitignored;
+so each iteration can be compared with the last: .local/visualization/viz_<major>/screens/<version>/ (gitignored;
 scripts/make_figures.py turns the best of it into the committed GIFs and contact sheets in docs/media/).
 
 Needs: `source scripts/env.sh`, the 6 GB emulator running (SCA_AVD=sca_phone_big scripts/run_emulator.sh) with
@@ -18,9 +18,9 @@ from pathlib import Path
 from PIL import Image
 
 import phone as p
+import viz
 
 ROOT = Path(__file__).resolve().parents[1]
-LOCAL = ROOT / ".local" / "visualization"  # gitignored: recordings on top, raw screenshots in tours/
 APK = ROOT / "android" / "app" / "build" / "outputs" / "apk" / "debug" / "app-debug.apk"
 STUDENT = ("9800000002", "demo123")
 TEACHER = ("9800000001", "demo123")
@@ -34,7 +34,7 @@ def main(version: str) -> None:
 
 
 def tour(version: str) -> None:
-    out = LOCAL / "tours" / version
+    out = viz.screens(version)
     out.mkdir(parents=True, exist_ok=True)
 
     def shot(name: str) -> None:
@@ -57,7 +57,7 @@ def tour(version: str) -> None:
     p.launch(fresh=True)
 
     # ---- student ----
-    video = p.Recording(LOCAL / f"student_tour_{version}.mp4")
+    video = p.Recording(viz.folder(version) / f"student_tour_{version}.mp4")
     shot("01_welcome")
     p.tap("I'm a student")
     shot("02_signup")
@@ -68,8 +68,8 @@ def tour(version: str) -> None:
     p.tap("Okay")  # the 😐 face, by its spoken label
     time.sleep(3)
     p.launch()  # back from the Meet link in the browser
-    p.tap("Week", exact=True)
-    shot("05_week")
+    p.tap("Practice", exact=True)
+    shot("05_practice")
     p.tap("Ask", exact=True)
     shot("07_ask")
     p.tap("How was my practice this week?")
@@ -109,7 +109,7 @@ def tour(version: str) -> None:
     time.sleep(1.5)
 
     # ---- teacher ----
-    video = p.Recording(LOCAL / f"teacher_tour_{version}.mp4")
+    video = p.Recording(viz.folder(version) / f"teacher_tour_{version}.mp4")
     p.tap("I'm the teacher")
     log_in(*TEACHER)
     shot("12_teacher_classes")
@@ -132,7 +132,7 @@ def tour(version: str) -> None:
     video.stop()
 
     for name in ("student_tour", "teacher_tour"):
-        make_small(LOCAL / f"{name}_{version}.mp4", out / f"{name}_small.mp4")
+        make_small(viz.folder(version) / f"{name}_{version}.mp4", out / f"{name}_small.mp4")
     print(f"saved to {out}")
 
 

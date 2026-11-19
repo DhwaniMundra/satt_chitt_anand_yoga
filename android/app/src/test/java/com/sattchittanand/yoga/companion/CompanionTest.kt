@@ -1,18 +1,16 @@
 package com.sattchittanand.yoga.companion
 
-import com.sattchittanand.yoga.JoinedClass
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.Instant
-import java.time.LocalDate
 
 /** The companion's conversation without the model: what Gemma is handed up front, its tools and the "Remember that…"
  *  rule. */
 class CompanionTest {
-    private val companion = PracticeCompanion(NOTES, "Satt Chitt Anand Yoga", "Ramit ji")
+    private val companion = PracticeCompanion(NOTES, "Lotus Yoga", "Teacher One")
     private val now = Instant.parse("2026-11-19T02:00:00Z") // Thursday 19 November, 7:30 in India
 
     /** The server, as the tools see it, with a fixed week of classes. */
@@ -22,7 +20,8 @@ class CompanionTest {
         override fun practice(days: Int, lang: String): Map<String, Any?> {
             if (!reachable) error("no network")
             practiceAsked = days to lang
-            return linkedMapOf("period_days" to days, "classes_joined" to 3)
+            return linkedMapOf("period_days" to days, "classes_joined" to 3,
+                "classes" to listOf(linkedMapOf("date" to "2026-11-16", "class" to "Hatha Yoga", "mood_before" to 3, "mood_after" to 4)))
         }
         override fun upcoming(lang: String): List<UpcomingClass> = if (reachable) classes else error("no network")
         override fun saveNote(text: String) { saved += text }
@@ -70,8 +69,8 @@ class CompanionTest {
         assertFalse("Pranayama" in system) // the next five classes only
         assertFalse("### About the studio and classes" in system)
         assertEquals(listOf("get_upcoming_classes"), t.used)
-        assertTrue(system.startsWith("You are the practice companion in the Satt Chitt Anand Yoga app, talking with one student, Asha."))
-        assertTrue(system.contains("tell\n   Ramit ji before class") && system.contains("6. Reply only in English."))
+        assertTrue(system.startsWith("You are the practice companion in the Lotus Yoga app, talking with one student, Asha."))
+        assertTrue(system.contains("tell\n   Teacher One before class") && system.contains("6. Reply only in English."))
     }
 
     @Test fun otherMessagesGetNoSchedule() {
@@ -94,7 +93,9 @@ class CompanionTest {
     @Test fun toolsReturnTheServersSummaryAndTheNotesInTheStudentsLanguage() {
         val server = Server(week)
         val t = tools(server, "mr")
-        assertEquals(3, t.getMyPractice(7)["classes_joined"])
+        val week = t.getMyPractice(7)
+        assertEquals(3, week["classes_joined"])
+        assertEquals(listOf("Monday 16 November"), (week["classes"] as List<*>).map { (it as Map<*, *>)["date"] }) // the weekday written out
         assertEquals(7 to "mr", server.practiceAsked)
         t.getMyPractice(400)
         assertEquals(90 to "mr", server.practiceAsked) // at most 90 days
@@ -125,12 +126,5 @@ class CompanionTest {
         assertNull(noteToSave("Do you remember that my knee hurts?", emptyList())) // asking, not telling
         assertNull(noteToSave("What did I tell you about my knee?", emptyList()))
         assertNull(noteToSave("Remember that my knee hurts", listOf("save_my_note"))) // Gemma saved it: not twice
-    }
-
-    @Test fun aPracticeDayIsTheLatestDateWithThatWeekday() {
-        val today = LocalDate.of(2026, 1, 5) // a Monday
-        assertEquals(LocalDate.of(2026, 1, 2), JoinedClass.pastDate("Fri 02 Jan", today))
-        assertEquals(LocalDate.of(2025, 12, 29), JoinedClass.pastDate("Mon 29 Dec", today)) // 29 Dec 2026 is a Tuesday
-        assertNull(JoinedClass.pastDate("Tue 06 Jan", today)) // tomorrow, not a class already joined
     }
 }

@@ -144,7 +144,7 @@ private fun ColumnScope.Chat(vm: AppViewModel, gemma: GemmaState) {
     }
     if (!open) { // next to the box it explains, whatever the conversation above
         Surface(color = Palette.mossLight, shape = MaterialTheme.shapes.small, modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
-            Text(stringResource(R.string.err_pending), Modifier.padding(12.dp), style = MaterialTheme.typography.bodyLarge)
+            Text(stringResource(R.string.err_pending, LocalTeacher.current), Modifier.padding(12.dp), style = MaterialTheme.typography.bodyLarge)
         }
     }
     if (ready) {

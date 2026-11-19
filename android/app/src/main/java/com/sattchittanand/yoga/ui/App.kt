@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.ChatBubble
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Insights
@@ -22,6 +21,7 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -39,25 +39,25 @@ private data class Tab(val key: String, val label: Int, val icon: ImageVector)
 
 private val STUDENT_TABS = listOf(
     Tab("today", R.string.tab_today, Icons.Filled.WbSunny),
-    Tab("week", R.string.tab_week, Icons.Filled.CalendarMonth),
+    Tab("practice", R.string.tab_practice, Icons.Filled.SelfImprovement),
     Tab("ask", R.string.tab_ask, Icons.Filled.ChatBubble),
     Tab("me", R.string.tab_me, Icons.Filled.Person),
 )
 private val TEACHER_TABS = listOf(
-    Tab("classes", R.string.tab_classes, Icons.Filled.SelfImprovement),
+    Tab("today", R.string.tab_today, Icons.Filled.WbSunny),
     Tab("students", R.string.tab_students, Icons.Filled.Groups),
     Tab("insights", R.string.tab_insights, Icons.Filled.Insights),
-    Tab("ask", R.string.tab_ask, Icons.Filled.ChatBubble),
-    Tab("me", R.string.tab_me, Icons.Filled.Person),
 )
 
 @Composable
 fun App(vm: AppViewModel, onLanguage: (String) -> Unit) {
     val user = vm.user
-    when {
-        vm.starting -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { BrandHeader(large = true) }
-        user == null -> WelcomeScreen(vm, onLanguage)
-        else -> Main(vm, user.isTeacher, onLanguage)
+    CompositionLocalProvider(LocalTeacher provides vm.words().teacher) {
+        when {
+            vm.starting -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { BrandHeader(large = true) }
+            user == null -> WelcomeScreen(vm, onLanguage)
+            else -> Main(vm, user.isTeacher, onLanguage)
+        }
     }
 }
 
@@ -70,7 +70,7 @@ private fun Main(vm: AppViewModel, teacher: Boolean, onLanguage: (String) -> Uni
 
     LaunchedEffect(vm.notice) { vm.notice?.let { snackbar.showSnackbar(it); vm.notice = null } }
     // Screens with their own form show errors inline; elsewhere a snackbar does.
-    LaunchedEffect(error, tab) { if (error != null && tab !in setOf("today", "classes")) snackbar.showSnackbar(error) }
+    LaunchedEffect(error, tab) { if (error != null && tab != "today") snackbar.showSnackbar(error) }
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbar) },
@@ -92,11 +92,10 @@ private fun Main(vm: AppViewModel, teacher: Boolean, onLanguage: (String) -> Uni
         // the Ask box and the other text fields stay in sight as the student types.
         Box(Modifier.padding(padding).consumeWindowInsets(padding).imePadding()) {
             when (tab) {
-                "today" -> TodayScreen(vm)
-                "week" -> WeekScreen(vm)
+                "today" -> if (teacher) TeacherTodayScreen(vm, onLanguage) { tab = "students" } else TodayScreen(vm)
+                "practice" -> PracticeScreen(vm)
                 "ask" -> AskScreen(vm)
                 "me" -> MeScreen(vm, onLanguage)
-                "classes" -> TeacherClassesScreen(vm) { tab = "students" }
                 "students" -> StudentsScreen(vm)
                 "insights" -> InsightsScreen(vm)
             }
