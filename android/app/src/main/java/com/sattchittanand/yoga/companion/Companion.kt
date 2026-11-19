@@ -174,25 +174,27 @@ fun progressSummary(item: ItemName, p: Map<String, Any?>, lang: String): Map<Str
 /** The next classes, each with an unambiguous day ("tomorrow, Friday 20 November"), so Gemma need not work out dates. */
 fun schedule(classes: List<UpcomingClass>, now: Instant, limit: Int = 5): Map<String, Any?> {
     val today = now.atZone(IST).toLocalDate()
+    val listed = classes.take(limit).map { c ->
+        val start = c.startsAt.atZone(IST)
+        val date = DATE.format(start)
+        val day = when (ChronoUnit.DAYS.between(today, start.toLocalDate())) {
+            0L -> "today, $date"
+            1L -> "tomorrow, $date"
+            else -> date
+        }
+        linkedMapOf("day" to day, "time" to TIME.format(start) + " India time", "class" to c.name, "about" to c.about)
+    }
     return linkedMapOf(
         "today_is" to DATE.format(today),
-        "classes" to classes.take(limit).map { c ->
-            val start = c.startsAt.atZone(IST)
-            val date = DATE.format(start)
-            val day = when (ChronoUnit.DAYS.between(today, start.toLocalDate())) {
-                0L -> "today, $date"
-                1L -> "tomorrow, $date"
-                else -> date
-            }
-            linkedMapOf("day" to day, "time" to TIME.format(start) + " India time", "class" to c.name, "about" to c.about)
-        },
+        "next_class" to listed.firstOrNull()?.let { "${it["day"]}, at ${it["time"]}" }, // said, not left to pick from the list
+        "classes" to listed,
     )
 }
 
 private const val UNREACHABLE = "The studio server could not be reached just now, so this is not available."
 
 /**
- * The companion's five tools, bound to the student on this phone, each in its own [ToolSet] so Gemma sees them in
+ * The companion's six tools, bound to the student on this phone, each in its own [ToolSet] so Gemma sees them in
  * this order. Each records its name in [used].
  */
 class Tools(private val data: StudentData, private val notes: StudioNotes, private val lang: String, private val now: () -> Instant = Instant::now) {
@@ -361,7 +363,8 @@ class PracticeCompanion(val notes: StudioNotes, private val studioName: String, 
         @Suppress("UNCHECKED_CAST")
         val classes = schedule["classes"] as? List<Map<String, Any?>> ?: return "".also { tools.used.removeAt(tools.used.lastIndex) }
         val lines = classes.joinToString("\n") { c -> "- ${c["day"]}: ${c["class"]} at ${c["time"]}" }
-        return "\n\nToday is ${schedule["today_is"]}. This student's coming classes, in their batch. Answer from them:\n$lines"
+        val next = schedule["next_class"]?.let { "Their next class is $it. " }.orEmpty()
+        return "\n\nToday is ${schedule["today_is"]}. ${next}This student's coming classes, in their batch. Answer from them:\n$lines"
     }
 
     /** The notes section on the topic [message] names, as text for the system message (or ""), so a health question
