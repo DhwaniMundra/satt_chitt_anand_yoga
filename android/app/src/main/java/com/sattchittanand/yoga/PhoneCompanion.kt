@@ -6,6 +6,7 @@ import com.sattchittanand.yoga.companion.GemmaOnPhone
 import com.sattchittanand.yoga.companion.HISTORY_TURNS
 import com.sattchittanand.yoga.companion.KeptNote
 import com.sattchittanand.yoga.companion.PracticeCompanion
+import com.sattchittanand.yoga.companion.ItemName
 import com.sattchittanand.yoga.companion.StudentData
 import com.sattchittanand.yoga.companion.StudioNotes
 import com.sattchittanand.yoga.companion.Tools
@@ -35,14 +36,14 @@ class PhoneCompanion(context: Context, private val api: Api, studio: JSONObject)
         )
     }
 
-    /** The reply to [message]; [history] holds the earlier messages, oldest first. Emergency signs get the fixed
-     *  reply first, with no model. Never throws: if Gemma fails, the reply says so. */
-    suspend fun answer(user: User, store: LocalStore, message: String, lang: String, history: List<ChatLine>): ChatLine {
+    /** The reply to [message]; [history] holds the earlier messages, oldest first, and [batch] names the student's
+     *  batch. Emergency signs get the fixed reply first, with no model. Never throws: if Gemma fails, the reply says so. */
+    suspend fun answer(user: User, store: LocalStore, message: String, lang: String, history: List<ChatLine>, batch: String?): ChatLine {
         if (isUrgent(message)) return ChatLine(URGENT_REPLY.getValue(lang), fromStudent = false, urgent = true)
         return try {
             val tools = Tools(Data(api, store), companion.notes, lang)
             val firstName = user.name.trim().split(Regex("\\s+")).first()
-            val system = withContext(Dispatchers.IO) { companion.system(firstName, message, lang, tools) }
+            val system = withContext(Dispatchers.IO) { companion.system(firstName, message, lang, tools, batch) }
             val earlier = history.takeLast(HISTORY_TURNS).map { it.fromStudent to it.text }
             val text = gemma.reply(system, earlier, message, tools.toolSets(), banForeign = lang == "mr")
             check(text.isNotBlank()) { "empty reply" }
@@ -73,6 +74,13 @@ private class Data(private val api: Api, private val store: LocalStore) : Studen
     override fun saveNote(text: String) = store.addNote(text)
 
     override fun notes(): List<KeptNote> = store.notes().map { KeptNote(it.text, it.savedAt) }
+
+    private var read: List<ItemName>? = null // the library, read once per question
+
+    override fun library(): List<ItemName> = read ?: Curricula.from(api.getNow("/curricula?lang=en")).library.values
+        .map { ItemName(it.key, it.sanskrit, it.name, it.english, it.aliases) }.also { read = it }
+
+    override fun itemProgress(key: String): Map<String, Any?> = api.getNow("/me/asanas/$key").toMap()
 }
 
 /** The server's JSON as maps and lists, in the server's key order, as the tool hands it to Gemma. */

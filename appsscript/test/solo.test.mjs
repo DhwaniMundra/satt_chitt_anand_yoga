@@ -66,6 +66,8 @@ test('the practice summary lists the sessions on one\'s own, with the item names
   assert.deepEqual(en.solo, [{ date: en.solo[0].date, minutes: 20, items: ['Vajrasana', 'Bhujangasana'] }]);
   assert.match(en.solo[0].date, /^\d{4}-\d\d-\d\d$/);
   assert.equal(en.classes_joined, 0, 'practice on one\'s own is not a class');
+  assert.deepEqual(en.top_items, [{ asana: 'Bhujangasana', times: 1, average_reaction: 3, pain_times: 0 },
+    { asana: 'Vajrasana', times: 1, average_reaction: null, pain_times: 0 }], 'the most practised first, then by name');
   const hi = b.call('GET', '/me/practice', { token: s.token, query: { days: 7, lang: 'hi' } }).body;
   assert.deepEqual(hi.solo[0].items, ['वज्रासन', 'भुजंगासन']);
 });

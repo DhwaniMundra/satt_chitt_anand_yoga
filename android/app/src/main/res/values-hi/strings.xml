@@ -128,10 +128,12 @@
     <string name="ask_disclaimer">इसे आपकी कक्षाएँ और आपका मूड पता है, और वह भी जो आप इसे याद रखने को कहें। स्टूडियो के नोट्स से सामान्य जानकारी, चिकित्सा सलाह नहीं।</string>
     <string name="sugg_1">इस हफ्ते मेरी प्रैक्टिस कैसी रही?</string>
     <string name="sugg_2">कमर दर्द के लिए योग?</string>
-    <string name="sugg_3">कल कौन सी कक्षा मेरे लिए ठीक रहेगी?</string>
+    <string name="sugg_3">मेरी अगली कक्षा कब है?</string>
     <string name="sugg_4">सत्·चित्·आनन्द का अर्थ क्या है?</string>
+    <string name="sugg_asana">मेरा %1$s कैसा चल रहा है?</string>
     <string name="chat_clear">साफ़ करें</string>
     <string name="tool_practice">आपका अभ्यास देखा</string>
+    <string name="tool_progress">उस आसन को देखा</string>
     <string name="tool_schedule">कक्षाओं का समय देखा</string>
     <string name="tool_notes">स्टूडियो के नोट्स पढ़े</string>
     <string name="tool_saved">एक नोट सेव किया</string>
