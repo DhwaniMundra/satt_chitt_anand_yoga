@@ -1,5 +1,4 @@
 // ---------- Studio: the classes, the weekly rhythm in India time, and the sums over check-ins ----------
-// A port of backend/sca/studio.py, the stats of app.py and practice_summary() of companion.py.
 
 const IST_OFFSET_MS_ = 330 * 60000; // India is UTC+5:30 all year
 const DAY_MS_ = 86400000;
@@ -10,7 +9,7 @@ const CHECKIN_BEFORE_MIN_ = 60; // how early before class the "before" check-in 
 const MEET_LINK_ = /^https:\/\/(meet\.google\.com\/[a-z]{3}-[a-z]{4}-[a-z]{3}|([\w-]+\.)?zoom\.us\/j\/\d+(\?pwd=[\w.-]+)?)$/;
 const GROUP_LINK_ = /^https:\/\/chat\.whatsapp\.com\/[A-Za-z0-9]+$/;
 
-/** Like db.iso(): UTC, whole seconds, "Z". */
+/** UTC ISO-8601 to the second: "2026-11-18T02:30:00Z". */
 function isoTime_(ms) {
   return new Date(Math.floor(ms / 1000) * 1000).toISOString().replace('.000Z', 'Z');
 }
@@ -27,8 +26,7 @@ function istMidnight_(day) {
 
 function istParts_(ms) {
   const d = new Date(ms + IST_OFFSET_MS_);
-  return { day: d.getUTCDate(), month: d.getUTCMonth(), year: d.getUTCFullYear(), weekday: (d.getUTCDay() + 6) % 7,
-    hour: d.getUTCHours(), minute: d.getUTCMinutes() };
+  return { day: d.getUTCDate(), month: d.getUTCMonth(), weekday: (d.getUTCDay() + 6) % 7, hour: d.getUTCHours(), minute: d.getUTCMinutes() };
 }
 
 /** strftime("%-I:%M %p") in India time: "8:00 AM". */
@@ -43,7 +41,7 @@ function pick_(text, lang) {
 }
 
 function cleanLink_(raw, pattern, detail) {
-  let link = pyStrip_(raw);
+  let link = raw.trim();
   if (link.indexOf('https://') !== 0) link = 'https://' + (link.indexOf('http://') === 0 ? link.slice(7) : link);
   if (!pattern.test(link)) throw new HttpError_(400, detail);
   return link;
@@ -192,7 +190,8 @@ function practiceStats_(ctx, userId) {
   return { classes_joined: days.length, streak_days: streak, mood_change: change, mood_pairs: pairs };
 }
 
-/** Python's round(x, 1) for the averages of moods: ties (x.x5 exactly, which are the quarters) go to the even digit. */
+/** Rounds to one decimal, a tie to the even digit as Python's round() does: 2.25 is 2.2 and 2.75 is 2.8. Among averages
+ * of moods the only exact ties are the quarters. */
 function round1_(x) {
   const tenths = x * 10;
   if (Number.isInteger(x * 4) && !Number.isInteger(x * 2)) {
@@ -206,7 +205,8 @@ function average1_(values) {
   return values.length ? round1_(values.reduce((a, b) => a + b, 0) / values.length) : null;
 }
 
-/** practice_summary() of companion.py: the student's classes over the last `days` days, with the sums done. */
+/** The student's classes over the last `days` days (1 to 90), with the sums done: classes joined, average mood
+ * before and after, and the same per class, class names in `lang`. */
 function practiceSummary_(ctx, userId, days, lang) {
   days = Math.max(1, Math.min(days, 90));
   const sessions = sessionsById_(ctx);
@@ -259,7 +259,7 @@ function shareFor_(ctx, row, lang) {
   return { text: text, url: shareUrl_(text), group_link: ctx.db.setting('group_link') };
 }
 
-// ---------- WhatsApp messages (backend/sca/whatsapp.py) ----------
+// ---------- WhatsApp messages ----------
 // The app never reads the WhatsApp group; the teacher posts from the app through Android's share sheet.
 
 const TEXT_ = {
@@ -301,7 +301,7 @@ function inviteMessage_(code, lang, serverUrl) {
   return serverUrl ? text + '\n' + fill_(pick_(SERVER_LINE_, lang), { url: serverUrl }) : text;
 }
 
-/** A wa.me link that opens WhatsApp with `text` ready to send, escaped as Python's urllib.parse.quote does. */
+/** A wa.me link that opens WhatsApp with `text` ready to send: every character but letters, digits and _.-~/ escaped. */
 function shareUrl_(text) {
   const quoted = encodeURIComponent(text)
     .replace(/[!'()*]/g, (c) => '%' + c.charCodeAt(0).toString(16).toUpperCase())

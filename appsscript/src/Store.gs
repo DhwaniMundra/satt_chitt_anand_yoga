@@ -3,8 +3,7 @@
 // Each tab has a header row; columns are found by header name, so the owner may add columns of her own. Text is
 // written with a leading apostrophe, so Sheets keeps "+919876543210", "2E5K7Q" or "=..." exactly as typed instead of
 // reading a number, a date or a formula. Times are real date cells (shown in India time); the API sends them as
-// UTC ISO-8601 strings, as the FastAPI server does. Writes happen under the script lock; ids are the largest id + 1,
-// worked out under that lock (as SQLite does for an INTEGER PRIMARY KEY).
+// UTC ISO-8601 strings. Writes happen under the script lock; ids are the largest id + 1, worked out under that lock.
 
 const TABLES_ = {
   users: [['id', 'int'], ['name', 'text'], ['phone', 'text'], ['role', 'text'], ['status', 'text'], ['pw_hash', 'text'],
@@ -87,7 +86,6 @@ class Db_ {
 class Table_ {
   constructor(sheet, name) {
     this.sheet = sheet;
-    this.name = name;
     this.schema = TABLES_[name];
     const values = sheet.getDataRange().getValues();
     const header = values[0].map((h) => String(h).trim());
@@ -173,7 +171,7 @@ function encode_(value, type) {
   if (type === 'text' || type === 'text?') return value === '' ? '' : "'" + String(value);
   if (type === 'int') return Number(value);
   if (type === 'bool') return Boolean(value);
-  return new Date(Math.floor(value / 1000) * 1000); // time, date: milliseconds since 1970, kept to the second as db.iso does
+  return new Date(Math.floor(value / 1000) * 1000); // time, date: milliseconds since 1970, kept to the second as the API sends them
 }
 
 /** A cell as the app's value: text, a number, a boolean, or milliseconds for times. `own` marks a value just encoded. */

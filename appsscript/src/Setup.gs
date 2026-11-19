@@ -1,6 +1,7 @@
 // ---------- Setup: the tabs, the codes and the Dashboard ----------
 // Run setup() once from the script editor (it asks for permission the first time). Running it again is safe: it adds
-// what is missing and never touches the data, the codes or a Dashboard that already exists.
+// what is missing and leaves the data, the codes and an existing Dashboard alone. Only the classes tab, which comes
+// from the studio constant, is written afresh.
 
 const DATA_TABS_ = ['users', 'class_sessions', 'checkins', 'feedback', 'shared_notes', 'tokens', 'settings'];
 const HIDDEN_TABS_ = ['tokens', 'settings']; // login-token hashes and the codes: nothing to browse
@@ -38,7 +39,7 @@ function setup() {
   return message;
 }
 
-/** A tab with its header row; columns missing from an older tab are added at the end. */
+/** A tab with its header row; columns the code needs and the tab lacks are added at the end. */
 function ensureTab_(ss, name) {
   const columns = TABLES_[name];
   let sheet = ss.getSheetByName(name);

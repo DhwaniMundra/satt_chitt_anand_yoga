@@ -184,8 +184,8 @@ const STUDIO = {
 // is one POST whose body is an envelope:
 //   {"method": "GET", "path": "/home", "query": {"lang": "hi"}, "token": "<login token>", "body": null}
 // and every answer is HTTP 200 with
-//   {"status": <the HTTP status the FastAPI server would have used>, "body": <the JSON it would have sent>}.
-// A GET with no envelope answers /health. The routes, rules and JSON are those of backend/sca/app.py.
+//   {"status": <the HTTP status of the answer: 200, 400, 401, ...>, "body": <the answer's JSON>}.
+// A GET with no envelope answers /health. appsscript/README.md describes the envelope and every route.
 
 const METHODS_ = ['GET', 'POST', 'PUT', 'DELETE'];
 const LOCK_ = true; // the route writes: it runs under the script lock from start to finish
@@ -208,7 +208,7 @@ function doPost(e) {
   return reply_(request.error ? request.error : handle_(request));
 }
 
-/** Manual edits to any tab (the owner fixing a row by hand) make the script forget what it cached. */
+/** A hand edit to any tab makes the script forget what it cached. */
 function onEdit() {
   try {
     bumpCacheGeneration_();
@@ -254,7 +254,7 @@ function parseEnvelope_(text) {
   }
   let token = typeof env.token === 'string' ? env.token : '';
   if (token.indexOf('Bearer ') === 0) token = token.slice(7);
-  return { method: method, path: path, query: query, token: pyStrip_(token), body: env.body === undefined ? null : env.body };
+  return { method: method, path: path, query: query, token: token.trim(), body: env.body === undefined ? null : env.body };
 }
 
 function decodeQuery_(text) {
@@ -373,7 +373,7 @@ class Context_ {
     }
   }
 
-  /** Path, query and body checked the way FastAPI and pydantic check them; all problems in one 422. */
+  /** Checks the path, query and body against their specs (Validate.gs); all problems in one 422. */
   check(spec) {
     const errors = [];
     const out = {};
@@ -385,10 +385,11 @@ class Context_ {
   }
 }
 
-// ---------- Validate: request checks, as pydantic does them for FastAPI ----------
+// ---------- Validate: request checks ----------
 //
-// A failed check is a 422 whose detail is a list, like FastAPI's: [{"type", "loc", "msg", "input"}]. The app shows
-// any list as a generic error, so only the status and the shape matter.
+// A failed check is a 422 whose detail is a list of problems, [{"type", "loc", "msg", "input"}], in the shape of
+// FastAPI's validation errors. The app shows any list as a generic error; the other errors carry a code it translates.
+// Text is not coerced: a number where text is expected is an error. Integers may come as "3", booleans as "yes".
 
 const LANGS_ = ['en', 'hi', 'mr'];
 
@@ -426,7 +427,7 @@ const BODY_ = {
 };
 
 const QUERY_LANG_ = { lang: F_.oneOf(LANGS_, { def: 'en' }) };
-// Named as in app.py, since a 422 names the parameter.
+// A 422 names the parameter, so they carry their names.
 const PATH_SESSION_ = { session_id: F_.int(REQUIRED_) };
 const PATH_USER_ = { user_id: F_.int(REQUIRED_) };
 
@@ -532,8 +533,7 @@ function plural_(n, word) {
 // Each tab has a header row; columns are found by header name, so the owner may add columns of her own. Text is
 // written with a leading apostrophe, so Sheets keeps "+919876543210", "2E5K7Q" or "=..." exactly as typed instead of
 // reading a number, a date or a formula. Times are real date cells (shown in India time); the API sends them as
-// UTC ISO-8601 strings, as the FastAPI server does. Writes happen under the script lock; ids are the largest id + 1,
-// worked out under that lock (as SQLite does for an INTEGER PRIMARY KEY).
+// UTC ISO-8601 strings. Writes happen under the script lock; ids are the largest id + 1, worked out under that lock.
 
 const TABLES_ = {
   users: [['id', 'int'], ['name', 'text'], ['phone', 'text'], ['role', 'text'], ['status', 'text'], ['pw_hash', 'text'],
@@ -616,7 +616,6 @@ class Db_ {
 class Table_ {
   constructor(sheet, name) {
     this.sheet = sheet;
-    this.name = name;
     this.schema = TABLES_[name];
     const values = sheet.getDataRange().getValues();
     const header = values[0].map((h) => String(h).trim());
@@ -702,7 +701,7 @@ function encode_(value, type) {
   if (type === 'text' || type === 'text?') return value === '' ? '' : "'" + String(value);
   if (type === 'int') return Number(value);
   if (type === 'bool') return Boolean(value);
-  return new Date(Math.floor(value / 1000) * 1000); // time, date: milliseconds since 1970, kept to the second as db.iso does
+  return new Date(Math.floor(value / 1000) * 1000); // time, date: milliseconds since 1970, kept to the second as the API sends them
 }
 
 /** A cell as the app's value: text, a number, a boolean, or milliseconds for times. `own` marks a value just encoded. */
@@ -802,7 +801,7 @@ function base64Url_(bytes) {
   return out;
 }
 
-/** Like secrets.token_urlsafe(32): 43 characters. The Sheet keeps only its SHA-256. */
+/** 32 random bytes as 43 URL-safe characters. The Sheet keeps only their SHA-256. */
 function newToken_() {
   return base64Url_(randomBytes_(32));
 }
@@ -840,14 +839,6 @@ function checkPassword_(password, stored) {
   return diff === 0;
 }
 
-// Python's str.strip() whitespace (JavaScript's trim() differs at \x1c-\x1f, \x85 and ﻿).
-const PY_SPACE_ = '[\\t\\n\\x0b\\x0c\\r\\x1c-\\x1f \\x85\\xa0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000]';
-const PY_STRIP_ = new RegExp('^' + PY_SPACE_ + '+|' + PY_SPACE_ + '+$', 'g');
-
-function pyStrip_(text) {
-  return String(text).replace(PY_STRIP_, '');
-}
-
 /**
  * The WhatsApp number as +<country><number>, so one person always gets one account however they type it:
  * "98765 43210", "098765 43210", "+91 98765 43210" and "0091 98765 43210" are the same number. A bare 10-digit
@@ -866,8 +857,8 @@ function normalizePhone_(raw) {
 }
 
 // After ATTEMPT_LIMIT_ failures for one key (a phone number, the teacher code, a user entering a group code) within
-// the window, that key is refused until the window has passed. Kept in CacheService, like the FastAPI server keeps it
-// in memory: losing it (an eviction) only forgets recent failures. Callers hold the script lock.
+// the window, that key is refused until the window has passed. Kept in CacheService: an eviction only forgets recent
+// failures. Callers hold the script lock.
 
 function attempts_(key) {
   const raw = cache_().get('fail:' + key);
@@ -934,7 +925,6 @@ function userJson_(u) {
 }
 
 // ---------- Studio: the classes, the weekly rhythm in India time, and the sums over check-ins ----------
-// A port of backend/sca/studio.py, the stats of app.py and practice_summary() of companion.py.
 
 const IST_OFFSET_MS_ = 330 * 60000; // India is UTC+5:30 all year
 const DAY_MS_ = 86400000;
@@ -945,7 +935,7 @@ const CHECKIN_BEFORE_MIN_ = 60; // how early before class the "before" check-in 
 const MEET_LINK_ = /^https:\/\/(meet\.google\.com\/[a-z]{3}-[a-z]{4}-[a-z]{3}|([\w-]+\.)?zoom\.us\/j\/\d+(\?pwd=[\w.-]+)?)$/;
 const GROUP_LINK_ = /^https:\/\/chat\.whatsapp\.com\/[A-Za-z0-9]+$/;
 
-/** Like db.iso(): UTC, whole seconds, "Z". */
+/** UTC ISO-8601 to the second: "2026-11-18T02:30:00Z". */
 function isoTime_(ms) {
   return new Date(Math.floor(ms / 1000) * 1000).toISOString().replace('.000Z', 'Z');
 }
@@ -962,8 +952,7 @@ function istMidnight_(day) {
 
 function istParts_(ms) {
   const d = new Date(ms + IST_OFFSET_MS_);
-  return { day: d.getUTCDate(), month: d.getUTCMonth(), year: d.getUTCFullYear(), weekday: (d.getUTCDay() + 6) % 7,
-    hour: d.getUTCHours(), minute: d.getUTCMinutes() };
+  return { day: d.getUTCDate(), month: d.getUTCMonth(), weekday: (d.getUTCDay() + 6) % 7, hour: d.getUTCHours(), minute: d.getUTCMinutes() };
 }
 
 /** strftime("%-I:%M %p") in India time: "8:00 AM". */
@@ -978,7 +967,7 @@ function pick_(text, lang) {
 }
 
 function cleanLink_(raw, pattern, detail) {
-  let link = pyStrip_(raw);
+  let link = raw.trim();
   if (link.indexOf('https://') !== 0) link = 'https://' + (link.indexOf('http://') === 0 ? link.slice(7) : link);
   if (!pattern.test(link)) throw new HttpError_(400, detail);
   return link;
@@ -1127,7 +1116,8 @@ function practiceStats_(ctx, userId) {
   return { classes_joined: days.length, streak_days: streak, mood_change: change, mood_pairs: pairs };
 }
 
-/** Python's round(x, 1) for the averages of moods: ties (x.x5 exactly, which are the quarters) go to the even digit. */
+/** Rounds to one decimal, a tie to the even digit as Python's round() does: 2.25 is 2.2 and 2.75 is 2.8. Among averages
+ * of moods the only exact ties are the quarters. */
 function round1_(x) {
   const tenths = x * 10;
   if (Number.isInteger(x * 4) && !Number.isInteger(x * 2)) {
@@ -1141,7 +1131,8 @@ function average1_(values) {
   return values.length ? round1_(values.reduce((a, b) => a + b, 0) / values.length) : null;
 }
 
-/** practice_summary() of companion.py: the student's classes over the last `days` days, with the sums done. */
+/** The student's classes over the last `days` days (1 to 90), with the sums done: classes joined, average mood
+ * before and after, and the same per class, class names in `lang`. */
 function practiceSummary_(ctx, userId, days, lang) {
   days = Math.max(1, Math.min(days, 90));
   const sessions = sessionsById_(ctx);
@@ -1194,7 +1185,7 @@ function shareFor_(ctx, row, lang) {
   return { text: text, url: shareUrl_(text), group_link: ctx.db.setting('group_link') };
 }
 
-// ---------- WhatsApp messages (backend/sca/whatsapp.py) ----------
+// ---------- WhatsApp messages ----------
 // The app never reads the WhatsApp group; the teacher posts from the app through Android's share sheet.
 
 const TEXT_ = {
@@ -1236,7 +1227,7 @@ function inviteMessage_(code, lang, serverUrl) {
   return serverUrl ? text + '\n' + fill_(pick_(SERVER_LINE_, lang), { url: serverUrl }) : text;
 }
 
-/** A wa.me link that opens WhatsApp with `text` ready to send, escaped as Python's urllib.parse.quote does. */
+/** A wa.me link that opens WhatsApp with `text` ready to send: every character but letters, digits and _.-~/ escaped. */
 function shareUrl_(text) {
   const quoted = encodeURIComponent(text)
     .replace(/[!'()*]/g, (c) => '%' + c.charCodeAt(0).toString(16).toUpperCase())
@@ -1244,15 +1235,15 @@ function shareUrl_(text) {
   return 'https://wa.me/?text=' + quoted;
 }
 
-// ---------- Routes: one function per route of backend/sca/app.py ----------
-// Each checks who is asking first, then the inputs, then the rules, in the order FastAPI does, so the same request
-// gets the same status and detail. Routes marked LOCK_ in routes_() run entirely under the script lock; the others
-// take it only around their writes, so a slow password hash never holds up everyone else.
+// ---------- Routes: one function per route ----------
+// Each checks who is asking first, then the inputs, then the rules: a signed-out request is a 401 whatever its inputs,
+// and a bad input is a 422 before any rule is applied. Routes marked LOCK_ in routes_() run entirely under the script
+// lock; the others take it only around their writes, so a slow password hash never holds up everyone else.
 
 // ---------- public ----------
 
 function health_() {
-  // Gemma runs on the phone now; the server has no assistant of its own.
+  // The assistant runs on the phone; this server has none.
   return { ok: true, assistant: 'off', model: null };
 }
 
@@ -1264,12 +1255,12 @@ function studio_(ctx) {
 function signup_(ctx) {
   const { body } = ctx.check({ body: BODY_.signup });
   const phone = normalizePhone_(body.phone);
-  const code = pyStrip_(body.code).toUpperCase();
+  const code = body.code.trim().toUpperCase();
   const hasTeacher = () => ctx.db.t('users').rows.some((u) => u.role === 'teacher');
   let status;
   // The quick refusals come first, before the slow password hash; the lock below checks again.
   if (body.role === 'teacher') {
-    if (hasTeacher()) throw new HttpError_(409, 'teacher_exists'); // one teacher per studio; the code no longer works
+    if (hasTeacher()) throw new HttpError_(409, 'teacher_exists'); // one teacher per studio: the code works once
     ctx.lock(() => {
       if (attemptsBlocked_('login:teacher-code')) throw new HttpError_(429, 'too_many_attempts');
       if (!codeMatches_(ctx, code, 'teacher_code')) {
@@ -1291,7 +1282,7 @@ function signup_(ctx) {
     if (body.role === 'teacher' && hasTeacher()) throw new HttpError_(409, 'teacher_exists');
     if (users.rows.some((u) => u.phone === phone)) throw new HttpError_(409, 'phone_taken');
     const user = users.insert([{
-      id: users.nextId(), name: pyStrip_(body.name), phone: phone, role: body.role, status: status, pw_hash: pwHash,
+      id: users.nextId(), name: body.name.trim(), phone: phone, role: body.role, status: status, pw_hash: pwHash,
       lang: body.lang, research_consent: body.research_consent, created_at: ctx.now,
     }])[0];
     return signIn_(ctx, user);
@@ -1300,7 +1291,7 @@ function signup_(ctx) {
 
 /** Teacher and group codes are compared in capitals, so "ramit2024" and "RAMIT2024" are the same code. */
 function codeMatches_(ctx, code, key) {
-  const want = pyStrip_(ctx.db.setting(key) || '').toUpperCase();
+  const want = (ctx.db.setting(key) || '').trim().toUpperCase();
   return want !== '' && code === want;
 }
 
@@ -1348,7 +1339,7 @@ function updateMe_(ctx) {
   const user = currentUser_(ctx);
   const { body } = ctx.check({ body: BODY_.me });
   const changes = {};
-  if (body.name !== null) changes.name = pyStrip_(body.name);
+  if (body.name !== null) changes.name = body.name.trim();
   if (body.lang !== null) changes.lang = body.lang;
   if (body.research_consent !== null) changes.research_consent = body.research_consent;
   // Withdrawing consent removes what it allowed: here nothing, as questions never reach this server.
@@ -1362,7 +1353,7 @@ function joinGroup_(ctx) {
   const { body } = ctx.check({ body: BODY_.code });
   const key = 'code:' + user.id;
   if (attemptsBlocked_(key)) throw new HttpError_(429, 'too_many_attempts');
-  if (!codeMatches_(ctx, pyStrip_(body.code).toUpperCase(), 'group_code')) {
+  if (!codeMatches_(ctx, body.code.trim().toUpperCase(), 'group_code')) {
     attemptsFail_(key);
     throw new HttpError_(400, 'bad_group_code');
   }
@@ -1382,7 +1373,7 @@ function shareNote_(ctx) {
   const user = member_(ctx);
   const { body } = ctx.check({ body: BODY_.shared });
   if (user.role !== 'student') throw new HttpError_(403, 'pending');
-  const text = pyStrip_(body.text);
+  const text = body.text.trim();
   if (!text) throw new HttpError_(422, 'empty_note');
   const notes = ctx.db.t('shared_notes');
   let row = notes.rows.filter((n) => n.user_id === user.id && n.text === text)[0];
@@ -1460,7 +1451,7 @@ function feedback_(ctx) {
   const user = currentUser_(ctx);
   const { body } = ctx.check({ body: BODY_.feedback });
   const table = ctx.db.t('feedback');
-  table.insert([{ id: table.nextId(), user_id: user.id, screen: body.screen, text: pyStrip_(body.text), created_at: ctx.now }]);
+  table.insert([{ id: table.nextId(), user_id: user.id, screen: body.screen, text: body.text.trim(), created_at: ctx.now }]);
   return { ok: true };
 }
 
@@ -1599,7 +1590,7 @@ function insights_(ctx) {
   });
   const feedback = ctx.db.t('feedback').rows
     .filter((f) => Object.prototype.hasOwnProperty.call(names, f.user_id))
-    .sort((a, b) => b.created_at - a.created_at || a.id - b.id) // equal times keep table order, as SQLite's sort does
+    .sort((a, b) => b.created_at - a.created_at || a.id - b.id) // equal times in the order written
     .slice(0, 20)
     .map((f) => ({ screen: f.screen, text: f.text, created_at: isoTime_(f.created_at), name: names[f.user_id] }));
   return {
@@ -1629,7 +1620,8 @@ function sharedNotes_(ctx) {
 
 // ---------- Setup: the tabs, the codes and the Dashboard ----------
 // Run setup() once from the script editor (it asks for permission the first time). Running it again is safe: it adds
-// what is missing and never touches the data, the codes or a Dashboard that already exists.
+// what is missing and leaves the data, the codes and an existing Dashboard alone. Only the classes tab, which comes
+// from the studio constant, is written afresh.
 
 const DATA_TABS_ = ['users', 'class_sessions', 'checkins', 'feedback', 'shared_notes', 'tokens', 'settings'];
 const HIDDEN_TABS_ = ['tokens', 'settings']; // login-token hashes and the codes: nothing to browse
@@ -1667,7 +1659,7 @@ function setup() {
   return message;
 }
 
-/** A tab with its header row; columns missing from an older tab are added at the end. */
+/** A tab with its header row; columns the code needs and the tab lacks are added at the end. */
 function ensureTab_(ss, name) {
   const columns = TABLES_[name];
   let sheet = ss.getSheetByName(name);

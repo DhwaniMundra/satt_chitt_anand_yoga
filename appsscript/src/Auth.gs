@@ -43,7 +43,7 @@ function base64Url_(bytes) {
   return out;
 }
 
-/** Like secrets.token_urlsafe(32): 43 characters. The Sheet keeps only its SHA-256. */
+/** 32 random bytes as 43 URL-safe characters. The Sheet keeps only their SHA-256. */
 function newToken_() {
   return base64Url_(randomBytes_(32));
 }
@@ -81,14 +81,6 @@ function checkPassword_(password, stored) {
   return diff === 0;
 }
 
-// Python's str.strip() whitespace (JavaScript's trim() differs at \x1c-\x1f, \x85 and ﻿).
-const PY_SPACE_ = '[\\t\\n\\x0b\\x0c\\r\\x1c-\\x1f \\x85\\xa0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000]';
-const PY_STRIP_ = new RegExp('^' + PY_SPACE_ + '+|' + PY_SPACE_ + '+$', 'g');
-
-function pyStrip_(text) {
-  return String(text).replace(PY_STRIP_, '');
-}
-
 /**
  * The WhatsApp number as +<country><number>, so one person always gets one account however they type it:
  * "98765 43210", "098765 43210", "+91 98765 43210" and "0091 98765 43210" are the same number. A bare 10-digit
@@ -107,8 +99,8 @@ function normalizePhone_(raw) {
 }
 
 // After ATTEMPT_LIMIT_ failures for one key (a phone number, the teacher code, a user entering a group code) within
-// the window, that key is refused until the window has passed. Kept in CacheService, like the FastAPI server keeps it
-// in memory: losing it (an eviction) only forgets recent failures. Callers hold the script lock.
+// the window, that key is refused until the window has passed. Kept in CacheService: an eviction only forgets recent
+// failures. Callers hold the script lock.
 
 function attempts_(key) {
   const raw = cache_().get('fail:' + key);

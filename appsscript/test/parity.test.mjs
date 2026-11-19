@@ -1,6 +1,7 @@
-// The same 101 requests, answered by the FastAPI server (recorded in parity/fastapi.json) and by this backend: every
-// status and every JSON body must match. Login tokens and the two random values a step names (a reset password, a new
-// group code) are left out; validation errors are compared by (type, location), as their wording is pydantic's.
+// The same 101 requests (parity/scenario.json), answered by this backend and by the FastAPI server it replaces (its
+// answers recorded in parity/fastapi.json, at the same frozen moment): every status and every JSON body must match.
+// Login tokens and the two random values a step names (a reset password, a new group code) are left out; validation
+// errors are compared by (type, location), as their wording is pydantic's.
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';

@@ -4,8 +4,8 @@
 // is one POST whose body is an envelope:
 //   {"method": "GET", "path": "/home", "query": {"lang": "hi"}, "token": "<login token>", "body": null}
 // and every answer is HTTP 200 with
-//   {"status": <the HTTP status the FastAPI server would have used>, "body": <the JSON it would have sent>}.
-// A GET with no envelope answers /health. The routes, rules and JSON are those of backend/sca/app.py.
+//   {"status": <the HTTP status of the answer: 200, 400, 401, ...>, "body": <the answer's JSON>}.
+// A GET with no envelope answers /health. appsscript/README.md describes the envelope and every route.
 
 const METHODS_ = ['GET', 'POST', 'PUT', 'DELETE'];
 const LOCK_ = true; // the route writes: it runs under the script lock from start to finish
@@ -28,7 +28,7 @@ function doPost(e) {
   return reply_(request.error ? request.error : handle_(request));
 }
 
-/** Manual edits to any tab (the owner fixing a row by hand) make the script forget what it cached. */
+/** A hand edit to any tab makes the script forget what it cached. */
 function onEdit() {
   try {
     bumpCacheGeneration_();
@@ -74,7 +74,7 @@ function parseEnvelope_(text) {
   }
   let token = typeof env.token === 'string' ? env.token : '';
   if (token.indexOf('Bearer ') === 0) token = token.slice(7);
-  return { method: method, path: path, query: query, token: pyStrip_(token), body: env.body === undefined ? null : env.body };
+  return { method: method, path: path, query: query, token: token.trim(), body: env.body === undefined ? null : env.body };
 }
 
 function decodeQuery_(text) {
@@ -193,7 +193,7 @@ class Context_ {
     }
   }
 
-  /** Path, query and body checked the way FastAPI and pydantic check them; all problems in one 422. */
+  /** Checks the path, query and body against their specs (Validate.gs); all problems in one 422. */
   check(spec) {
     const errors = [];
     const out = {};

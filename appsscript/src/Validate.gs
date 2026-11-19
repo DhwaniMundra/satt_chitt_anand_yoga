@@ -1,7 +1,8 @@
-// ---------- Validate: request checks, as pydantic does them for FastAPI ----------
+// ---------- Validate: request checks ----------
 //
-// A failed check is a 422 whose detail is a list, like FastAPI's: [{"type", "loc", "msg", "input"}]. The app shows
-// any list as a generic error, so only the status and the shape matter.
+// A failed check is a 422 whose detail is a list of problems, [{"type", "loc", "msg", "input"}], in the shape of
+// FastAPI's validation errors. The app shows any list as a generic error; the other errors carry a code it translates.
+// Text is not coerced: a number where text is expected is an error. Integers may come as "3", booleans as "yes".
 
 const LANGS_ = ['en', 'hi', 'mr'];
 
@@ -39,7 +40,7 @@ const BODY_ = {
 };
 
 const QUERY_LANG_ = { lang: F_.oneOf(LANGS_, { def: 'en' }) };
-// Named as in app.py, since a 422 names the parameter.
+// A 422 names the parameter, so they carry their names.
 const PATH_SESSION_ = { session_id: F_.int(REQUIRED_) };
 const PATH_USER_ = { user_id: F_.int(REQUIRED_) };
 
