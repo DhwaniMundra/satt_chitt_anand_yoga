@@ -4,13 +4,18 @@ import android.content.Context
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
+import org.json.JSONException
 import org.json.JSONObject
 import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
 import java.time.Instant
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
+import java.time.format.DateTimeParseException
+import java.util.Locale
 
-/** What the app keeps on the phone: the login token, the server address and the chosen language. */
+/** What the app keeps on the phone: the login token, the chosen language and, in a debug build, the server address. */
 class Prefs(context: Context) {
     private val store = context.getSharedPreferences("sca", Context.MODE_PRIVATE)
 
@@ -18,8 +23,9 @@ class Prefs(context: Context) {
         get() = store.getString("token", null)
         set(value) = store.edit().putString("token", value).apply()
 
+    /** The backend, fixed at build time. A debug build may be pointed elsewhere on its first screen. */
     var server: String
-        get() = store.getString("server", null) ?: BuildConfig.DEFAULT_SERVER
+        get() = store.getString("server", null)?.takeIf { BuildConfig.DEBUG } ?: BuildConfig.SERVER
         set(value) = store.edit().putString("server", value.trim().trimEnd('/')).apply()
 
     var lang: String
@@ -36,38 +42,68 @@ class Prefs(context: Context) {
 /** An error the server named ("bad_login", "pending", …) or "network" when it could not be reached. */
 class ApiError(val code: String) : Exception(code)
 
-/** JSON over HTTP to the backend, with the platform's own HttpURLConnection. */
+/**
+ * The backend's API. The backend is a Google Apps Script web app, which cannot read request headers or set a status,
+ * so every call is one POST of an envelope {"method", "path", "token", "body"} (the path carries the query string),
+ * and every answer is HTTP 200 with {"status", "body"}: `status` is the call's real status. Apps Script answers the
+ * POST with a redirect to script.googleusercontent.com, to be fetched with GET; the dev backend answers the same way.
+ */
 class Api(private val prefs: Prefs) {
 
     suspend fun get(path: String) = call("GET", path, null)
     suspend fun post(path: String, body: JSONObject = JSONObject()) = call("POST", path, body)
     suspend fun put(path: String, body: JSONObject) = call("PUT", path, body)
-    suspend fun delete(path: String) = call("DELETE", path, null)
 
-    private suspend fun call(method: String, path: String, body: JSONObject?): JSONObject = withContext(Dispatchers.IO) {
-        try {
-            val conn = URL(prefs.server + path).openConnection() as HttpURLConnection
-            conn.requestMethod = method
-            conn.connectTimeout = 8_000
-            conn.readTimeout = 120_000 // the assistant can take a while on a busy laptop
-            prefs.token?.let { conn.setRequestProperty("Authorization", "Bearer $it") }
-            if (body != null) {
-                conn.doOutput = true
-                conn.setRequestProperty("Content-Type", "application/json; charset=utf-8")
-                conn.outputStream.use { it.write(body.toString().toByteArray()) }
-            }
-            val ok = conn.responseCode in 200..299
-            val text = (if (ok) conn.inputStream else conn.errorStream)?.bufferedReader()?.use { it.readText() } ?: "{}"
-            val json = JSONObject(text)
-            if (!ok) throw ApiError(json.optString("detail").takeIf { it.isNotEmpty() && !it.startsWith("[") } ?: "generic")
-            json
-        } catch (e: ApiError) {
-            throw e
+    private suspend fun call(method: String, path: String, body: JSONObject?): JSONObject = withContext(Dispatchers.IO) { request(method, path, body) }
+
+    /** A GET on the calling thread, for the companion's tools, which run on Gemma's own thread. */
+    fun getNow(path: String): JSONObject = request("GET", path, null)
+
+    private fun request(method: String, path: String, body: JSONObject?): JSONObject {
+        val envelope = JSONObject().put("method", method).put("path", path).put("token", prefs.token ?: "").put("body", body ?: JSONObject.NULL)
+        val reply = try {
+            JSONObject(exchange(envelope.toString()))
         } catch (e: IOException) {
             throw ApiError("network")
-        } catch (e: Exception) { // not JSON: a router page, a wrong port, a server error page
+        } catch (e: JSONException) { // not JSON: a sign-in page, a wrong address
             throw ApiError("generic")
         }
+        val answer = reply.optJSONObject("body") ?: JSONObject()
+        if (reply.optInt("status") !in 200..299) {
+            throw ApiError(answer.optString("detail").takeIf { it.isNotEmpty() && !it.startsWith("[") } ?: "generic")
+        }
+        return answer
+    }
+
+    /** POSTs the envelope, then follows the redirect with GET. */
+    private fun exchange(envelope: String): String {
+        var conn = open(URL(prefs.server))
+        conn.requestMethod = "POST"
+        conn.doOutput = true
+        conn.setRequestProperty("Content-Type", "application/json; charset=utf-8")
+        conn.outputStream.use { it.write(envelope.toByteArray()) }
+        repeat(MAX_REDIRECTS + 1) {
+            val code = conn.responseCode
+            if (code !in 300..399) {
+                if (code != HttpURLConnection.HTTP_OK) throw IOException("HTTP $code")
+                return conn.inputStream.bufferedReader().use { it.readText() }
+            }
+            val location = conn.getHeaderField("Location") ?: throw IOException("redirect without a Location")
+            val next = URL(conn.url, location)
+            conn.disconnect()
+            conn = open(next)
+        }
+        throw IOException("too many redirects")
+    }
+
+    private fun open(url: URL) = (url.openConnection() as HttpURLConnection).apply {
+        instanceFollowRedirects = false
+        connectTimeout = 10_000
+        readTimeout = 30_000 // Apps Script can take some seconds to start
+    }
+
+    private companion object {
+        const val MAX_REDIRECTS = 3
     }
 }
 
@@ -78,15 +114,12 @@ fun JSONObject.dbl(key: String): Double? = if (isNull(key)) null else getDouble(
 fun <T> JSONArray.map(transform: (JSONObject) -> T): List<T> = (0 until length()).map { transform(getJSONObject(it)) }
 fun JSONArray.strings(): List<String> = (0 until length()).map { getString(it) }
 
-data class User(val id: Int, val name: String, val phone: String, val role: String, val status: String, val lang: String, val researchConsent: Boolean) {
+data class User(val id: Int, val name: String, val phone: String, val role: String, val status: String) {
     val isTeacher get() = role == "teacher"
     val isApproved get() = status == "approved"
 
     companion object {
-        fun from(o: JSONObject) = User(
-            o.getInt("id"), o.getString("name"), o.getString("phone"), o.getString("role"), o.getString("status"),
-            o.getString("lang"), o.getBoolean("research_consent"),
-        )
+        fun from(o: JSONObject) = User(o.getInt("id"), o.getString("name"), o.getString("phone"), o.getString("role"), o.getString("status"))
     }
 }
 
@@ -117,12 +150,37 @@ data class ClassSession(
     }
 }
 
-data class Studio(val name: String, val tagline: String, val since: Int, val teacherName: String, val teacherTitle: String, val teacherBio: String, val weekly: List<Pair<String, ClassInfo>>) {
+data class Studio(val tagline: String, val teacherName: String, val teacherTitle: String, val teacherBio: String, val weekly: List<Pair<String, ClassInfo>>) {
     companion object {
         fun from(o: JSONObject): Studio {
             val t = o.getJSONObject("teacher")
             val weekly = o.getJSONArray("weekly").map { it.getString("day") to ClassInfo.from(it.getJSONObject("class")) }
-            return Studio(o.getString("name"), o.getString("tagline"), o.getInt("since"), t.getString("name"), t.getString("title"), t.getString("bio"), weekly)
+            return Studio(o.getString("tagline"), t.getString("name"), t.getString("title"), t.getString("bio"), weekly)
+        }
+    }
+}
+
+/** The studio's own words, in one language, from content/studio.json as the app bundles it. [name] holds the three
+ *  parts of the studio's name: (Devanagari, Latin, meaning). */
+data class StudioWords(
+    val blessing: String,
+    val blessingMeaning: String,
+    val nameIsAMap: String,
+    val name: List<Triple<String, String, String>>,
+    val week: String,
+    val classes: String,
+    val teacher: String,
+) {
+    companion object {
+        fun from(studio: JSONObject, lang: String): StudioWords {
+            fun JSONObject.pick(key: String) = getJSONObject(key).let { it.optString(lang).ifEmpty { it.getString("en") } }
+            val w = studio.getJSONObject("words")
+            val name = w.getJSONObject("name")
+            return StudioWords(
+                w.getJSONObject("blessing").getString("sa"), w.pick("blessing"), name.pick("map"),
+                name.getJSONArray("parts").map { Triple(it.getString("sa"), it.getString("name"), it.pick("meaning")) },
+                w.pick("week"), w.pick("classes"), w.pick("teacher"),
+            )
         }
     }
 }
@@ -136,9 +194,29 @@ data class Home(val user: User, val studio: Studio, val sessions: List<ClassSess
     }
 }
 
-data class Stats(val classesJoined: Int, val streakDays: Int, val moodChange: Double?, val moodPairs: Int) {
+data class Stats(val classesJoined: Int, val streakDays: Int, val moodChange: Double?) {
     companion object {
-        fun from(o: JSONObject) = Stats(o.getInt("classes_joined"), o.getInt("streak_days"), o.dbl("mood_change"), o.getInt("mood_pairs"))
+        fun from(o: JSONObject) = Stats(o.getInt("classes_joined"), o.getInt("streak_days"), o.dbl("mood_change"))
+    }
+}
+
+/** A class the student joined, from GET /me/practice: its date in India, its name, and the moods (1 to 5). */
+data class JoinedClass(val date: LocalDate?, val name: String, val moodBefore: Int, val moodAfter: Int?) {
+    companion object {
+        fun from(o: JSONObject, today: LocalDate) =
+            JoinedClass(pastDate(o.getString("date"), today), o.getString("class"), o.getInt("mood_before"), if (o.isNull("mood_after")) null else o.getInt("mood_after"))
+
+        private val DAY = DateTimeFormatter.ofPattern("EEE dd MMM uuuu", Locale.ENGLISH)
+
+        /** The server's "Mon 09 Nov", a day of the last 90 days, as a date: the weekday tells this year from last. */
+        fun pastDate(text: String, today: LocalDate): LocalDate? =
+            listOf(today.year, today.year - 1).firstNotNullOfOrNull { year ->
+                try {
+                    LocalDate.parse("$text $year", DAY).takeIf { !it.isAfter(today) }
+                } catch (_: DateTimeParseException) {
+                    null
+                }
+            }
     }
 }
 
@@ -164,49 +242,38 @@ data class Student(val user: User, val joined: Int) {
 }
 
 data class SessionInsight(val startsAt: Instant, val className: String, val joined: Int, val moodBefore: Double?, val moodAfter: Double?)
-data class Feedback(val name: String, val screen: String, val text: String)
+data class Feedback(val name: String, val text: String)
 
 data class Insights(
     val approved: Int,
-    val pending: Int,
     val moodChange: Double?,
     val moodPairs: Int,
-    val questions: Int,
     val sessions: List<SessionInsight>,
     val feedback: List<Feedback>,
 ) {
     companion object {
-        fun from(o: JSONObject): Insights {
-            val students = o.getJSONObject("students")
-            return Insights(
-                students.getInt("approved"), students.getInt("pending"), o.dbl("mood_change"), o.getInt("mood_pairs"),
-                o.getJSONObject("questions").getInt("count"),
-                o.getJSONArray("sessions").map {
-                    SessionInsight(Instant.parse(it.getString("starts_at")), it.getString("class"), it.getInt("joined"), it.dbl("mood_before"), it.dbl("mood_after"))
-                },
-                o.getJSONArray("feedback").map { Feedback(it.getString("name"), it.getString("screen"), it.getString("text")) },
-            )
-        }
-    }
-}
-
-/**
- * One message in the chat with the practice companion. A reply's `tools` say what it looked at ("practice", "schedule",
- * "notes", "saved", "memory"); its `mode` is "companion", "notes" or "urgent" (an urgent reply stays red after a
- * restart: the server keeps the mode). The student's own messages have neither.
- */
-data class ChatLine(val text: String, val fromStudent: Boolean, val tools: List<String> = emptyList(), val mode: String? = null) {
-    companion object {
-        fun from(o: JSONObject) = ChatLine(
-            o.getString("text"), o.getString("role") == "student", o.getJSONArray("tools").strings(),
-            o.optString("mode").takeIf { it.isNotEmpty() && o.getString("role") == "companion" },
+        fun from(o: JSONObject) = Insights(
+            o.getJSONObject("students").getInt("approved"), o.dbl("mood_change"), o.getInt("mood_pairs"),
+            o.getJSONArray("sessions").map {
+                SessionInsight(Instant.parse(it.getString("starts_at")), it.getString("class"), it.getInt("joined"), it.dbl("mood_before"), it.dbl("mood_after"))
+            },
+            o.getJSONArray("feedback").map { Feedback(it.getString("name"), it.getString("text")) },
         )
     }
 }
 
-/** Something the student asked the companion to remember. */
-data class Note(val id: Int, val text: String, val savedAt: Instant) {
+/**
+ * One message in the chat with the practice companion, kept on this phone ([LocalStore]). A reply's `tools` are the
+ * companion's tools it used, by name, each once; an urgent reply stays marked after a restart.
+ */
+data class ChatLine(val text: String, val fromStudent: Boolean, val tools: List<String> = emptyList(), val urgent: Boolean = false)
+
+/** One of the student's health notes, kept on this phone; [sharedId] once shared with the teacher. */
+data class Note(val id: Int, val text: String, val savedAt: Instant, val sharedId: Int? = null)
+
+/** A note a student shared with the teacher, as the teacher's Students screen shows it (GET /teacher/shared). */
+data class SharedNote(val student: String, val text: String, val sharedAt: Instant) {
     companion object {
-        fun from(o: JSONObject) = Note(o.getInt("id"), o.getString("text"), Instant.parse(o.getString("created_at")))
+        fun from(o: JSONObject) = SharedNote(o.getString("name"), o.getString("text"), Instant.parse(o.getString("created_at")))
     }
 }

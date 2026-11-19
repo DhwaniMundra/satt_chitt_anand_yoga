@@ -3,21 +3,17 @@ devices, saves a screenshot at each step (.local/visualization/tours/<version>/)
 side-by-side video (.local/visualization/two_phones_<version>.mp4); the pass/fail list goes to
 docs/evals/two_phones_<version>.md.
 
-Needs: both emulators running (scripts/run_emulator.sh, then SCA_AVD=sca_phone_2 SCA_PORT=5556 ...), the APK built,
-and the backend running on a fresh database with SCA_TEACHER_CODE set. `server` is the address the app shows:
-http://10.0.2.2:8000 for emulators, or the laptop's Wi-Fi address for an APK built with -PscaServer.
-Uses test people only.
+Needs: both emulators running (scripts/run_emulator.sh, then SCA_AVD=sca_phone_2 SCA_PORT=5556 ...), the debug APK
+built, and nothing else on port 8000: the test starts the dev backend on an empty Sheet (data/two_phones.json) whose
+teacher signs up with `teacher_code`. Uses test people only.
 
-Usage: python3 scripts/two_phone_test.py v0.3-two-phones http://10.0.2.2:8000 data/two_phones.sqlite3 PILOT1
+Usage: python3 scripts/two_phone_test.py v1-two-phones PILOT1
 """
 
-import subprocess
-
 import os
-import sqlite3
+import subprocess
 import sys
 import time
-from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from PIL import Image
@@ -28,6 +24,9 @@ ROOT = Path(__file__).resolve().parents[1]
 LOCAL = ROOT / ".local" / "visualization"  # gitignored
 APK = ROOT / "android" / "app" / "build" / "outputs" / "apk" / "debug" / "app-debug.apk"
 TEACHER, STUDENT = "emulator-5554", "emulator-5556"
+SERVER = "http://10.0.2.2:8000"  # the dev backend, as the emulators see it
+TEACHER_PHONE = "9800000101"
+PASSWORD = "pilot123"  # every test person's
 
 
 def on(serial: str) -> None:
@@ -35,7 +34,12 @@ def on(serial: str) -> None:
     os.environ["ANDROID_SERIAL"] = serial
 
 
-def main(version: str, server: str, db_path: Path, teacher_code: str) -> None:
+def main(version: str, teacher_code: str) -> None:
+    with p.dev_backend(ROOT / "data" / "two_phones.json", demo=False, teacher_code=teacher_code):
+        run(version, teacher_code)
+
+
+def run(version: str, teacher_code: str) -> None:
     out = LOCAL / "tours" / version
     out.mkdir(parents=True, exist_ok=True)
     results: list[tuple[str, bool]] = []
@@ -75,7 +79,7 @@ def main(version: str, server: str, db_path: Path, teacher_code: str) -> None:
         p.tap("Create account", exact=True)  # the switch above the form; the teacher's form opens on "Log in"
         p.type_into("Your name", name)
         p.type_into("WhatsApp number", number)
-        p.type_into("Password", "pilot123")
+        p.type_into("Password", PASSWORD)
         p.type_into("Teacher code" if teacher else "Group code", code)
         p.hide_keyboard()
         p.tap("Create account", exact=True, last=True)
@@ -86,7 +90,7 @@ def main(version: str, server: str, db_path: Path, teacher_code: str) -> None:
         p.adb("install", "-r", str(APK))
         p.adb("shell", "cmd", "alarm", "set-timezone", "Asia/Kolkata")
         p.demo_mode()
-        p.launch(clear=True)
+        p.launch(fresh=True)
 
     recordings: list[tuple[str, p.Recording]] = []
 
@@ -106,19 +110,13 @@ def main(version: str, server: str, db_path: Path, teacher_code: str) -> None:
 
     # 1. Teacher signs up and sets the class link; the app already shows the server address it will use.
     on(TEACHER)
-    check("teacher phone shows the server address before sign-in", server)
+    check("teacher phone shows the server address before sign-in", SERVER)
     shot("01_teacher_welcome_server")
-    sign_up("Ramit (test)", "9800000101", teacher_code, teacher=True)
+    sign_up("Ramit (test)", TEACHER_PHONE, teacher_code, teacher=True)
     check("teacher signed up", "Your classes")
-    # A class in progress (started 47 min ago, 8 min left), so check-ins are open now.
-    conn = sqlite3.connect(db_path)
-    start = (datetime.now(UTC) - timedelta(minutes=47)).isoformat(timespec="seconds").replace("+00:00", "Z")
-    conn.execute(
-        "INSERT INTO class_sessions (class_key, starts_at, duration_min, updated_at) VALUES ('pranayama', ?, 55, ?)",
-        (start, start),
-    )
-    conn.commit()
-    group_code = conn.execute("SELECT value FROM settings WHERE key = 'group_code'").fetchone()[0]
+    p.add_class("pranayama", -47)  # under way, 8 minutes left: both check-ins are open
+    token = p.call("POST", "/auth/login", body={"phone": TEACHER_PHONE, "password": PASSWORD})["token"]
+    group_code = p.call("GET", "/teacher/home", token)["settings"]["group_code"]
     come_back()
     p.type_into("Google Meet link", "meet.google.com/pil-otte-sta")
     p.hide_keyboard()
@@ -143,8 +141,7 @@ def main(version: str, server: str, db_path: Path, teacher_code: str) -> None:
     p.tap("Great")
     time.sleep(2)
     p.tap("Ask", exact=True)
-    p.tap("What should I eat before class?")
-    check("Gemma answers the student", "From the notes", timeout=120)
+    check("a 2 GB phone says chat needs more memory", "Cloud model support coming soon")
     shot("05_student_ask")
 
     # 3. Teacher sees the check-in from the other phone.
@@ -166,7 +163,7 @@ def main(version: str, server: str, db_path: Path, teacher_code: str) -> None:
     p.tap("I'm a student")
     p.type_into("Your name", "Meera (test)")
     p.type_into("WhatsApp number", "09800000103")  # typed with a leading 0
-    p.type_into("Password", "pilot123")
+    p.type_into("Password", PASSWORD)
     p.hide_keyboard()
     p.tap("Create account", exact=True, last=True)
     time.sleep(3)
@@ -190,7 +187,7 @@ def main(version: str, server: str, db_path: Path, teacher_code: str) -> None:
     report = ROOT / "docs" / "evals" / f"two_phones_{version.removesuffix('-two-phones')}.md"
     report.write_text(
         f"# Two-phone test: {version}\n\n"
-        f"- **Server:** {server} (the laptop as seen from the emulators; an APK built with -PscaServer uses the laptop's Wi-Fi address instead)\n"
+        f"- **Server:** the dev backend at {SERVER} (the laptop as the emulators see it)\n"
         f"- **Phones:** {TEACHER} (teacher), {STUDENT} (students), Android 16 emulators\n"
         f"- **Passed:** {passed}/{len(results)}\n\n"
         + "".join(f"- {'✅' if ok else '❌'} {what}\n" for what, ok in results)
@@ -221,4 +218,4 @@ def side_by_side(out: Path, final: Path) -> None:
 
 
 if __name__ == "__main__":
-    main(sys.argv[1], sys.argv[2], Path(sys.argv[3]), sys.argv[4])
+    main(sys.argv[1], sys.argv[2])

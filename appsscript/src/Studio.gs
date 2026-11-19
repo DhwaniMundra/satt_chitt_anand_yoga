@@ -279,11 +279,6 @@ const DAY_NAMES_ = {
   hi: ['सोम', 'मंगल', 'बुध', 'गुरु', 'शुक्र', 'शनि', 'रवि'],
   mr: ['सोम', 'मंगळ', 'बुध', 'गुरु', 'शुक्र', 'शनि', 'रवि'],
 };
-const SERVER_LINE_ = {
-  en: 'In the app, under Server address, enter: {url}',
-  hi: 'ऐप में सर्वर पता डालें: {url}',
-  mr: 'ॲपमध्ये सर्व्हर पत्ता टाका: {url}',
-};
 
 function fill_(template, values) {
   return template.replace(/\{(\w+)\}/g, (all, key) => (Object.prototype.hasOwnProperty.call(values, key) ? String(values[key]) : all));
@@ -296,9 +291,8 @@ function classMessage_(className, startsAt, minutes, link, lang) {
     minutes: minutes, link: link });
 }
 
-function inviteMessage_(code, lang, serverUrl) {
-  const text = fill_(pick_(TEXT_.invite, lang), { studio: pick_(STUDIO.name, lang), code: code });
-  return serverUrl ? text + '\n' + fill_(pick_(SERVER_LINE_, lang), { url: serverUrl }) : text;
+function inviteMessage_(code, lang) {
+  return fill_(pick_(TEXT_.invite, lang), { studio: pick_(STUDIO.name, lang), code: code });
 }
 
 /** A wa.me link that opens WhatsApp with `text` ready to send: every character but letters, digits and _.-~/ escaped. */

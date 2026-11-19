@@ -163,5 +163,5 @@ function signIn_(ctx, user) {
 }
 
 function userJson_(u) {
-  return { id: u.id, name: u.name, phone: u.phone, role: u.role, status: u.status, lang: u.lang, research_consent: Boolean(u.research_consent) };
+  return { id: u.id, name: u.name, phone: u.phone, role: u.role, status: u.status, lang: u.lang };
 }

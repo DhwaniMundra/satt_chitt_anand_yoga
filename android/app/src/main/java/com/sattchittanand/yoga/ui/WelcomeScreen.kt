@@ -18,7 +18,6 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.SelfImprovement
 import androidx.compose.material3.Button
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -43,11 +42,12 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.sattchittanand.yoga.AppViewModel
+import com.sattchittanand.yoga.BuildConfig
 import com.sattchittanand.yoga.R
 
-/** The studio server's address, folded away under a small link: needed on a real phone before signing in. */
+/** The server address, folded away under a small link: a debug build can be pointed at a laptop on the Wi-Fi. */
 @Composable
-fun ServerAddress(vm: AppViewModel) {
+private fun ServerAddress(vm: AppViewModel) {
     var open by rememberSaveable { mutableStateOf(false) }
     var address by rememberSaveable { mutableStateOf(vm.prefs.server) }
     TextButton(onClick = { open = !open }) {
@@ -84,7 +84,6 @@ fun WelcomeScreen(vm: AppViewModel, onLanguage: (String) -> Unit) {
     var phone by rememberSaveable { mutableStateOf("") }
     var password by rememberSaveable { mutableStateOf("") }
     var code by rememberSaveable { mutableStateOf("") }
-    var consent by rememberSaveable { mutableStateOf(false) }
 
     Column(
         Modifier.fillMaxSize().safeDrawingPadding().imePadding().verticalScroll(rememberScrollState()).padding(24.dp),
@@ -94,6 +93,10 @@ fun WelcomeScreen(vm: AppViewModel, onLanguage: (String) -> Unit) {
         Spacer(Modifier.height(if (role == null) 48.dp else 8.dp))
         BrandHeader(large = role == null)
         Text(stringResource(R.string.welcome_sub), style = MaterialTheme.typography.bodyLarge, color = Palette.muted, textAlign = TextAlign.Center)
+        vm.studio?.takeIf { role == null }?.let { studio -> // from the server: the first sign that the app can reach it
+            Text(studio.tagline, style = MaterialTheme.typography.labelLarge, color = Palette.saffron, textAlign = TextAlign.Center)
+            Text("${studio.teacherName} · ${studio.teacherTitle}", style = MaterialTheme.typography.bodyMedium, color = Palette.muted, textAlign = TextAlign.Center)
+        }
         Spacer(Modifier.height(4.dp))
         LanguageChips(vm.prefs.lang, onLanguage)
         Spacer(Modifier.height(12.dp))
@@ -111,7 +114,11 @@ fun WelcomeScreen(vm: AppViewModel, onLanguage: (String) -> Unit) {
                 Spacer(Modifier.padding(4.dp))
                 Text(stringResource(R.string.i_am_teacher))
             }
-            ServerAddress(vm)
+            if (BuildConfig.DEBUG) ServerAddress(vm)
+            val words = vm.words()
+            Spacer(Modifier.height(20.dp))
+            Text(words.blessing, style = MaterialTheme.typography.bodyMedium, color = Palette.saffron, textAlign = TextAlign.Center)
+            Text(words.blessingMeaning, style = MaterialTheme.typography.labelMedium, color = Palette.muted, textAlign = TextAlign.Center)
             return@Column
         }
 
@@ -153,16 +160,10 @@ fun WelcomeScreen(vm: AppViewModel, onLanguage: (String) -> Unit) {
                 supportingText = if (teacher) null else ({ Text(stringResource(R.string.group_code_help)) }),
                 singleLine = true, modifier = Modifier.fillMaxWidth(),
             )
-            if (!teacher) {
-                Row(verticalAlignment = Alignment.Top) {
-                    Checkbox(consent, { consent = it })
-                    Text(stringResource(R.string.consent), style = MaterialTheme.typography.bodyMedium, color = Palette.muted, modifier = Modifier.padding(top = 12.dp))
-                }
-            }
         }
         vm.error?.let { Text(errorText(it), color = MaterialTheme.colorScheme.error, modifier = Modifier.fillMaxWidth()) }
         Button(
-            onClick = { if (signup) vm.signup(name, phone, password, teacher, code, consent) else vm.login(phone, password) },
+            onClick = { if (signup) vm.signup(name, phone, password, teacher, code) else vm.login(phone, password) },
             enabled = !vm.busy && phone.isNotBlank() && password.isNotBlank() && (!signup || name.isNotBlank()),
             modifier = Modifier.fillMaxWidth().height(56.dp),
         ) { Text(stringResource(if (signup) R.string.signup else R.string.login)) }

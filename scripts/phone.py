@@ -1,16 +1,72 @@
-"""Drives the app on the emulator through adb, by the text on screen: tap, type, screenshot, record.
+"""Drives the app on the emulator through adb, by the text on screen: tap, type, screenshot, record; and runs the dev
+backend the app talks to, with the data a tour needs.
 
-Used by capture_tour.py to take the same screenshots after every iteration. Needs `source scripts/env.sh` first
-(for the project's adb) and a running emulator.
+Used by capture_tour.py and two_phone_test.py. Needs `source scripts/env.sh` first (for the project's adb and node)
+and a running emulator.
 """
 
+import contextlib
+import json
+import os
 import re
 import subprocess
 import time
+import urllib.request
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
 PACKAGE = "com.sattchittanand.yoga"
+ROOT = Path(__file__).resolve().parents[1]
+BACKEND = "http://localhost:8000"  # the dev backend as this laptop sees it; the emulator reaches it at 10.0.2.2:8000
+
+
+@contextlib.contextmanager
+def dev_backend(data: Path, demo: bool, teacher_code: str = ""):
+    """The dev backend on port 8000 with a new data file: the synthetic demo (scripts/seed_demo.mjs) or, without
+    `demo`, an empty Sheet whose teacher signs up with `teacher_code`. Stopped on leaving."""
+    try:
+        urllib.request.urlopen(BACKEND, timeout=2)
+        raise SystemExit("something already answers on port 8000: stop it first (scripts/demo.sh stop)")
+    except OSError:
+        pass
+    data.unlink(missing_ok=True)
+    if demo:
+        subprocess.run(["node", ROOT / "scripts" / "seed_demo.mjs", data], check=True)
+    env = dict(os.environ, SCA_TEACHER_CODE=teacher_code)
+    server = subprocess.Popen(["node", ROOT / "scripts" / "dev_backend.mjs", data], env=env, stdout=subprocess.DEVNULL)
+    try:
+        for _ in range(50):
+            try:
+                urllib.request.urlopen(BACKEND, timeout=1)
+                break
+            except OSError:
+                time.sleep(0.2)
+        yield
+    finally:
+        server.terminate()
+        server.wait(timeout=10)
+
+
+def call(method: str, path: str, token: str = "", body: dict | None = None) -> dict:
+    """One call to the dev backend through the envelope, as the app makes it (urllib follows the 302 with a GET).
+
+    Raises:
+        RuntimeError: if the answer's status is not 200.
+    """
+    envelope = json.dumps({"method": method, "path": path, "token": token, "body": body}).encode()
+    request = urllib.request.Request(BACKEND, data=envelope, headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(request, timeout=30) as answer:
+        reply = json.load(answer)
+    if reply["status"] != 200:
+        raise RuntimeError(f"{method} {path}: {reply}")
+    return reply["body"]
+
+
+def add_class(class_key: str, minutes_from_now: int) -> int:
+    """A 55-minute class starting at that time (negative: under way), so the check-ins are open whatever the hour."""
+    body = json.dumps({"class_key": class_key, "minutes_from_now": minutes_from_now}).encode()
+    with urllib.request.urlopen(urllib.request.Request(BACKEND + "/dev/class", data=body), timeout=10) as answer:
+        return json.load(answer)["id"]
 
 
 def adb(*args: str, capture: bool = True) -> str:
@@ -105,10 +161,12 @@ def screenshot(path: Path) -> None:
     path.write_bytes(subprocess.run(["adb", "exec-out", "screencap", "-p"], check=True, capture_output=True).stdout)
 
 
-def launch(clear: bool = False) -> None:
-    if clear:
-        adb("shell", "pm", "clear", PACKAGE)
+def launch(fresh: bool = False) -> None:
+    """Starts the app; with `fresh`, signed out and with no chat or health notes, as on a new phone. Gemma's download
+    stays: `pm clear` would delete the 2.6 GB model."""
     adb("shell", "am", "force-stop", PACKAGE)
+    if fresh:
+        adb("shell", "run-as", PACKAGE, "rm", "-rf", "shared_prefs/sca.xml", "files/companion")
     adb("shell", "am", "start", "-n", f"{PACKAGE}/.MainActivity")
     time.sleep(3)
 

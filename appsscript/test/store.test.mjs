@@ -58,8 +58,6 @@ test('validation errors are a 422 with a list of problems, after the sign-in che
   assert.equal(mood(2.5).body.detail[0].type, 'int_from_float');
   assert.equal(mood('x').body.detail[0].type, 'int_parsing');
   assert.notEqual(mood('3').status, 422); // "3" counts as an integer
-  assert.equal(b.call('POST', '/me', { token: s.token, body: { research_consent: 'yes' } }).body.user.research_consent, true);
-  assert.equal(b.call('POST', '/me', { token: s.token, body: { research_consent: 'perhaps' } }).body.detail[0].type, 'bool_parsing');
 });
 
 test('the Sheet keeps text as typed: numbers, codes and formulas stay text', () => {
@@ -72,7 +70,7 @@ test('the Sheet keeps text as typed: numbers, codes and formulas stay text', () 
   assert.equal(row[1], '=HYPERLINK("http://evil.example")'); // text, not a formula
   assert.equal(row[2], '+919000000001'); // text, not the number 919000000001
   assert.equal(typeof row[0], 'number');
-  assert.ok(row[8] instanceof Date);
+  assert.ok(row[7] instanceof Date);
   assert.equal(b.call('POST', '/auth/login', { body: { phone: '9000000001', password: 'secret1' } }).body.user.name, t.user.name);
   b.call('PUT', '/teacher/settings', { token: t.token, body: { group_link: 'chat.whatsapp.com/123456' } });
   assert.equal(setting(b, 'group_link'), 'https://chat.whatsapp.com/123456');
@@ -245,7 +243,7 @@ test('setup: the Dashboard formulas point at the right columns', () => {
   assert.equal(formulas.length, 7);
   assert.equal(Object.keys(dashboard.notes).length, 7, 'each block title explains its block');
   const text = formulas.map(([, , v]) => v.formula).join('\n');
-  assert.match(text, /QUERY\(users!A1:I, "select E, count\(A\) where D = 'student' group by E/);
+  assert.match(text, /QUERY\(users!A1:H, "select E, count\(A\) where D = 'student' group by E/);
   assert.match(text, /QUERY\(checkins!A1:G, "select G, F, count\(A\) where C = 'before' group by G, F order by G desc/);
   assert.match(text, /select F, avg\(D\) where A is not null group by F pivot C/);
   assert.match(text, /VLOOKUP\(feedback!B2:B, \{users!A2:A, users!B2:B\}, 2, FALSE\)/);
