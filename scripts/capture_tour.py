@@ -4,8 +4,10 @@ scripts/make_figures.py turns the best of it into the committed GIFs and contact
 
 Needs: `source scripts/env.sh`, the 6 GB emulator running (SCA_AVD=sca_phone_big scripts/run_emulator.sh) with
 Gemma downloaded in Ask, and nothing else on port 8000. The tour starts the dev backend on a fresh copy of the
-synthetic demo (data/tour.json), adds an Intermediate class under way so both check-ins are open, and starts the app
-signed out with no chat or notes, so a second run shows the same screens.
+synthetic demo (data/tour.json), where today's 8:00 Intermediate class has three students who joined; Asha says how it
+went, so run the tour after that class and within 12 hours of it (9:00 to 20:55 in India). It adds an Intermediate class
+starting in 20 minutes, for the before-class check-in, and starts the app signed out with no chat or notes, so a second
+run shows the same screens.
 
 The student, Asha (Intermediate): Today, joining, how the class went, the Practice tab and an asana's history, a
 practice on her own with the stopwatch, Ask about her own asana, Me, then Hindi and Marathi. Neha, waiting to be
@@ -34,7 +36,7 @@ TEACHER = ("9800000001", "demo123")
 
 def main(version: str) -> None:
     with p.dev_backend(ROOT / "data" / "tour.json", demo=True):
-        p.add_class("intermediate", -47)  # under way, 8 minutes left: both check-ins are open
+        p.add_class("intermediate", 20)  # its check-in is open; Asha skips the mood, so it stays out of Insights
         tour(version)
 
 
@@ -73,7 +75,7 @@ def tour(version: str) -> None:
     shot("03_today")
     p.tap("Join class")
     shot("04_checkin_before")
-    p.tap("Okay")  # the 😐 face, by its spoken label
+    p.tap("Skip", exact=True)
     time.sleep(3)
     p.launch()  # back from the Meet link in the browser
     tap_scrolling(f"Tell {p.TEACHER_NAME}")
@@ -196,12 +198,13 @@ def tour(version: str) -> None:
     p.tap("I'm the teacher")
     log_in(*TEACHER)
     shot("24_teacher_today")
-    tap_scrolling("Share on WhatsApp", exact=True)  # the class under way, on its batch's everyday link
+    tap_scrolling("Share on WhatsApp", exact=True)  # the next class, on its batch's everyday link
     time.sleep(2.5)
     shot("25_teacher_share")  # the message names the batch
     p.back()
     time.sleep(1)
-    p.scroll_down()
+    find_scrolling("https://meet.google.com/def-ghij-klm")  # the last batch's everyday link
+    bring("https://meet.google.com/def-ghij-klm", 1950)  # the four links in frame, the group code below them out of it
     shot("26_teacher_batches")
     p.tap("Students", exact=True)
     time.sleep(2)
@@ -221,6 +224,10 @@ def tour(version: str) -> None:
     shot("30_move_batch")
     p.tap_under("Rohan Desai", "Move to Intermediate")
     time.sleep(2)
+    p.scroll_to_top()
+    find_scrolling("Rohan Desai")
+    bring("Rohan Desai", 450)
+    shot("30b_rohan_moved")  # "Intermediate · since" today
     p.scroll_to_top()
     p.tap_under("Asha Kulkarni", "How each item has gone ›")
     time.sleep(2)
@@ -248,7 +255,7 @@ def tour(version: str) -> None:
     time.sleep(1.5)
     p.tap("I'm a student")
     log_in(*WAITING)
-    shot("29b_neha_today")  # her batch now, after the teacher placed her (29)
+    shot("27b_neha_today")  # her batch now, after the teacher placed her (after 28)
 
     for name in ("student_tour", "teacher_tour"):
         make_small(viz.folder(version) / f"{name}_{version}.mp4", out / f"{name}_small.mp4")
@@ -264,6 +271,24 @@ def tap_scrolling(text: str, exact: bool = False) -> None:
         except TimeoutError:
             p.scroll_down()
     p.tap(text, exact=exact)
+
+
+def find_scrolling(text: str) -> None:
+    """Scrolls down until `text` is on screen."""
+    for _ in range(12):
+        try:
+            p.find(text, timeout=1.5)
+            return
+        except TimeoutError:
+            p.scroll_down()
+    raise TimeoutError(f"'{text}' not on screen")
+
+
+def bring(text: str, y: int) -> None:
+    """Scrolls so the element showing `text` sits at height `y` on the screen: a slow swipe, so the page stops there."""
+    _, at = p.center(p.find(text))
+    p.adb("shell", "input", "swipe", "540", "1200", "540", str(max(150, min(2200, 1200 + y - at))), "1500")
+    time.sleep(1)
 
 
 def make_small(video: Path, small: Path) -> None:
