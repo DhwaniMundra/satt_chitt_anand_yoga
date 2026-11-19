@@ -6,6 +6,7 @@ import com.sattchittanand.yoga.companion.GemmaOnPhone
 import com.sattchittanand.yoga.companion.HISTORY_TURNS
 import com.sattchittanand.yoga.companion.KeptNote
 import com.sattchittanand.yoga.companion.PracticeCompanion
+import com.sattchittanand.yoga.companion.ItemName
 import com.sattchittanand.yoga.companion.StudentData
 import com.sattchittanand.yoga.companion.StudioNotes
 import com.sattchittanand.yoga.companion.Tools
@@ -73,6 +74,13 @@ private class Data(private val api: Api, private val store: LocalStore) : Studen
     override fun saveNote(text: String) = store.addNote(text)
 
     override fun notes(): List<KeptNote> = store.notes().map { KeptNote(it.text, it.savedAt) }
+
+    private var read: List<ItemName>? = null // the library, read once per question
+
+    override fun library(): List<ItemName> = read ?: Curricula.from(api.getNow("/curricula?lang=en")).library.values
+        .map { ItemName(it.key, it.sanskrit, it.name, it.english, it.aliases) }.also { read = it }
+
+    override fun itemProgress(key: String): Map<String, Any?> = api.getNow("/me/asanas/$key").toMap()
 }
 
 /** The server's JSON as maps and lists, in the server's key order, as the tool hands it to Gemma. */
