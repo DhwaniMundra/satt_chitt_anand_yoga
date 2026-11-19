@@ -3,6 +3,7 @@ package com.sattchittanand.yoga.companion
 import com.google.ai.edge.litertlm.Tool
 import com.google.ai.edge.litertlm.ToolParam
 import com.google.ai.edge.litertlm.ToolSet
+import java.text.Normalizer
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -11,10 +12,10 @@ import java.time.temporal.ChronoUnit
 import java.util.Locale
 
 /*
- * The practice companion's conversation: the system message, the five tools and the "Remember that…" rule. Tools
- * return summaries worked out in code, so Gemma never adds up rows; the notes section a message names and, for a
- * message about classes, the coming classes are handed to Gemma up front, so it answers from them even when it does
- * not call a tool. Plain Kotlin (the tools use LiteRT-LM's annotations only), so the JVM unit tests run it with a
+ * The practice companion's conversation: the system message, the six tools and the "Remember that…" rule. Tools
+ * return summaries worked out in code, so Gemma never adds up rows; the notes section a message names, for a message
+ * about classes the coming classes, and for a message about one's own asana that asana's progress are handed to Gemma
+ * up front, so it answers from them even when it does not call a tool. Plain Kotlin (the tools use LiteRT-LM's annotations only), so the JVM unit tests run it with a
  * stand-in for the server.
  */
 
@@ -39,8 +40,9 @@ const val SYSTEM = """You are the practice companion in the {studio} app, talkin
 own practice, the studio's coming classes and the studio's notes, and save notes they ask you to remember.
 
 Rules:
-1. For anything about this student's practice, classes or moods, call a tool first and use only what it returns. Never
-   invent numbers or dates. Report summaries exactly as the tool gives them.
+1. For anything about this student's practice, classes or moods, call a tool first and use only what it returns; for
+   one asana, pranayama or meditation, call asana_progress (its teacher_said is what {teacher} wrote to them about it).
+   Never invent numbers or dates. Report summaries exactly as the tool gives them.
 2. For yoga or health guidance, call search_studio_notes and answer only from what it returns.
 3. When the student asks you to remember something, call save_my_note. When they ask what they told you, call
    get_my_notes.
@@ -59,6 +61,15 @@ data class UpcomingClass(val startsAt: Instant, val name: String, val about: Str
 /** A note the companion keeps on this phone. */
 data class KeptNote(val text: String, val savedAt: Instant)
 
+/** An item of the studio's library, by all its names, for finding the one a student or Gemma means. */
+data class ItemName(val key: String, val sanskrit: String, val name: String, val english: String, val aliases: List<String>) {
+    /** "Vajrasana (वज्रासन, Thunderbolt pose)": every way the student may know it. */
+    val full get() = "$name ($sanskrit, $english)"
+
+    /** Its names folded for comparing ([foldName]), the key among them. */
+    val forms: List<String> by lazy { (listOf(key.replace('_', ' '), sanskrit, name, english) + aliases).map(::foldName).filter { it.isNotEmpty() } }
+}
+
 /** What the tools read and write. The practice summary and the classes come from the server, the notes from the phone. */
 interface StudentData {
     /** The server's practice summary (GET /me/practice), as maps and lists. Throws when the server cannot be reached. */
@@ -69,11 +80,75 @@ interface StudentData {
 
     fun saveNote(text: String)
     fun notes(): List<KeptNote>
+
+    /** The studio's library (GET /curricula). Throws when the server cannot be reached. */
+    fun library(): List<ItemName>
+
+    /** One item's history for this student, the sums done (GET /me/asanas/{key}). Throws when the server cannot be
+     *  reached. */
+    fun itemProgress(key: String): Map<String, Any?>
+}
+
+// ---------- finding the item a name means ----------
+
+private val SELF_WORDS = listOf("my ", "i ", "i'", "me ", "मेरा", "मेरी", "मेरे", "मैं", "माझ", "मी ", "मला")
+
+/** A name reduced for comparing: lower case, without accents or the nukta, without "pose" or "posture" and without
+ *  "asana", "asan" or "आसन" (as a word or an ending), the words run together: "Vajrāsana", "vajrasan", "वज्रासन" and
+ *  "वज्र आसन" all become one form, as do "Thunderbolt pose" and "thunderbolt". */
+fun foldName(text: String): String {
+    val plain = Normalizer.normalize(text.lowercase(), Normalizer.Form.NFD).replace(Regex("\\p{Mn}+"), "")
+    return plain.split(Regex("[^\\p{L}\\p{M}\\p{N}]+"))
+        .filter { it.isNotEmpty() && it != "pose" && it != "posture" }
+        .joinToString("") { word -> listOf("asana", "asan", "ासन", "आसन").fold(word) { w, end -> w.removeSuffix(end) } }
+}
+
+/** The library key [asked] names: one of an item's names exactly (folded), else the one item a name starts. */
+fun resolveItem(asked: String, library: List<ItemName>): String? {
+    val q = foldName(asked)
+    if (q.isEmpty()) return null
+    library.firstOrNull { q in it.forms }?.let { return it.key }
+    return library.filter { item -> item.forms.any { it.startsWith(q) || q.startsWith(it) } }.singleOrNull()?.key
+}
+
+/** The items whose names are closest to [asked], for telling Gemma what there is. */
+fun closestItems(asked: String, library: List<ItemName>, n: Int = 3): List<String> {
+    val q = foldName(asked)
+    fun shared(form: String) = form.zip(q).takeWhile { (a, b) -> a == b }.size
+    return library.sortedByDescending { item -> item.forms.maxOfOrNull(::shared) ?: 0 }.take(n).map { it.name }
 }
 
 private val IST: ZoneId = ZoneId.of("Asia/Kolkata")
 private val DATE = DateTimeFormatter.ofPattern("EEEE d MMMM", Locale.ENGLISH)
 private val TIME = DateTimeFormatter.ofPattern("h:mm a", Locale.ENGLISH)
+
+/** An item's progress as Gemma reads it ([Tools.asanaProgress]): the server's sums, each date with its weekday. */
+fun progressSummary(item: ItemName, p: Map<String, Any?>): Map<String, Any?> {
+    fun day(value: Any?) = (value as? String)?.let { DATE.format(LocalDate.parse(it)) }
+
+    @Suppress("UNCHECKED_CAST")
+    fun map(key: String) = p[key] as? Map<String, Any?>
+    val trend = map("reaction_trend")
+    val times = { n: Any?, which: String -> if (n == 1 || n == 1.0) "$which time" else "$which ${(n as Number).toInt()} times" }
+    @Suppress("UNCHECKED_CAST")
+    val notes = (p["your_notes"] as? List<Map<String, Any?>>).orEmpty()
+    return linkedMapOf(
+        "asana" to item.full,
+        "reaction_scale" to "1 not yet, 2 with effort, 3 steady, 4 at ease",
+        "in_class" to p["in_class"],
+        "solo" to p["solo"],
+        "first" to day(p["first"]),
+        "last" to day(p["last"]),
+        "reaction_trend" to trend?.let {
+            linkedMapOf("early_average" to it["early_average"], "recent_average" to it["recent_average"],
+                "early" to times(it["each"], "first"), "recent" to times(it["each"], "last"))
+        },
+        "holds" to map("holds"),
+        "strain_or_pain" to map("strain_or_pain")?.let { linkedMapOf("times" to it["times"], "last" to day(it["last"])) },
+        "teacher_said" to map("teacher_said")?.let { linkedMapOf("date" to day(it["date"]), "text" to it["text"]) },
+        "your_notes" to notes.map { linkedMapOf("date" to day(it["date"]), "text" to it["text"]) },
+    )
+}
 
 /** The next classes, each with an unambiguous day ("tomorrow, Friday 20 November"), so Gemma need not work out dates. */
 fun schedule(classes: List<UpcomingClass>, now: Instant, limit: Int = 5): Map<String, Any?> {
@@ -118,6 +193,34 @@ class Tools(private val data: StudentData, private val notes: StudioNotes, priva
         (summary[key] as? List<Map<String, Any?>>)?.let { days -> key to days.map { it + ("date" to DATE.format(LocalDate.parse(it["date"] as String))) } }
     }
 
+    /** How this student's practice of one item has gone: the server's sums for it, its dates written out, the reactions'
+     *  scale spelt out; or what the studio's list has closest when [asana] names nothing in it. */
+    fun asanaProgress(asana: String): Map<String, Any?> {
+        used += "asana_progress"
+        return try {
+            val library = data.library()
+            val key = resolveItem(asana, library)
+                ?: return mapOf("error" to "Nothing called \"$asana\" is in the studio's list. The closest: ${closestItems(asana, library).joinToString(", ")}.")
+            progressSummary(library.first { it.key == key }, data.itemProgress(key))
+        } catch (e: Exception) {
+            mapOf("error" to UNREACHABLE)
+        }
+    }
+
+    /** The item a message about the student's own practice names (a word, or two or three together), or null. */
+    fun itemNamedIn(message: String): String? {
+        val lowered = "${message.lowercase()} "
+        if (SELF_WORDS.none { it in lowered }) return null
+        val library = try {
+            data.library()
+        } catch (e: Exception) {
+            return null
+        }
+        val words = message.split(Regex("[^\\p{L}\\p{M}\\p{N}']+")).filter { it.isNotEmpty() }
+        return (3 downTo 1).asSequence().flatMap { n -> words.windowed(n).map { it.joinToString(" ") } }
+            .firstNotNullOfOrNull { phrase -> foldName(phrase).takeIf { it.isNotEmpty() }?.let { f -> library.firstOrNull { f in it.forms }?.key } }
+    }
+
     fun getUpcomingClasses(): Map<String, Any?> {
         used += "get_upcoming_classes"
         return try {
@@ -144,13 +247,20 @@ class Tools(private val data: StudentData, private val notes: StudioNotes, priva
     }
 
     /** The tools as LiteRT-LM reads them: names, descriptions and parameters from the annotations. */
-    fun toolSets(): List<ToolSet> = listOf(Practice(this), Schedule(this), Search(this), Save(this), Recall(this))
+    fun toolSets(): List<ToolSet> = listOf(Practice(this), Progress(this), Schedule(this), Search(this), Save(this), Recall(this))
 
     @Suppress("FunctionName")
     private class Practice(private val t: Tools) : ToolSet {
         @Tool(description = "This student's classes over the last `days` days, with how they felt before and after (summaries included).")
         fun get_my_practice(@ToolParam(description = "how many days back to look, for example 7 for this week or 30 for this month.") days: Int) =
             t.getMyPractice(days)
+    }
+
+    @Suppress("FunctionName")
+    private class Progress(private val t: Tools) : ToolSet {
+        @Tool(description = "How this student's practice of one asana, pranayama or meditation has gone: times in class and on their own, how it felt at first and lately, holds, strain or pain, their notes and what the teacher wrote.")
+        fun asana_progress(@ToolParam(description = "the item, by any of its names, for example \"Vajrasana\", \"वज्रासन\" or \"thunderbolt pose\".") asana: String) =
+            t.asanaProgress(asana)
     }
 
     @Suppress("FunctionName")
@@ -187,8 +297,19 @@ class PracticeCompanion(val notes: StudioNotes, private val studioName: String, 
     fun system(firstName: String, message: String, lang: String, tools: Tools): String {
         val base = SYSTEM.replace("{studio}", studioName).replace("{name}", firstName).replace("{teacher}", teacher)
             .replace("{language}", LANGUAGE_NAMES.getValue(lang))
+        val progress = preloadedProgress(message, tools)
         val schedule = preloadedSchedule(message, tools)
-        return base + schedule + preloadedNotes(message, lang, tools.used, schedule = schedule.isNotEmpty())
+        return base + progress + schedule + preloadedNotes(message, lang, tools.used, schedule = schedule.isNotEmpty())
+    }
+
+    /** How the asana a message about the student's own practice names has gone, as text for the system message (or
+     *  ""). Recorded as a use of asana_progress. */
+    fun preloadedProgress(message: String, tools: Tools): String {
+        val key = tools.itemNamedIn(message) ?: return ""
+        val progress = tools.asanaProgress(key)
+        if ("error" in progress) return "".also { tools.used.removeAt(tools.used.lastIndex) }
+        val lines = progress.entries.joinToString("\n") { (k, v) -> "- $k: $v" }
+        return "\n\nHow ${progress["asana"]} has gone for this student (asana_progress). Answer from it:\n$lines"
     }
 
     /** The coming classes as text for the system message when [message] is about the schedule (or ""). Recorded as a

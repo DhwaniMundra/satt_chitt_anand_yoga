@@ -27,6 +27,8 @@ class CompanionTest {
         override fun upcoming(lang: String): List<UpcomingClass> = if (reachable) classes else error("no network")
         override fun saveNote(text: String) { saved += text }
         override fun notes() = saved.map { KeptNote(it, Instant.parse("2026-11-18T08:00:00Z")) }
+        override fun library() = listOf(ItemName("vajrasana", "वज्रासन", "Vajrasana", "Thunderbolt pose", listOf("vajrasan", "kneeling")))
+        override fun itemProgress(key: String): Map<String, Any?> = mapOf("in_class" to 0, "solo" to 0)
     }
 
     private val week = listOf(
@@ -118,8 +120,8 @@ class CompanionTest {
     }
 
     @Test fun theToolsKeepTheirNamesAndOrder() {
-        val names = tools().toolSets().map { set -> set.javaClass.declaredMethods.single { it.name.startsWith("get_") || it.name.startsWith("s") }.name }
-        assertEquals(listOf("get_my_practice", "get_upcoming_classes", "search_studio_notes", "save_my_note", "get_my_notes"), names)
+        val names = tools().toolSets().map { set -> set.javaClass.declaredMethods.single { it.name.matches(Regex("(get|search|save|asana)_.*")) }.name }
+        assertEquals(listOf("get_my_practice", "asana_progress", "get_upcoming_classes", "search_studio_notes", "save_my_note", "get_my_notes"), names)
     }
 
     @Test fun theWordsTheAppTeachesForSaving() {
