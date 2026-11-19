@@ -12,12 +12,12 @@ function withHistory() {
   const said = [[2, 1, 'Knee pinched'], [2, 1, null], [3, 0, null], [3, 0, 'Cushion helped'], [4, 0, null]];
   let id = 1;
   days.forEach((ago, i) => {
-    const session = attend(b, s.user.id, 'hatha', ago, 3, 4);
+    const session = attend(b, s.user.id, 'beginner', ago, 3, 4);
     const [reaction, pain, note] = said[i];
     addRow(b, 'practice', { id: id++, user_id: s.user.id, session_id: session, item: 'vajrasana', reaction, pain, note,
       created_at: b.clock() - ago * DAY, item_name: 'Vajrasana', week: b.clock() - ago * DAY });
   });
-  const tadasana = attend(b, s.user.id, 'hatha', 2, 3, 4);
+  const tadasana = attend(b, s.user.id, 'beginner', 2, 3, 4);
   addRow(b, 'practice', { id: id++, user_id: s.user.id, session_id: tadasana, item: 'tadasana', reaction: 3, pain: 0,
     created_at: b.clock() - 2 * DAY, item_name: 'Tadasana', week: b.clock() - 2 * DAY });
   b.context.onEdit({});

@@ -164,7 +164,7 @@ fun WelcomeScreen(vm: AppViewModel, onLanguage: (String) -> Unit) {
         vm.error?.let { Text(errorText(it), color = MaterialTheme.colorScheme.error, modifier = Modifier.fillMaxWidth()) }
         Button(
             onClick = { if (signup) vm.signup(name, phone, password, teacher, code) else vm.login(phone, password) },
-            enabled = !vm.busy && phone.isNotBlank() && password.isNotBlank() && (!signup || name.isNotBlank()),
+            enabled = !vm.busy && phone.isNotBlank() && password.isNotBlank() && (!signup || name.isNotBlank() && code.isNotBlank()),
             modifier = Modifier.fillMaxWidth().height(56.dp),
         ) { Text(stringResource(if (signup) R.string.signup else R.string.login)) }
     }

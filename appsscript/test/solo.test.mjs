@@ -43,7 +43,7 @@ test('the holds: the latest and the longest', () => {
 test('an item\'s history mixes classes and practice on one\'s own, in order', () => {
   const { b, t, s } = student();
   [4, 2].forEach((ago, i) => {
-    const session = attend(b, s.user.id, 'hatha', ago, 3, 4);
+    const session = attend(b, s.user.id, 'beginner', ago, 3, 4);
     addRow(b, 'practice', { id: i + 1, user_id: s.user.id, session_id: session, item: 'vajrasana', reaction: 2, pain: 0,
       created_at: b.clock() - ago * DAY, item_name: 'Vajrasana', week: b.clock() - ago * DAY });
   });

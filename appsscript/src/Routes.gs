@@ -12,7 +12,7 @@ function health_() {
 
 function studio_(ctx) {
   const { query } = ctx.check({ query: QUERY_LANG_ });
-  return studioJson_(query.lang);
+  return studioJson_(ctx, query.lang);
 }
 
 function signup_(ctx) {
@@ -32,10 +32,15 @@ function signup_(ctx) {
       }
     }, true);
     status = 'approved';
-  } else if (code) {
-    if (!codeMatches_(ctx, code, 'group_code')) throw new HttpError_(400, 'bad_group_code');
-    status = 'approved';
   } else {
+    // The group code, from the class's WhatsApp invite, keeps sign-ups to the class; the teacher then places each
+    // student in a batch.
+    const key = 'group-code:' + phone;
+    if (attemptsBlocked_(key)) throw new HttpError_(429, 'too_many_attempts');
+    if (!codeMatches_(ctx, code, 'group_code')) {
+      attemptsFail_(key);
+      throw new HttpError_(400, 'bad_group_code');
+    }
     status = 'pending';
   }
   if (ctx.db.t('users').rows.some((u) => u.phone === phone)) throw new HttpError_(409, 'phone_taken');
@@ -109,19 +114,6 @@ function updateMe_(ctx) {
 }
 
 /** A pending student who later gets the group code from the WhatsApp group is approved at once. */
-function joinGroup_(ctx) {
-  const user = currentUser_(ctx);
-  const { body } = ctx.check({ body: BODY_.code });
-  const key = 'code:' + user.id;
-  if (attemptsBlocked_(key)) throw new HttpError_(429, 'too_many_attempts');
-  if (!codeMatches_(ctx, body.code.trim().toUpperCase(), 'group_code')) {
-    attemptsFail_(key);
-    throw new HttpError_(400, 'bad_group_code');
-  }
-  if (user.status === 'pending') ctx.db.t('users').update(user, { status: 'approved' });
-  return { user: userJson_(user) };
-}
-
 /** What the get_my_practice tool on the phone hands Gemma: this student's classes over the last `days` days. */
 function myPractice_(ctx) {
   const user = member_(ctx);
@@ -148,7 +140,7 @@ function home_(ctx) {
   const { query } = ctx.check({ query: QUERY_LANG_ });
   const lang = query.lang;
   const member = user.status === 'approved';
-  const defaultLink = ctx.db.setting('default_meet_link');
+  const batches = batches_(ctx);
   const checkins = ctx.db.t('checkins').rows.filter((c) => c.user_id === user.id);
   const joined = {};
   const answered = {};
@@ -160,8 +152,9 @@ function home_(ctx) {
     if (p.user_id === user.id) answered[p.session_id] = true;
   });
   const plan = sessionCurricula_(ctx);
-  const sessions = upcoming_(ctx).map((r) => {
-    const s = sessionJson_(r, lang, member, defaultLink);
+  // A student sees only their batch's classes, once placed.
+  const sessions = (member && user.batch ? upcoming_(ctx, 7, user.batch) : []).map((r) => {
+    const s = sessionJson_(r, lang, member, batches);
     s.checked_in = Boolean(joined[r.id]);
     s.curriculum = plan[r.id];
     return s;
@@ -175,7 +168,7 @@ function home_(ctx) {
     .sort((a, b) => b.starts_at - a.starts_at)[0];
   let after = null;
   if (open) {
-    after = sessionJson_(open, lang, false, null);
+    after = sessionJson_(open, lang, false, batches);
     after.curriculum = plan[open.id];
     const mood = checkins.filter((c) => c.session_id === open.id && c.phase === 'after').map((c) => c.mood)[0];
     after.said = !answered[open.id] ? null : {
@@ -186,7 +179,8 @@ function home_(ctx) {
   }
   return {
     user: userJson_(user),
-    studio: studioJson_(lang),
+    batch: user.batch ? batchJson_(batches[user.batch], user.batch, lang) : null,
+    studio: studioJson_(ctx, lang),
     sessions: sessions,
     after_checkin: after,
     group_link: member ? ctx.db.setting('group_link') : null,
@@ -198,6 +192,7 @@ function checkin_(ctx) {
   const { path, body } = ctx.check({ path: PATH_SESSION_, body: BODY_.checkin });
   if (user.status !== 'approved') throw new HttpError_(403, 'pending');
   const row = sessionRow_(ctx, path.session_id);
+  if (user.role === 'student' && row.batch !== user.batch) throw new HttpError_(403, 'other_batch');
   const start = row.starts_at;
   const end = start + row.duration_min * 60000;
   const now = ctx.now;
@@ -215,7 +210,7 @@ function checkin_(ctx) {
     checkins.update(existing, { mood: body.mood });
   } else {
     checkins.insert([{ user_id: user.id, session_id: row.id, phase: body.phase, mood: body.mood, created_at: now,
-      class: classInfo_(row.class_key, 'en').name, class_date: istMidnight_(istDay_(start)) }]);
+      class: batchJson_(batches_(ctx)[row.batch], row.batch, 'en').name, class_date: istMidnight_(istDay_(start)) }]);
   }
   return { ok: true, stats: practiceStats_(ctx, user.id) };
 }
@@ -230,17 +225,21 @@ function feedback_(ctx) {
 
 // ---------- teacher ----------
 
+/** The teacher's day: the classes of the next day that has some left (today, or tomorrow once today's are over),
+ * every batch's, each with its curriculum and link; the batches with their everyday links; the settings. */
 function teacherHome_(ctx) {
   teacher_(ctx);
   const { query } = ctx.check({ query: QUERY_LANG_ });
-  const defaultLink = ctx.db.setting('default_meet_link');
+  const batches = batches_(ctx);
   const joined = {};
   ctx.db.t('checkins').rows.forEach((c) => {
     if (c.phase === 'before') joined[c.session_id] = (joined[c.session_id] || 0) + 1;
   });
   const plan = sessionCurricula_(ctx);
-  const sessions = upcoming_(ctx).map((r) => {
-    const s = sessionJson_(r, query.lang, true, defaultLink);
+  const ahead = upcoming_(ctx, 100);
+  const day = ahead.length ? istDay_(ahead[0].starts_at) : null;
+  const sessions = ahead.filter((r) => istDay_(r.starts_at) === day).map((r) => {
+    const s = sessionJson_(r, query.lang, true, batches);
     s.own_link = r.meet_link !== null && r.meet_link !== '';
     s.joined = joined[r.id] || 0;
     s.curriculum = plan[r.id];
@@ -248,9 +247,20 @@ function teacherHome_(ctx) {
   });
   return {
     sessions: sessions,
-    settings: { group_link: ctx.db.setting('group_link'), group_code: ctx.db.setting('group_code'), default_meet_link: defaultLink },
+    batches: Object.keys(batches).map((key) => Object.assign(batchJson_(batches[key], key, query.lang), { meet_link: batches[key].meet_link })),
+    settings: { group_link: ctx.db.setting('group_link'), group_code: ctx.db.setting('group_code') },
     pending_students: ctx.db.t('users').rows.filter((u) => u.status === 'pending').length,
   };
+}
+
+/** A batch's everyday Meet link, for its classes without their own. */
+function setBatchLink_(ctx) {
+  teacher_(ctx);
+  const { path, body } = ctx.check({ path: PATH_BATCH_, body: BODY_.link });
+  const row = ctx.db.t('batches').rows.filter((r) => r.key === path.key)[0];
+  if (!row) throw new HttpError_(404, 'no_batch');
+  ctx.db.t('batches').update(row, { meet_link: cleanMeetLink_(body.meet_link) });
+  return { ok: true, meet_link: row.meet_link };
 }
 
 function setLink_(ctx) {
@@ -272,12 +282,8 @@ function updateSettings_(ctx) {
   teacher_(ctx);
   const { body } = ctx.check({ body: BODY_.settings });
   // Check both before saving either, so a bad link never leaves the other half-saved.
-  const updates = {};
-  if (body.group_link !== null) updates.group_link = cleanGroupLink_(body.group_link);
-  if (body.default_meet_link !== null) updates.default_meet_link = cleanMeetLink_(body.default_meet_link);
-  Object.keys(updates).forEach((key) => ctx.db.setSetting(key, updates[key]));
-  return { group_link: ctx.db.setting('group_link'), group_code: ctx.db.setting('group_code'),
-    default_meet_link: ctx.db.setting('default_meet_link') };
+  if (body.group_link !== null) ctx.db.setSetting('group_link', cleanGroupLink_(body.group_link));
+  return { group_link: ctx.db.setting('group_link'), group_code: ctx.db.setting('group_code') };
 }
 
 function rotateGroupCode_(ctx) {
@@ -305,11 +311,28 @@ function students_(ctx) {
   return { students: rows.map((u) => Object.assign(userJson_(u), { joined: joined[u.id] || 0, created_at: isoTime_(u.created_at) })) };
 }
 
+/** Removes a student, or takes a removed one back into their batch; placing a new student is placeInBatch_. */
 function setStatus_(ctx) {
   teacher_(ctx);
   const { path, body } = ctx.check({ path: PATH_USER_, body: BODY_.status });
-  ctx.db.t('users').update(studentRow_(ctx, path.user_id), { status: body.status });
+  const student = studentRow_(ctx, path.user_id);
+  if (body.status === 'approved' && !student.batch) throw new HttpError_(400, 'needs_batch');
+  ctx.db.t('users').update(student, { status: body.status });
   return { ok: true };
+}
+
+/** Places a student in a batch: a new one ("Approve into a batch"), or one moving after a review. Each is logged in
+ * batch_changes, with the teacher's note. */
+function placeInBatch_(ctx) {
+  teacher_(ctx);
+  const { path, body } = ctx.check({ path: PATH_USER_, body: BODY_.place });
+  const student = studentRow_(ctx, path.user_id);
+  if (!batches_(ctx)[body.batch]) throw new HttpError_(400, 'no_batch');
+  const changes = ctx.db.t('batch_changes');
+  changes.insert([{ id: changes.nextId(), student_id: student.id, from: student.batch || null, to: body.batch,
+    note: body.note === null ? null : body.note.trim() || null, created_at: ctx.now }]);
+  ctx.db.t('users').update(student, { batch: body.batch, batch_since: ctx.now, status: 'approved' });
+  return { ok: true, student: userJson_(student) };
 }
 
 /** A new temporary password for a student who forgot theirs; the teacher passes it on in person or on WhatsApp.
@@ -337,6 +360,7 @@ function resetPassword_(ctx) {
 function insights_(ctx) {
   teacher_(ctx);
   const { query } = ctx.check({ query: QUERY_LANG_ });
+  const batches = batches_(ctx);
   const now = ctx.now;
   const checkins = ctx.db.t('checkins').rows;
   const bySession = {};
@@ -351,7 +375,7 @@ function insights_(ctx) {
       const list = bySession[s.id] || [];
       const before = list.filter((c) => c.phase === 'before').map((c) => c.mood);
       const after = list.filter((c) => c.phase === 'after').map((c) => c.mood);
-      return { id: s.id, starts_at: isoTime_(s.starts_at), class: classInfo_(s.class_key, query.lang).name, joined: before.length,
+      return { id: s.id, starts_at: isoTime_(s.starts_at), class: batchJson_(batches[s.batch], s.batch, query.lang).name, joined: before.length,
         mood_before: mean(before), mood_after: mean(after), answered_after: after.length };
     });
   const [change, pairs] = moodChange_(checkins);

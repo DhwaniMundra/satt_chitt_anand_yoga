@@ -21,9 +21,9 @@ import java.util.Locale
 const val HISTORY_TURNS = 6 // earlier messages replayed as context; lasting facts belong in saved notes
 
 /** Words that make a message about the class schedule, in English, Hindi and Marathi: such messages get the coming
- *  classes up front. */
-val SCHEDULE_WORDS = listOf("class", "tomorrow", "today", "next", "schedule", "कक्षा", "क्लास", "कल ", "आज", "अगल", "कब",
-    "वर्ग", "उद्या", "पुढ", "कधी")
+ *  classes of the student's batch up front. */
+val SCHEDULE_WORDS = listOf("class", "batch", "tomorrow", "today", "next", "schedule", "कक्षा", "क्लास", "बैच", "कल ", "आज", "अगल", "कब",
+    "वर्ग", "बॅच", "उद्या", "पुढ", "कधी")
 
 /** The words the app teaches for saving a note ("Remember that…"), at the start of a message. `\s` spelt out as in
  *  [isUrgent]. */
@@ -52,8 +52,9 @@ Rules:
 
 // ---------- what the tools read ----------
 
-/** A coming class, from the server's /home (names, level and description already in the student's language). */
-data class UpcomingClass(val startsAt: Instant, val name: String, val level: String, val about: String)
+/** A coming class of the student's batch, from the server's /home (the batch's name and words in the student's
+ *  language). */
+data class UpcomingClass(val startsAt: Instant, val name: String, val about: String)
 
 /** A note the companion keeps on this phone. */
 data class KeptNote(val text: String, val savedAt: Instant)
@@ -87,7 +88,7 @@ fun schedule(classes: List<UpcomingClass>, now: Instant, limit: Int = 5): Map<St
                 1L -> "tomorrow, $date"
                 else -> date
             }
-            linkedMapOf("day" to day, "time" to TIME.format(start) + " India time", "class" to c.name, "level" to c.level, "about" to c.about)
+            linkedMapOf("day" to day, "time" to TIME.format(start) + " India time", "class" to c.name, "about" to c.about)
         },
     )
 }
@@ -154,7 +155,7 @@ class Tools(private val data: StudentData, private val notes: StudioNotes, priva
 
     @Suppress("FunctionName")
     private class Schedule(private val t: Tools) : ToolSet {
-        @Tool(description = "The studio's classes in the coming week, soonest first: when, time, class, level.")
+        @Tool(description = "This student's batch's classes in the coming week, soonest first: when, time, batch.")
         fun get_upcoming_classes() = t.getUpcomingClasses()
     }
 
@@ -199,8 +200,8 @@ class PracticeCompanion(val notes: StudioNotes, private val studioName: String, 
 
         @Suppress("UNCHECKED_CAST")
         val classes = schedule["classes"] as? List<Map<String, Any?>> ?: return "".also { tools.used.removeAt(tools.used.lastIndex) }
-        val lines = classes.joinToString("\n") { c -> "- ${c["day"]}: ${c["class"]} at ${c["time"]} (${c["level"]})" }
-        return "\n\nToday is ${schedule["today_is"]}. The studio's coming classes. Answer from them:\n$lines"
+        val lines = classes.joinToString("\n") { c -> "- ${c["day"]}: ${c["class"]} at ${c["time"]}" }
+        return "\n\nToday is ${schedule["today_is"]}. This student's coming classes, in their batch. Answer from them:\n$lines"
     }
 
     /** The notes section on the topic [message] names, as text for the system message (or ""), so a health question

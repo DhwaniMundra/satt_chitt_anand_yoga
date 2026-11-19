@@ -112,18 +112,21 @@ fun JSONObject.dbl(key: String): Double? = if (isNull(key)) null else getDouble(
 fun <T> JSONArray.map(transform: (JSONObject) -> T): List<T> = (0 until length()).map { transform(getJSONObject(it)) }
 fun JSONArray.strings(): List<String> = (0 until length()).map { getString(it) }
 
-data class User(val id: Int, val name: String, val phone: String, val role: String, val status: String) {
+/** A user; a student's [batch] (a key) and since when, once the teacher has placed them. */
+data class User(val id: Int, val name: String, val phone: String, val role: String, val status: String, val batch: String?, val batchSince: Instant?) {
     val isTeacher get() = role == "teacher"
     val isApproved get() = status == "approved"
 
     companion object {
-        fun from(o: JSONObject) = User(o.getInt("id"), o.getString("name"), o.getString("phone"), o.getString("role"), o.getString("status"))
+        fun from(o: JSONObject) = User(o.getInt("id"), o.getString("name"), o.getString("phone"), o.getString("role"), o.getString("status"),
+            o.str("batch"), o.str("batch_since")?.let(Instant::parse))
     }
 }
 
-data class ClassInfo(val key: String, val name: String, val level: String, val about: String) {
+/** A batch: its name and words in the chosen language, its days ("mon"…) and start in India ("07:00"). */
+data class BatchInfo(val key: String, val name: String, val about: String, val days: List<String>, val time: String?) {
     companion object {
-        fun from(o: JSONObject) = ClassInfo(o.getString("key"), o.getString("name"), o.getString("level"), o.getString("about"))
+        fun from(o: JSONObject) = BatchInfo(o.getString("key"), o.getString("name"), o.getString("about"), o.getJSONArray("days").strings(), o.str("time"))
     }
 }
 
@@ -131,7 +134,7 @@ data class ClassSession(
     val id: Int,
     val startsAt: Instant,
     val minutes: Int,
-    val info: ClassInfo,
+    val batch: BatchInfo,
     val meetLink: String?,
     val hasLink: Boolean,
     val checkedIn: Boolean,
@@ -144,7 +147,7 @@ data class ClassSession(
 
     companion object {
         fun from(o: JSONObject) = ClassSession(
-            o.getInt("id"), Instant.parse(o.getString("starts_at")), o.getInt("duration_min"), ClassInfo.from(o.getJSONObject("class")),
+            o.getInt("id"), Instant.parse(o.getString("starts_at")), o.getInt("duration_min"), BatchInfo.from(o.getJSONObject("batch")),
             o.str("meet_link"), o.getBoolean("has_link"), o.optBoolean("checked_in"), o.optBoolean("own_link"), o.optInt("joined"),
             o.optString("curriculum").ifEmpty { null },
         )
@@ -288,12 +291,11 @@ data class ClassReview(val curriculum: String?, val joined: Int, val answered: I
 /** One item of a class review: how many said each reaction (not yet … at ease), who felt strain or pain, the notes. */
 data class ItemReview(val item: String, val reactions: List<Int>, val pain: List<Pair<String, String?>>, val notes: List<Pair<String, String>>)
 
-data class Studio(val tagline: String, val teacherName: String, val teacherTitle: String, val teacherBio: String, val weekly: List<Pair<String, ClassInfo>>) {
+data class Studio(val tagline: String, val teacherName: String, val teacherTitle: String, val teacherBio: String) {
     companion object {
         fun from(o: JSONObject): Studio {
             val t = o.getJSONObject("teacher")
-            val weekly = o.getJSONArray("weekly").map { it.getString("day") to ClassInfo.from(it.getJSONObject("class")) }
-            return Studio(o.getString("tagline"), t.getString("name"), t.getString("title"), t.getString("bio"), weekly)
+            return Studio(o.getString("tagline"), t.getString("name"), t.getString("title"), t.getString("bio"))
         }
     }
 }
@@ -306,7 +308,6 @@ data class StudioWords(
     val nameIsAMap: String,
     val name: List<Triple<String, String, String>>,
     val week: String,
-    val classes: String,
     val teacherHeading: String,
     val teacher: String,
 ) {
@@ -318,20 +319,22 @@ data class StudioWords(
             return StudioWords(
                 w.getJSONObject("blessing").getString("sa"), w.pick("blessing"), name.pick("map"),
                 name.getJSONArray("parts").map { Triple(it.getString("sa"), it.getString("name"), it.pick("meaning")) },
-                w.pick("week"), w.pick("classes"), w.pick("teacher"), studio.getJSONObject("teacher").pick("short"),
+                w.pick("week"), w.pick("teacher"), studio.getJSONObject("teacher").pick("short"),
             )
         }
     }
 }
 
-/** [afterCheckin]: the class whose after-class window is open; [afterSaid]: what the student said about it, if anything. */
-data class Home(val user: User, val studio: Studio, val sessions: List<ClassSession>, val afterCheckin: ClassSession?, val afterSaid: Said?,
-    val groupLink: String?) {
+/** [batch]: the student's batch, once placed; [sessions]: its coming classes. [afterCheckin]: the class whose after-class
+ *  window is open; [afterSaid]: what the student said about it, if anything. */
+data class Home(val user: User, val batch: BatchInfo?, val studio: Studio, val sessions: List<ClassSession>, val afterCheckin: ClassSession?,
+    val afterSaid: Said?, val groupLink: String?) {
     companion object {
         fun from(o: JSONObject): Home {
             val after = if (o.isNull("after_checkin")) null else o.getJSONObject("after_checkin")
             return Home(
-                User.from(o.getJSONObject("user")), Studio.from(o.getJSONObject("studio")), o.getJSONArray("sessions").map(ClassSession::from),
+                User.from(o.getJSONObject("user")), if (o.isNull("batch")) null else BatchInfo.from(o.getJSONObject("batch")),
+                Studio.from(o.getJSONObject("studio")), o.getJSONArray("sessions").map(ClassSession::from),
                 after?.let(ClassSession::from), after?.takeUnless { it.isNull("said") }?.getJSONObject("said")?.let(Said::from), o.str("group_link"),
             )
         }
@@ -368,15 +371,21 @@ data class SoloSession(val date: LocalDate, val minutes: Int, val items: List<St
     }
 }
 
-data class TeacherSettings(val groupLink: String?, val groupCode: String, val defaultMeetLink: String?)
+data class TeacherSettings(val groupLink: String?, val groupCode: String)
 
-data class TeacherHome(val sessions: List<ClassSession>, val settings: TeacherSettings, val pendingStudents: Int) {
+/** A batch with its everyday Meet link, for its classes without their own. */
+data class BatchLink(val info: BatchInfo, val meetLink: String?)
+
+data class TeacherHome(val sessions: List<ClassSession>, val batches: List<BatchLink>, val settings: TeacherSettings, val pendingStudents: Int) {
+    fun batch(key: String?) = batches.firstOrNull { it.info.key == key }
+
     companion object {
         fun from(o: JSONObject): TeacherHome {
             val s = o.getJSONObject("settings")
             return TeacherHome(
                 o.getJSONArray("sessions").map(ClassSession::from),
-                TeacherSettings(s.str("group_link"), s.getString("group_code"), s.str("default_meet_link")),
+                o.getJSONArray("batches").map { BatchLink(BatchInfo.from(it), it.str("meet_link")) },
+                TeacherSettings(s.str("group_link"), s.getString("group_code")),
                 o.getInt("pending_students"),
             )
         }

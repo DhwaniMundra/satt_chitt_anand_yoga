@@ -62,70 +62,120 @@ function cleanGroupLink_(raw) {
   return cleanLink_(raw, GROUP_LINK_, 'bad_group_link');
 }
 
-function classInfo_(key, lang) {
-  const entry = STUDIO.classes.filter((c) => c.key === key)[0];
-  if (!entry) throw new Error('unknown class ' + key);
-  return { key: key, name: pick_(entry.name, lang), level: pick_(entry.level, lang), about: pick_(entry.about, lang) };
+/** The batches, from the batches tab, by key: names and words in each language, the default curriculum, the days
+ * ("mon"…), the start in minutes after midnight in India, the length and the everyday Meet link. */
+function batches_(ctx) {
+  const out = {};
+  ctx.db.t('batches').rows.forEach((r) => {
+    if (!r.key) return;
+    out[r.key] = {
+      key: r.key,
+      name: { en: r.name, hi: r.name_hi || r.name, mr: r.name_mr || r.name },
+      about: { en: r.about, hi: r.about_hi || r.about, mr: r.about_mr || r.about },
+      curriculum: r.curriculum,
+      days: String(r.days || '').split(',').map((d) => d.trim().toLowerCase().slice(0, 3)).filter((d) => DAYS_.indexOf(d) >= 0),
+      start_min: startMinutes_(r.time),
+      duration_min: r.duration_min || 55,
+      meet_link: r.meet_link,
+    };
+  });
+  return out;
 }
 
-/** A session for the app. The link is shown only to approved members; without its own link a session uses the
- * teacher's standing link. */
-function sessionJson_(row, lang, showLink, defaultLink) {
-  const link = row.meet_link || defaultLink;
+/** "07:00" (or a time the owner typed, which Sheets keeps as a time of day) as minutes after midnight in India. */
+function startMinutes_(time) {
+  const text = String(time || '');
+  const iso = /T(\d\d):(\d\d)/.exec(text); // a time-of-day cell, read back as a UTC moment
+  if (iso) return (Number(iso[1]) * 60 + Number(iso[2]) + IST_OFFSET_MS_ / 60000) % 1440;
+  const plain = /(\d{1,2})[:.](\d\d)/.exec(text);
+  return plain ? Number(plain[1]) * 60 + Number(plain[2]) : 0;
+}
+
+/** A batch for the app, in `lang`: its key, name, words, days and start ("07:00"). */
+function batchJson_(batch, key, lang) {
+  if (!batch) return { key: key, name: key || '', about: '', days: [], time: null };
+  const h = Math.floor(batch.start_min / 60);
+  const m = batch.start_min % 60;
+  return { key: batch.key, name: pick_(batch.name, lang), about: pick_(batch.about, lang), days: batch.days,
+    time: (h < 10 ? '0' : '') + h + ':' + (m < 10 ? '0' : '') + m };
+}
+
+/** A session for the app. The link is shown only to approved members; without its own link a session uses its batch's
+ * everyday link. */
+function sessionJson_(row, lang, showLink, batches) {
+  const batch = batches[row.batch];
+  const link = row.meet_link || (batch && batch.meet_link);
   return {
     id: row.id,
     starts_at: isoTime_(row.starts_at),
     duration_min: row.duration_min,
-    class: classInfo_(row.class_key, lang),
+    batch: batchJson_(batch, row.batch, lang),
     meet_link: showLink ? link || null : null,
     has_link: Boolean(link),
   };
 }
 
-function studioJson_(lang) {
+function studioJson_(ctx, lang) {
   const teacher = STUDIO.teacher;
+  const batches = batches_(ctx);
   return {
     name: pick_(STUDIO.name, lang),
     tagline: pick_(STUDIO.tagline, lang),
     since: STUDIO.since,
     teacher: { name: teacher.name, title: pick_(teacher.title, lang), bio: pick_(teacher.bio, lang) },
-    classes: STUDIO.classes.map((c) => classInfo_(c.key, lang)),
-    weekly: DAYS_.map((day) => ({ day: day, class: classInfo_(STUDIO.weekly[day], lang) })),
-    class_start_ist: STUDIO.class_start_ist,
-    duration_min: STUDIO.duration_min,
+    batches: Object.keys(batches).map((key) => batchJson_(batches[key], key, lang)),
   };
 }
 
-/** The class start of each of the 7 days from `now`'s India date. */
-function weekStarts_(now) {
-  const [hour, minute] = STUDIO.class_start_ist.split(':').map(Number);
+/** Each batch's classes on its days, over the 7 days from `now`'s India date. */
+function weekStarts_(now, batches) {
   const today = istDay_(now);
   const out = [];
   for (let offset = 0; offset < 7; offset++) {
     const day = today + offset;
-    out.push({ starts_at: istMidnight_(day) + (hour * 60 + minute) * 60000, class_key: STUDIO.weekly[DAYS_[(day + 3) % 7]] });
+    const weekday = DAYS_[(day + 3) % 7]; // 1 Jan 1970 was a Thursday
+    Object.keys(batches).forEach((key) => {
+      const b = batches[key];
+      if (b.days.indexOf(weekday) >= 0) out.push({ batch: key, starts_at: istMidnight_(day) + b.start_min * 60000, duration_min: b.duration_min });
+    });
   }
   return out;
 }
 
-/** Makes sure a session row exists for each of the next 7 days; takes the lock only when one is missing. */
+/** Makes the next 7 days' classes match the batches: adds each one missing and removes one outside the schedule (after
+ * the owner changed a batch's days or time) that has not begun and nobody has checked in to. Takes the lock only
+ * when there is something to change. */
 function ensureWeek_(ctx) {
-  const wanted = weekStarts_(ctx.now);
-  const have = (table) => {
-    const starts = {};
+  const wanted = weekStarts_(ctx.now, batches_(ctx));
+  const keyOf = (r) => r.batch + '@' + r.starts_at;
+  const want = {};
+  wanted.forEach((w) => {
+    want[keyOf(w)] = true;
+  });
+  const horizon = istMidnight_(istDay_(ctx.now) + 7);
+  const changes = (table) => {
+    const present = {};
     table.rows.forEach((r) => {
-      starts[r.starts_at] = true;
+      present[keyOf(r)] = true;
     });
-    return starts;
+    const joined = {};
+    ctx.db.t('checkins').rows.forEach((c) => {
+      joined[c.session_id] = true;
+    });
+    return {
+      missing: wanted.filter((w) => !present[keyOf(w)]),
+      stale: table.rows.filter((r) => r.starts_at > ctx.now && r.starts_at < horizon && !want[keyOf(r)] && !joined[r.id]),
+    };
   };
-  let present = have(ctx.db.t('class_sessions'));
-  if (wanted.every((w) => present[w.starts_at])) return;
+  let todo = changes(ctx.db.t('class_sessions'));
+  if (!todo.missing.length && !todo.stale.length) return;
   ctx.lock(() => {
     const table = ctx.db.t('class_sessions');
-    present = have(table);
+    todo = changes(table);
+    if (todo.stale.length) table.remove(todo.stale);
     let id = table.nextId();
-    table.insert(wanted.filter((w) => !present[w.starts_at]).map((w) => ({
-      id: id++, class_key: w.class_key, starts_at: w.starts_at, duration_min: STUDIO.duration_min, meet_link: null, updated_at: ctx.now,
+    table.insert(todo.missing.map((w) => ({
+      id: id++, batch: w.batch, starts_at: w.starts_at, duration_min: w.duration_min, meet_link: null, updated_at: ctx.now,
     })));
   });
 }
@@ -136,14 +186,14 @@ function afterOpen_(session, now) {
   return end - 10 * 60000 <= now && now <= end + 12 * 3600000;
 }
 
-/** Sessions that have not ended yet, soonest first. */
-function upcoming_(ctx, limit) {
+/** Sessions that have not ended yet, soonest first: [batch]'s, or every batch's. */
+function upcoming_(ctx, limit, batch) {
   ensureWeek_(ctx);
   const from = ctx.now - 2 * 3600000;
   return ctx.db.t('class_sessions').rows
-    .filter((r) => r.starts_at >= from && r.starts_at + r.duration_min * 60000 > ctx.now)
-    .sort((a, b) => a.starts_at - b.starts_at)
-    .slice(0, limit || 7);
+    .filter((r) => (!batch || r.batch === batch) && r.starts_at >= from && r.starts_at + r.duration_min * 60000 > ctx.now)
+    .sort((a, b) => a.starts_at - b.starts_at || String(a.batch).localeCompare(String(b.batch)))
+    .slice(0, limit);
 }
 
 function sessionRow_(ctx, id) {
@@ -221,6 +271,7 @@ function average1_(values) {
 function practiceSummary_(ctx, userId, days, lang) {
   days = Math.max(1, Math.min(days, 90));
   const sessions = sessionsById_(ctx);
+  const batches = batches_(ctx);
   const mine = ctx.db.t('checkins').rows.filter((c) => c.user_id === userId);
   const afterBySession = {};
   mine.forEach((c) => {
@@ -237,7 +288,7 @@ function practiceSummary_(ctx, userId, days, lang) {
   const byClass = {};
   const plan = sessionCurricula_(ctx);
   rows.forEach((r) => {
-    const name = classInfo_(r.session.class_key, lang).name;
+    const name = batchJson_(batches[r.session.batch], r.session.batch, lang).name;
     classes.push({ date: istDate_(r.session.starts_at), class: name, curriculum: plan[r.session.id], mood_before: r.before, mood_after: r.after });
     const entry = byClass[name] || (byClass[name] = { times: 0, before: [], after: [] });
     entry.times += 1;
@@ -279,9 +330,10 @@ function itemTitle_(entry, key, lang) {
 
 /** The WhatsApp message for one session, its wa.me link, and the group to post it in. */
 function shareFor_(ctx, row, lang) {
-  const link = row.meet_link || ctx.db.setting('default_meet_link');
+  const batch = batches_(ctx)[row.batch];
+  const link = row.meet_link || (batch && batch.meet_link);
   if (!link) throw new HttpError_(400, 'no_link');
-  const name = classInfo_(row.class_key, lang).name;
+  const name = batchJson_(batch, row.batch, lang).name;
   const text = classMessage_(name, row.starts_at, row.duration_min, link, lang);
   return { text: text, url: shareUrl_(text), group_link: ctx.db.setting('group_link') };
 }

@@ -28,7 +28,7 @@ test('setup seeds the curriculum tabs once, and leaves the owner\'s edits alone'
   const rows = (tab) => b.ss.getSheetByName(tab).rows().slice(1);
   const items = CONTENT.curricula.reduce((n, c) => n + c.items.length, 0);
   assert.equal(rows('library').length, CONTENT.library.length);
-  assert.equal(rows('curricula').length, 3);
+  assert.equal(rows('curricula').length, 4);
   assert.equal(rows('curriculum_items').length, items);
   assert.ok(b.ss.getSheetByName('curricula').notes['1:1'].startsWith('A mock curriculum for ' + TEACHER.en + ' to confirm.'));
   b.ss.getSheetByName('curricula').getRange(2, 2).setValue("'Foundations");
@@ -43,7 +43,7 @@ test('the curricula in the student\'s language, items in order', () => {
   const s = signup(b, '9000000002', { code });
   assert.equal(b.call('GET', '/curricula').status, 401);
   const hi = b.call('GET', '/curricula', { token: s.token, query: { lang: 'hi' } }).body;
-  assert.deepEqual(hi.curricula.map((c) => c.name), ['शुरुआती', 'मध्यम', 'उन्नत']);
+  assert.deepEqual(hi.curricula.map((c) => c.name), ['शुरुआती', 'मध्यम', 'उन्नत', 'दर्द प्रबंधन']);
   const beginner = hi.curricula[0];
   assert.deepEqual(beginner.items.slice(0, 3).map((i) => i.item), ['sectional_breathing', 'omkar', 'tadasana']);
   assert.deepEqual(beginner.items[3], { item: 'vrikshasana', dose: 5, unit: 'breaths', cue: 'दोनों ओर। पैर पिंडली या जाँघ पर, घुटने पर कभी नहीं।' });
@@ -55,25 +55,23 @@ test('the curricula in the student\'s language, items in order', () => {
   assert.ok(shirshasana('mr').cue.startsWith('फक्त ' + TEACHER.mr + ' यांच्यासोबत.'));
 });
 
-test('a class follows its own curriculum, else the last one used for its kind, else Beginner', () => {
-  const b = freshBackend({ now: WEDNESDAY_6AM }); // the week ahead holds two Hatha classes
+test('a class follows its own curriculum, else its batch\'s', () => {
+  const b = freshBackend({ now: WEDNESDAY_6AM });
   const { t, code } = teacherAndCode(b);
   const s = signup(b, '9000000002', { code });
-  const week = b.call('GET', '/teacher/home', { token: t.token }).body.sessions;
-  assert.ok(week.every((x) => x.curriculum === 'beginner'));
-  const hatha = week.filter((x) => x.class.key === 'hatha');
-  assert.equal(hatha.length, 2); // Friday, then Monday
+  const day = b.call('GET', '/teacher/home', { token: t.token }).body.sessions;
+  assert.deepEqual(day.map((x) => [x.batch.key, x.curriculum]), [['beginner', 'beginner'], ['intermediate', 'intermediate'],
+    ['advanced', 'advanced'], ['pain_management', 'pain_management']]);
   const set = (id, curriculum, token = t.token) => b.call('PUT', '/teacher/sessions/' + id + '/curriculum', { token, body: { curriculum } });
-  assert.deepEqual(set(hatha[0].id, 'intermediate').body, { ok: true, curriculum: 'intermediate' });
-  const after = b.call('GET', '/home', { token: s.token }).body.sessions;
-  const plan = (id) => after.find((x) => x.id === id).curriculum;
-  assert.equal(plan(hatha[0].id), 'intermediate');
-  assert.equal(plan(hatha[1].id), 'intermediate', 'the next Hatha class follows the last one');
-  assert.ok(after.filter((x) => x.class.key !== 'hatha').every((x) => x.curriculum === 'beginner'));
-  assert.equal(set(hatha[1].id, 'advanced').status, 200);
-  assert.equal(b.call('GET', '/home', { token: s.token }).body.sessions.find((x) => x.id === hatha[0].id).curriculum, 'intermediate');
-  assert.deepEqual(set(hatha[0].id, 'expert').body, { detail: 'no_curriculum' });
-  assert.deepEqual(set(hatha[0].id, 'advanced', s.token), { status: 403, body: { detail: 'teacher_only' } });
+  assert.deepEqual(set(day[0].id, 'pain_management').body, { ok: true, curriculum: 'pain_management' });
+  const plans = () => b.call('GET', '/home', { token: s.token }).body.sessions.map((x) => x.curriculum);
+  assert.deepEqual(plans(), ['pain_management', 'beginner', 'beginner', 'beginner', 'beginner', 'beginner'], 'one class changed, not the rest');
+  const batches = b.ss.getSheetByName('batches');
+  batches.getRange(2, batches.rows()[0].indexOf('curriculum') + 1).setValue("'intermediate"); // the owner changes Beginner's default
+  b.context.onEdit({});
+  assert.deepEqual(plans(), ['pain_management', 'intermediate', 'intermediate', 'intermediate', 'intermediate', 'intermediate']);
+  assert.deepEqual(set(day[0].id, 'expert').body, { detail: 'no_curriculum' });
+  assert.deepEqual(set(day[0].id, 'advanced', s.token), { status: 403, body: { detail: 'teacher_only' } });
 });
 
 test('after class, a student says how each item went; a second send replaces the first', () => {
