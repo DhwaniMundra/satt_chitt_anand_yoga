@@ -61,13 +61,20 @@ test('an item\'s history mixes classes and practice on one\'s own, in order', ()
 
 test('the practice summary lists the sessions on one\'s own, with the item names in the language asked', () => {
   const { b, s } = student();
+  const session = attend(b, s.user.id, 'beginner', 2, 3, 4);
+  for (const [id, item, reaction] of [[1, 'setu_bandhasana', 2], [2, 'vajrasana', 3]]) { // in class
+    addRow(b, 'practice', { id, user_id: s.user.id, session_id: session, item, reaction, pain: 0, created_at: b.clock() - 2 * DAY,
+      item_name: item, week: b.clock() - 2 * DAY });
+  }
   solo(b, s.token, 20, [{ item: 'vajrasana', hold_s: 60 }, { item: 'bhujangasana', reaction: 3 }]);
   const en = b.call('GET', '/me/practice', { token: s.token, query: { days: 7 } }).body;
   assert.deepEqual(en.solo, [{ date: en.solo[0].date, minutes: 20, items: ['Vajrasana', 'Bhujangasana'] }]);
   assert.match(en.solo[0].date, /^\d{4}-\d\d-\d\d$/);
-  assert.equal(en.classes_joined, 0, 'practice on one\'s own is not a class');
-  assert.deepEqual(en.top_items, [{ asana: 'Bhujangasana', times: 1, average_reaction: 3, pain_times: 0 },
+  assert.equal(en.classes_joined, 1, 'practice on one\'s own is not a class');
+  assert.deepEqual(en.items_on_own, [{ asana: 'Bhujangasana', times: 1, average_reaction: 3, pain_times: 0 },
     { asana: 'Vajrasana', times: 1, average_reaction: null, pain_times: 0 }], 'the most practised first, then by name');
+  assert.deepEqual(en.items_in_class.map((i) => [i.asana, i.average_reaction]), [['Setu Bandhasana', 2], ['Vajrasana', 3]]);
+  assert.ok(!en.items_on_own.some((i) => i.asana === 'Setu Bandhasana'), 'an item practised in class only is never one\'s own');
   const hi = b.call('GET', '/me/practice', { token: s.token, query: { days: 7, lang: 'hi' } }).body;
   assert.deepEqual(hi.solo[0].items, ['वज्रासन', 'भुजंगासन']);
 });
