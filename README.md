@@ -21,6 +21,9 @@ WhatsApp group. The app had to fit around that, not replace it:
 
 ![For students: join with a one-tap check-in, breathe, ask, in Hindi or Marathi](docs/media/gifs/students.gif)
 
+- **Ask knows your practice.** "How was my practice this week?" gets the student's own classes and moods; "Which
+  class suits me tomorrow?" checks the schedule; "Remember that my knee hurts" is kept for later.
+
 ![For the teacher: share the class link, approve students, see how classes went](docs/media/gifs/teacher.gif)
 
 ![Two phones, one server: the teacher shares the link, a student joins and checks in](docs/media/gifs/two_phones.gif)
@@ -37,7 +40,10 @@ WhatsApp group. The app had to fit around that, not replace it:
 - **The students' own languages.** Screens, class names and answers in English, Hindi and Marathi.
 - **Careful with health.** The assistant answers only from notes the studio can read and correct. It never diagnoses or
   touches medicines, and emergency signs get a fixed reply pointing to 112, with no AI involved.
-- **Ask before keeping anything.** A student's questions are kept only if they agree.
+- **Code does the sums.** The assistant looks up only the signed-in student's own data, through tools that hand it
+  totals and averages worked out in code, so a small model never has to add up rows.
+- **Ask before sharing anything.** A student's chat and what the assistant remembers are theirs: the teacher cannot
+  see them and they are not in the studio's backup. The studio sees the words of a question only if they agree.
 
 Each choice, with the alternatives considered: [`docs/decisions.md`](docs/decisions.md).
 
@@ -52,7 +58,7 @@ laptop's graphics card, so questions do not go to an outside AI service.
 
 ![Made in small rounds: build, tour, ask, read, fix](docs/media/diagrams/rounds.png)
 
-Four rounds so far. Each round, a script walks through every screen on an Android emulator, and the assistant is asked
+Five rounds so far. Each round, a script walks through every screen on an Android emulator, and the assistant is asked
 the same questions in three languages. Then every screen and every answer is read, as a student would. Two things the
 first tour caught:
 

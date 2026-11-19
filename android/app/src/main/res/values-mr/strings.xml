@@ -94,16 +94,21 @@
     <string name="breaths">%1$d श्वास</string>
     <string name="breathe_note">नाकाने श्वास घ्या. चक्कर आल्यास थांबा.</string>
 
-    <string name="ask_title">योगाबद्दल विचारा</string>
+    <string name="ask_title">सराव सोबती</string>
     <string name="ask_hint">तुमचा प्रश्न लिहा…</string>
     <string name="ask_send">पाठवा</string>
-    <string name="ask_disclaimer">स्टुडिओच्या नोंदींतून सामान्य माहिती, वैद्यकीय सल्ला नाही. वेदना, आजार किंवा गरोदरपणात तुमच्या डॉक्टरांना विचारा.</string>
+    <string name="ask_disclaimer">याला तुमचे वर्ग आणि तुम्हाला कसे वाटले ते माहीत आहे, आणि तुम्ही लक्षात ठेवायला सांगितलेलेही. स्टुडिओच्या नोंदींतून सामान्य माहिती, वैद्यकीय सल्ला नाही.</string>
     <string name="ask_thinking">विचार करत आहे…</string>
-    <string name="sugg_1">मी नवशिका आहे. सुरुवात कशी करू?</string>
+    <string name="sugg_1">या आठवड्यात माझा सराव कसा झाला?</string>
     <string name="sugg_2">पाठदुखीसाठी योग?</string>
-    <string name="sugg_3">वर्गापूर्वी काय खावे?</string>
+    <string name="sugg_3">उद्या कोणता वर्ग मला योग्य आहे?</string>
     <string name="sugg_4">सत् चित् आनंद म्हणजे काय?</string>
-    <string name="sources">नोंदींमधून: %1$s</string>
+    <string name="chat_clear">साफ करा</string>
+    <string name="tool_practice">तुमचा सराव पाहिला</string>
+    <string name="tool_schedule">वेळापत्रक पाहिले</string>
+    <string name="tool_notes">स्टुडिओच्या नोंदी वाचल्या</string>
+    <string name="tool_saved">एक नोंद सेव्ह केली</string>
+    <string name="tool_memory">तुमच्या नोंदी वाचल्या</string>
     <string name="urgent_label">कृपया लगेच मदत घ्या</string>
 
     <string name="my_practice">माझा सराव</string>
@@ -111,6 +116,9 @@
     <string name="streak">सलग दिवस</string>
     <string name="mood_lift">मूडमध्ये सुधारणा</string>
     <string name="mood_lift_help">वर्गानंतर सरासरी तुम्हाला किती बरे वाटते (−4 ते +4).</string>
+    <string name="memory_title">मी लक्षात ठेवलेले</string>
+    <string name="memory_empty">अजून काही नाही. ‘विचारा’ मध्ये म्हणा: \"लक्षात ठेवा की…\"</string>
+    <string name="forget_note">विसरा</string>
     <string name="research">स्टुडिओ माझे सहायक-प्रश्न वाचू शकतो</string>
     <string name="feedback_title">आम्ही काय सुधारावे?</string>
     <string name="feedback_hint">काय आवडले? काय अवघड होते?</string>

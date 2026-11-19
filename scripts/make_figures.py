@@ -24,6 +24,7 @@ CREAM, PAPER, MOSS, SAFFRON, INK, MUTED = "#F6F1E7", "#FFFCF6", "#3F5B45", "#C26
 SERIF = "/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf"
 FPS = 8
 STUDENT_TOUR = TOURS / "v0.4" / "student_tour_small.mp4"
+COMPANION_TOUR = TOURS / "v0.5" / "student_tour_small.mp4"  # Ask became the practice companion in v0.5
 TEACHER_TOUR = TOURS / "v0.4" / "teacher_tour_small.mp4"
 
 
@@ -236,7 +237,7 @@ def main() -> None:
     strip("students", "For students", [
         ("Join, one tap first", "how do you feel?", ("join", STUDENT_TOUR, 22.0, 7.5)),
         ("Breathe", "a circle to follow", ("breathe", STUDENT_TOUR, 43.4, 10.2)),
-        ("Ask", "answers from the notes", ("ask", STUDENT_TOUR, 57.4, 9.0)),
+        ("Ask", "knows your practice", ("ask_v0.5", COMPANION_TOUR, 60.0, 10.0)),
         ("In Hindi or Marathi", "the whole app", ("hindi", STUDENT_TOUR, 69.5, 9.5)),
     ])
     strip("teacher", "For the teacher", [
@@ -248,7 +249,8 @@ def main() -> None:
     for version, caption in (("v0.1", "v0.1, first tour: the findings are in docs/iterations/v0.1.md"),
                              ("v0.2", "v0.2: after the first round of fixes"),
                              ("v0.4", "v0.4: after the code review and the Marathi notes"),
-                             ("v0.4-two-phones", "v0.4: two phones, one server (teacher and students, in order)")):
+                             ("v0.4-two-phones", "v0.4: two phones, one server (teacher and students, in order)"),
+                             ("v0.5", "v0.5: Ask becomes a practice companion that knows the student's own classes")):
         sheet(version, caption)
     print(f"media in {OUT}")
 
