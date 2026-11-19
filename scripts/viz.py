@@ -15,6 +15,11 @@ def folder(version: str) -> Path:
     return LOCAL / f"viz_v{major}"
 
 
+def tours(version: str) -> Path:
+    """The version's screen recordings and the videos made from them: viz_<major>/tours/."""
+    return folder(version) / "tours"
+
+
 def screens(version: str) -> Path:
     """The version's screenshots and small recordings: viz_<major>/screens/<version>/."""
     return folder(version) / "screens" / version

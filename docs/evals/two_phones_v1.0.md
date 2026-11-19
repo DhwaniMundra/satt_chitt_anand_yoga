@@ -23,4 +23,4 @@
 - ✅ and waits to be placed
 - ✅ the placed student leaves the waiting card, after returning to the app
 
-Test people only. Screenshots and the recording are kept locally in .local/visualization/viz_v1/.
+Test people only. Screenshots and the recording are kept locally in .local/visualization/viz_v1/ (screens/ and tours/).
