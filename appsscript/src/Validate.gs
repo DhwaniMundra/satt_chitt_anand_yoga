@@ -46,6 +46,16 @@ const BODY_ = {
       note: F_.str({ nullable: true, def: null, max: 500 }),
     }, { required: true, max: 60 }),
   },
+  solo: {
+    minutes: F_.int({ required: true, ge: 0, le: 240 }),
+    entries: F_.list({
+      item: F_.str({ required: true, min: 1, max: 40 }),
+      hold_s: F_.int({ nullable: true, def: null, ge: 0, le: 3600 }),
+      reaction: F_.int({ nullable: true, def: null, ge: 1, le: 4 }),
+      pain: F_.int({ def: 0, ge: 0, le: 1 }),
+      note: F_.str({ nullable: true, def: null, max: 500 }),
+    }, { required: true, max: 60 }),
+  },
 };
 
 const QUERY_LANG_ = { lang: F_.oneOf(LANGS_, { def: 'en' }) };

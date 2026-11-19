@@ -249,7 +249,7 @@ test('setup: the Dashboard formulas point at the right columns', () => {
   assert.match(text, /VLOOKUP\(shared_notes!B2:B, \{users!A2:A, users!B2:B\}, 2, FALSE\)/);
   assert.match(text, /COUNTIFS\(checkins!A2:A, users!A2:A, checkins!C2:C, "before"\)/);
   assert.match(text, /practice!F2:F\}, "select Col1, Col2, Col3, Col4 where Col5 = 1 and Col1 >= datetime '" & TEXT\(TODAY\(\) - 14/);
-  assert.match(text, /QUERY\(practice!A1:J, "select I, avg\(E\) where E is not null group by I pivot J", 1\)/);
+  assert.match(text, /QUERY\(practice!A1:L, "select I, avg\(E\) where E is not null group by I pivot J", 1\)/);
   for (const [, , v] of formulas) {
     assert.equal((v.formula.match(/\(/g) || []).length, (v.formula.match(/\)/g) || []).length, v.formula);
     assert.equal((v.formula.match(/"/g) || []).length % 2, 0, v.formula);
