@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -30,7 +31,10 @@ fun ClassReviewScreen(vm: AppViewModel, session: SessionInsight) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text(stringResource(R.string.review_title), style = MaterialTheme.typography.headlineSmall)
         Text("${session.className} · ${dayLabel(session.startsAt)} · ${timeLabel(session.startsAt)}", color = Palette.muted)
-        if (review == null || curricula == null) return@Column
+        if (review == null || curricula == null) {
+            Waiting(vm, { vm.loadReview(session.id) }, Modifier.fillMaxWidth())
+            return@Column
+        }
         curricula.find(review.curriculum)?.let { Label(it.name) }
         Text(stringResource(R.string.review_counts, review.joined, review.answered), style = MaterialTheme.typography.bodyMedium)
         if (review.answered == 0) {

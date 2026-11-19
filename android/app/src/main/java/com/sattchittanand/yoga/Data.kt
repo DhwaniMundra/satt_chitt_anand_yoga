@@ -324,12 +324,26 @@ data class StudioWords(
     }
 }
 
-data class Home(val user: User, val studio: Studio, val sessions: List<ClassSession>, val afterCheckin: ClassSession?, val groupLink: String?) {
+/** [afterCheckin]: the class whose after-class window is open; [afterSaid]: what the student said about it, if anything. */
+data class Home(val user: User, val studio: Studio, val sessions: List<ClassSession>, val afterCheckin: ClassSession?, val afterSaid: Said?,
+    val groupLink: String?) {
     companion object {
-        fun from(o: JSONObject) = Home(
-            User.from(o.getJSONObject("user")), Studio.from(o.getJSONObject("studio")), o.getJSONArray("sessions").map(ClassSession::from),
-            if (o.isNull("after_checkin")) null else ClassSession.from(o.getJSONObject("after_checkin")), o.str("group_link"),
-        )
+        fun from(o: JSONObject): Home {
+            val after = if (o.isNull("after_checkin")) null else o.getJSONObject("after_checkin")
+            return Home(
+                User.from(o.getJSONObject("user")), Studio.from(o.getJSONObject("studio")), o.getJSONArray("sessions").map(ClassSession::from),
+                after?.let(ClassSession::from), after?.takeUnless { it.isNull("said") }?.getJSONObject("said")?.let(Said::from), o.str("group_link"),
+            )
+        }
+    }
+}
+
+/** What a student said after a class: the mood, if given, and each item's answer. */
+data class Said(val mood: Int?, val items: List<ItemFeedback>) {
+    companion object {
+        fun from(o: JSONObject) = Said(o.intOrNull("mood"), o.getJSONArray("items").map {
+            ItemFeedback(it.getString("item"), it.intOrNull("reaction"), it.getInt("pain") == 1, it.str("note").orEmpty())
+        })
     }
 }
 
