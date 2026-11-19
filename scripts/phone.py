@@ -227,7 +227,8 @@ class Recording:
         self.proc = subprocess.Popen(["adb", "shell", "screenrecord", "--bit-rate", "6000000", remote])
 
     def stop(self) -> None:
-        adb("shell", "pkill", "-INT", "screenrecord")
+        # Not checked: screenrecord ends by itself after 3 minutes, and a longer part has nothing left to stop.
+        subprocess.run(["adb", "shell", "pkill", "-INT", "screenrecord"], capture_output=True)
         self.proc.wait(timeout=20)
         time.sleep(1.5)
         self.path.parent.mkdir(parents=True, exist_ok=True)
