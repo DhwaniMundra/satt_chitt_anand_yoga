@@ -5,8 +5,9 @@ scripts/make_figures.py turns the best of it into the committed GIFs and contact
 Needs: `source scripts/env.sh`, the emulator running (scripts/run_emulator.sh), and the backend running on the
 synthetic demo database (backend/scripts/seed_demo.py), with Gemma loaded.
 
-Usage: python3 scripts/capture_tour.py v0.4 data/demo.sqlite3
-(The database path lets the tour add a class starting in 20 minutes, so the before-class check-in is open.)
+Usage: python3 scripts/capture_tour.py v0.5 data/demo.sqlite3
+(The database path lets the tour add a class starting in 20 minutes, so the before-class check-in is open, and
+start the demo student's chat afresh, so a second run shows the same screens.)
 """
 
 import sqlite3
@@ -25,6 +26,7 @@ LOCAL = ROOT / ".local" / "visualization"  # gitignored: recordings on top, raw 
 APK = ROOT / "android" / "app" / "build" / "outputs" / "apk" / "debug" / "app-debug.apk"
 STUDENT = ("9800000002", "demo123")
 TEACHER = ("9800000001", "demo123")
+CLEAR_HI = "\u0938\u093e\u092b\u093c \u0915\u0930\u0947\u0902"  # "साफ़ करें" (Clear), spelt as in values-hi/strings.xml
 
 
 def class_soon(db_path: Path) -> None:
@@ -32,6 +34,14 @@ def class_soon(db_path: Path) -> None:
     start = (datetime.now(UTC) + timedelta(minutes=20)).replace(second=0).isoformat(timespec="seconds").replace("+00:00", "Z")
     conn = sqlite3.connect(db_path)
     conn.execute("INSERT OR IGNORE INTO class_sessions (class_key, starts_at, duration_min, updated_at) VALUES ('hatha', ?, 55, ?)", (start, start))
+    conn.commit()
+
+
+def fresh_chat(db_path: Path) -> None:
+    """No conversation and nothing remembered for the demo student, as after seeding."""
+    conn = sqlite3.connect(db_path)
+    for table in ("chat_messages", "companion_notes"):
+        conn.execute(f"DELETE FROM {table} WHERE user_id = (SELECT id FROM users WHERE phone = ?)", (f"+91{STUDENT[0]}",))
     conn.commit()
 
 
@@ -54,6 +64,7 @@ def main(version: str, db_path: Path) -> None:
         time.sleep(3)
 
     class_soon(db_path)
+    fresh_chat(db_path)
     p.adb("install", "-r", str(APK))
     p.adb("shell", "cmd", "alarm", "set-timezone", "Asia/Kolkata")
     p.demo_mode()
@@ -80,30 +91,40 @@ def main(version: str, db_path: Path) -> None:
     p.tap("Stop", exact=True)
     p.tap("Ask", exact=True)
     shot("07_ask")
-    p.tap("Yoga for back pain?")
-    p.find("From the notes", timeout=120)
+    p.tap("How was my practice this week?")
+    p.find("Looked at your practice", timeout=120)
     time.sleep(1)
     shot("08_ask_answer")
+    p.type_into("Type your question", "Please remember that my left knee hurts in Vajrasana.")
+    shot("08a_ask_typing")  # the box stays above the keyboard
+    p.tap("Send", exact=True)
+    p.find("Saved a note", timeout=120)
+    p.hide_keyboard()
+    time.sleep(1)
+    shot("08b_ask_remember")
     p.tap("Me", exact=True)
+    p.find("left knee hurts")  # under "What I remember"
+    time.sleep(1)
     shot("09_me")
-    p.tap("हिन्दी")
+    tap_below("हिन्दी")  # the language chips, under what the companion remembers
     time.sleep(3)
     p.tap("आज", exact=True)
     time.sleep(1.5)
     shot("10_today_hindi")
     video.stop()
 
-    p.launch()  # a fresh start empties the chat, so the Hindi suggestions show
+    p.launch()
     p.tap("पूछें", exact=True)
-    p.tap("कक्षा से पहले क्या खाएँ?")
-    p.find("नोट्स से", timeout=120)
+    p.tap(CLEAR_HI, exact=True)  # the server keeps the English conversation; cleared, the Hindi suggestions show
+    p.tap("इस हफ्ते मेरी प्रैक्टिस कैसी रही?")
+    p.find("आपका अभ्यास देखा", timeout=120)
     time.sleep(1)
     shot("11_ask_hindi")
     p.tap("मैं", exact=True)
-    p.tap("English")
+    tap_below("English")
     time.sleep(3)
     p.scroll_down()
-    p.tap("Log out")
+    tap_below("Log out")
     time.sleep(1.5)
 
     # ---- teacher ----
@@ -132,6 +153,15 @@ def main(version: str, db_path: Path) -> None:
     for name in ("student_tour", "teacher_tour"):
         make_small(LOCAL / f"{name}_{version}.mp4", out / f"{name}_small.mp4")
     print(f"saved to {out}")
+
+
+def tap_below(text: str) -> None:
+    """Taps `text`, scrolling down once first if it is not on screen."""
+    try:
+        p.find(text, timeout=2)
+    except TimeoutError:
+        p.scroll_down()
+    p.tap(text)
 
 
 def make_small(video: Path, small: Path) -> None:
