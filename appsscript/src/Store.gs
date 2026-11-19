@@ -24,10 +24,13 @@ const TABLES_ = {
     ['about_hi', 'text'], ['about_mr', 'text'], ['source', 'text']],
   curriculum_items: [['curriculum', 'text'], ['position', 'int'], ['item', 'text'], ['dose', 'int'], ['unit', 'text'], ['cue', 'text'],
     ['cue_hi', 'text'], ['cue_mr', 'text']],
-  // How each item of a class went for a student: reaction 1 (not yet) to 4 (at ease), pain 1 for strain or pain.
-  // `item_name` and `week` (its Monday) copy the item's name and the class's week, for the owner's queries.
+  // How each item went for a student, in a class (session_id) or on their own (solo_id): reaction 1 (not yet) to 4
+  // (at ease), pain 1 for strain or pain, and on their own the stopwatch's seconds (hold_s). `item_name` and `week`
+  // (its Monday) copy the item's name and the week, for the owner's queries.
   practice: [['id', 'int'], ['user_id', 'int'], ['session_id', 'int'], ['item', 'text'], ['reaction', 'int'], ['pain', 'int'],
-    ['note', 'text?'], ['created_at', 'time'], ['item_name', 'text'], ['week', 'date']],
+    ['note', 'text?'], ['created_at', 'time'], ['item_name', 'text'], ['week', 'date'], ['solo_id', 'int'], ['hold_s', 'int']],
+  // A student's practice on their own; its items are rows of practice with this solo_id.
+  solo_sessions: [['id', 'int'], ['user_id', 'int'], ['started_at', 'time'], ['ended_at', 'time']],
   // The teacher's word to one student about one item of the library.
   asana_feedback: [['id', 'int'], ['student_id', 'int'], ['item', 'text'], ['text', 'text'], ['created_at', 'time']],
 };
