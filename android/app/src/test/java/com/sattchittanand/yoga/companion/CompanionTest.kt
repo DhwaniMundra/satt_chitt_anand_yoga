@@ -40,9 +40,10 @@ class CompanionTest {
         override fun practice(days: Int, lang: String): Map<String, Any?> {
             if (!reachable) error("no network")
             practiceAsked = days to lang
-            return linkedMapOf("period_days" to days, "classes_joined" to 3,
+            return linkedMapOf("period_days" to days, "classes_joined" to 3, "average_mood_before" to 3.0, "average_mood_after" to 4.0,
                 "classes" to listOf(linkedMapOf("date" to "2026-11-16", "class" to "Intermediate", "mood_before" to 3, "mood_after" to 4)),
-                "solo" to listOf(linkedMapOf("date" to "2026-11-17", "minutes" to 20, "items" to listOf("Vajrasana"))))
+                "solo" to listOf(linkedMapOf("date" to "2026-11-17", "minutes" to 20, "items" to listOf("Vajrasana"))),
+                "top_items" to listOf(linkedMapOf("asana" to "Vajrasana", "times" to 4, "average_reaction" to 2.5, "pain_times" to 1)))
         }
         override fun upcoming(lang: String): List<UpcomingClass> = if (reachable) classes else error("no network")
         override fun saveNote(text: String) { saved += text }
@@ -119,8 +120,10 @@ class CompanionTest {
         val t = tools(server, "mr")
         val week = t.getMyPractice(7)
         assertEquals(3, week["classes_joined"])
+        assertEquals(listOf(3.0, 4.0, null), listOf(week["average_class_mood_before"], week["average_class_mood_after"], week["average_mood_after"]))
         assertEquals(listOf("Monday 16 November"), (week["classes"] as List<*>).map { (it as Map<*, *>)["date"] }) // the weekday written out
         assertEquals(listOf("Tuesday 17 November"), (week["solo"] as List<*>).map { (it as Map<*, *>)["date"] })
+        assertEquals(listOf("2.5, between with effort and steady"), (week["top_items"] as List<*>).map { (it as Map<*, *>)["average_reaction"] })
         assertEquals(7 to "mr", server.practiceAsked)
         t.getMyPractice(400)
         assertEquals(90 to "mr", server.practiceAsked) // at most 90 days
@@ -170,9 +173,10 @@ class CompanionTest {
         val t = tools()
         val p = t.asanaProgress("वज्रासन")
         assertEquals("Vajrasana (वज्रासन, Thunderbolt pose)", p["asana"])
-        assertEquals(listOf(9, 5), listOf(p["in_class"], p["solo"]))
+        assertEquals(listOf(9, 5), listOf(p["times_in_class"], p["times_on_own"]))
         assertEquals("Friday 30 October", p["first"])
-        assertEquals(mapOf("early_average" to 2.0, "recent_average" to 3.7, "early" to "first 3 times", "recent" to "last 3 times"), p["reaction_trend"])
+        assertEquals(mapOf("first 3 times" to "2.0, with effort", "last 3 times" to "3.7, between steady and at ease"), p["how_it_felt"])
+        assertEquals(listOf("1.0, not yet", "2.5, between with effort and steady", "4.0, at ease"), listOf(1, 2.5, 4.0).map(::reactionWords))
         assertEquals(mapOf("date" to "Monday 16 November", "text" to "Much steadier this week."), p["teacher_said"])
         assertEquals(mapOf("times" to 6, "last" to "Tuesday 10 November"), p["strain_or_pain"])
         assertEquals(listOf("asana_progress"), t.used)
@@ -192,6 +196,9 @@ class CompanionTest {
         val general = tools()
         assertFalse("not about their own practice", "(asana_progress). Answer from it" in companion.system("Asha", "Is meditation good for sleep?", "en", general))
         assertFalse("asana_progress" in general.used)
+        val keep = tools()
+        companion.system("Asha", "Remember that my left knee hurts in Vajrasana", "en", keep)
+        assertFalse("a note to keep, not a question", "asana_progress" in keep.used)
     }
 
     @Test fun theSystemMessageNamesTheStudentsBatch() {
