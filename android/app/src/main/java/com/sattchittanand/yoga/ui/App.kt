@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Air
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.ChatBubble
 import androidx.compose.material.icons.filled.Groups
@@ -41,7 +40,6 @@ private data class Tab(val key: String, val label: Int, val icon: ImageVector)
 private val STUDENT_TABS = listOf(
     Tab("today", R.string.tab_today, Icons.Filled.WbSunny),
     Tab("week", R.string.tab_week, Icons.Filled.CalendarMonth),
-    Tab("breathe", R.string.tab_breathe, Icons.Filled.Air),
     Tab("ask", R.string.tab_ask, Icons.Filled.ChatBubble),
     Tab("me", R.string.tab_me, Icons.Filled.Person),
 )
@@ -96,7 +94,6 @@ private fun Main(vm: AppViewModel, teacher: Boolean, onLanguage: (String) -> Uni
             when (tab) {
                 "today" -> TodayScreen(vm)
                 "week" -> WeekScreen(vm)
-                "breathe" -> BreatheScreen()
                 "ask" -> AskScreen(vm)
                 "me" -> MeScreen(vm, onLanguage)
                 "classes" -> TeacherClassesScreen(vm) { tab = "students" }

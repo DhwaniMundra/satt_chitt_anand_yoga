@@ -34,7 +34,6 @@ class MainActivity : ComponentActivity() {
             YogaTheme {
                 App(vm) { lang ->
                     vm.setLanguage(lang)
-                    if (vm.user != null) vm.refresh() // class names come from the server in the chosen language
                     recreate()
                 }
             }

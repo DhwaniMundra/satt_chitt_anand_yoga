@@ -10,35 +10,26 @@ import java.time.temporal.ChronoUnit
 import java.util.Locale
 
 /*
- * The practice companion on the phone: a port of backend/sca/companion.py. What the evaluations proved stays as it was
- * (docs/iterations/v0.5.md): tools return summaries worked out in code; the notes section a message names and, for a
- * message about classes, the coming classes are handed to Gemma up front; "Remember that…" is saved by code if Gemma
- * does not; the emergency check runs first, with no model. Plain Kotlin (the tools use LiteRT-LM's annotations only),
- * so the JVM unit tests run it with a stand-in for the server.
+ * The practice companion's conversation: the system message, the five tools and the "Remember that…" rule. Tools
+ * return summaries worked out in code, so Gemma never adds up rows; the notes section a message names and, for a
+ * message about classes, the coming classes are handed to Gemma up front, so it answers from them even when it does
+ * not call a tool. Plain Kotlin (the tools use LiteRT-LM's annotations only), so the JVM unit tests run it with a
+ * stand-in for the server.
  */
 
 const val HISTORY_TURNS = 6 // earlier messages replayed as context; lasting facts belong in saved notes
 
 /** Words that make a message about the class schedule, in English, Hindi and Marathi: such messages get the coming
- *  classes up front (both models asked for clarification instead of checking the schedule in Marathi). */
+ *  classes up front. */
 val SCHEDULE_WORDS = listOf("class", "tomorrow", "today", "next", "schedule", "कक्षा", "क्लास", "कल ", "आज", "अगल", "कब",
     "वर्ग", "उद्या", "पुढ", "कधी")
 
-/** The words the app teaches for saving a note (Me, "What I remember": say "Remember that…"), at the start of a message.
- *  `\s` spelt out as in [isUrgent]. */
+/** The words the app teaches for saving a note ("Remember that…"), at the start of a message. `\s` spelt out as in
+ *  [isUrgent]. */
 private const val S = "[\\s\\p{Z}]"
 private val REMEMBER = Regex(
     "^(?:$S*(?:please$S+)?remember${S}+that$S+|$S*(?:कृपया$S+)?याद${S}+रख(?:ना|ें|िए|ो)$S+कि$S+|$S*(?:कृपया$S+)?लक्षात${S}+ठेवा$S+की$S+)",
     RegexOption.IGNORE_CASE,
-)
-
-/** What the app shows under a reply that used a tool. */
-val TOOL_LABELS = mapOf(
-    "get_my_practice" to "practice",
-    "get_upcoming_classes" to "schedule",
-    "search_studio_notes" to "notes",
-    "save_my_note" to "saved",
-    "get_my_notes" to "memory",
 )
 
 val LANGUAGE_NAMES = mapOf("en" to "English", "hi" to "Hindi (हिन्दी, Devanagari script)", "mr" to "Marathi (मराठी, Devanagari script)")
@@ -57,13 +48,6 @@ Rules:
    {teacher} before class.
 5. Keep replies short and warm: at most 90 words.
 6. Reply only in {language}."""
-
-/** One reply: its text, the tools it used (in order) and how it was made: "companion" (Gemma on the phone), "notes"
- *  (the studio's notes, no model) or "urgent" (the fixed emergency reply). */
-data class Reply(val text: String, val tools: List<String>, val mode: String)
-
-/** The tools' labels, each once, in the order first used. */
-fun labels(tools: List<String>): List<String> = tools.distinct().map { TOOL_LABELS[it] ?: it }
 
 // ---------- what the tools read ----------
 
@@ -89,7 +73,7 @@ private val IST: ZoneId = ZoneId.of("Asia/Kolkata")
 private val DATE = DateTimeFormatter.ofPattern("EEEE d MMMM", Locale.ENGLISH)
 private val TIME = DateTimeFormatter.ofPattern("h:mm a", Locale.ENGLISH)
 
-/** The next classes, each with an unambiguous day: "tomorrow, Friday 20 November" (as upcoming_classes on the server). */
+/** The next classes, each with an unambiguous day ("tomorrow, Friday 20 November"), so Gemma need not work out dates. */
 fun schedule(classes: List<UpcomingClass>, now: Instant, limit: Int = 5): Map<String, Any?> {
     val today = now.atZone(IST).toLocalDate()
     return linkedMapOf(
@@ -111,7 +95,7 @@ private const val UNREACHABLE = "The studio server could not be reached just now
 
 /**
  * The companion's five tools, bound to the student on this phone, each in its own [ToolSet] so Gemma sees them in
- * the server's order. Each records its name in [used].
+ * this order. Each records its name in [used].
  */
 class Tools(private val data: StudentData, private val notes: StudioNotes, private val lang: String, private val now: () -> Instant = Instant::now) {
     val used = mutableListOf<String>()
@@ -150,7 +134,7 @@ class Tools(private val data: StudentData, private val notes: StudioNotes, priva
         return mapOf("notes" to data.notes().map { mapOf("note" to it.text, "saved" to it.savedAt.toString().take(10)) })
     }
 
-    /** The tools as LiteRT-LM reads them: names, descriptions and parameters as the server's Python functions give them. */
+    /** The tools as LiteRT-LM reads them: names, descriptions and parameters from the annotations. */
     fun toolSets(): List<ToolSet> = listOf(Practice(this), Schedule(this), Search(this), Save(this), Recall(this))
 
     @Suppress("FunctionName")
@@ -188,8 +172,7 @@ class Tools(private val data: StudentData, private val notes: StudioNotes, priva
 
 // ---------- the conversation handed to Gemma ----------
 
-/** The system message, with the coming classes and the matching notes handed over up front, as Companion.prompt()
- *  builds it on the server. [history] holds the earlier messages, oldest first, as (from the student?, text). */
+/** The system message, with the coming classes and the matching notes handed over up front. */
 class PracticeCompanion(val notes: StudioNotes, private val studioName: String, private val teacher: String) {
 
     fun system(firstName: String, message: String, lang: String, tools: Tools): String {
@@ -198,8 +181,6 @@ class PracticeCompanion(val notes: StudioNotes, private val studioName: String, 
         val schedule = preloadedSchedule(message, tools)
         return base + schedule + preloadedNotes(message, lang, tools.used, schedule = schedule.isNotEmpty())
     }
-
-    fun preface(history: List<Pair<Boolean, String>>): List<Pair<Boolean, String>> = history.takeLast(HISTORY_TURNS)
 
     /** The coming classes as text for the system message when [message] is about the schedule (or ""). Recorded as a
      *  use of get_upcoming_classes, since the student sees it the same way. */
@@ -214,69 +195,25 @@ class PracticeCompanion(val notes: StudioNotes, private val studioName: String, 
         return "\n\nToday is ${schedule["today_is"]}. The studio's coming classes. Answer from them:\n$lines"
     }
 
-    /** The notes section on the topic [message] names, as text for the system message (or ""): Gemma 4 E2B often
-     *  answered health questions without searching. With the [schedule] already handed over, a class word does not name
-     *  a topic: told to answer from "About the studio and classes", E2B answered "which class tomorrow?" with today's. */
+    /** The notes section on the topic [message] names, as text for the system message (or ""), so a health question
+     *  is answered from the notes even when Gemma does not search them. With the [schedule] already handed over, a
+     *  class word does not count as naming a topic, so "which class tomorrow?" is answered from the schedule rather
+     *  than from "About the studio and classes". */
     fun preloadedNotes(message: String, lang: String, used: MutableList<String>, schedule: Boolean = false): String {
         val ignore = if (schedule) SCHEDULE_WORDS.map { it.trim() } else emptyList()
         val section = notes.retriever.named(message, ignore) ?: return ""
         used += "search_studio_notes"
         return "\n\nThe studio's notes on what the student asks about. Answer from them:\n### ${section.title}\n${notes.text(section, lang)}"
     }
-
-    /** The answer without Gemma, from the notes on the phone (the old notes-only path), saying why. */
-    fun notesOnly(message: String, lang: String, reason: NotesReason, save: (String) -> Unit): Reply {
-        if (isUrgent(message)) return Reply(URGENT_REPLY.getValue(lang), emptyList(), "urgent")
-        noteToSave(message, emptyList())?.let { note ->
-            save(note)
-            return Reply(SAVED.getValue(lang).format(note), listOf("save_my_note"), "notes")
-        }
-        val sections = notes.retriever.top(message)
-        if (sections.isEmpty()) return Reply(NO_MATCH.getValue(lang), emptyList(), "notes")
-        val best = sections.first()
-        val own = notes.translations[lang]?.get(best.title)
-        val tail = if (lang == "en") NOTES_TAIL.getValue("en") else if (own != null) NOTES_TAIL_OWN.getValue(lang) else NOTES_TAIL.getValue(lang)
-        return Reply("${reason.text.getValue(lang)} $tail\n\n${own ?: best.text}", listOf("search_studio_notes"), "notes")
-    }
 }
 
 /**
  * The note to save when [message] starts with the words the app teaches ("Remember that…") and Gemma did not call
- * save_my_note: in a conversation that began with another question, E4B replied "I have saved that" without saving
- * (docs/iterations/v0.5.md). Null when there is nothing to save.
+ * save_my_note, which it sometimes skips while saying it has saved. Null when there is nothing to save.
  */
 fun noteToSave(message: String, used: List<String>): String? {
     val match = REMEMBER.find(message) ?: return null
     val note = message.substring(match.range.last + 1).trim().take(500)
     if (note.isEmpty() || "save_my_note" in used) return null
-    return note.substring(0, 1).uppercase() + note.substring(1) // "My left knee…", as it reads in "What I remember"
+    return note.substring(0, 1).uppercase() + note.substring(1) // "My left knee…", as it reads in the health notes
 }
-
-/** Why the phone answered from the notes alone. */
-enum class NotesReason(val text: Map<String, String>) {
-    NOT_DOWNLOADED(mapOf("en" to "Gemma is not on this phone yet.", "hi" to "Gemma अभी इस फ़ोन पर नहीं है।", "mr" to "Gemma अजून या फोनवर नाही.")),
-    TOO_LITTLE_MEMORY(mapOf("en" to "This phone has too little memory for Gemma.", "hi" to "इस फ़ोन में Gemma के लिए पर्याप्त मेमोरी नहीं है।",
-        "mr" to "या फोनमध्ये Gemma साठी पुरेशी मेमरी नाही.")),
-    NOT_STARTED(mapOf("en" to "Gemma could not answer on this phone just now.", "hi" to "Gemma अभी इस फ़ोन पर जवाब नहीं दे पाया।",
-        "mr" to "Gemma ला आत्ता या फोनवर उत्तर देता आले नाही.")),
-}
-
-private val NOTES_TAIL = mapOf(
-    "en" to "Here is what the studio's notes say:",
-    "hi" to "स्टूडियो के नोट्स में यह लिखा है (अंग्रेज़ी में):",
-    "mr" to "स्टुडिओच्या नोंदींमध्ये हे लिहिले आहे (इंग्रजीत):",
-)
-private val NOTES_TAIL_OWN = mapOf( // when the notes exist in the student's language
-    "hi" to "स्टूडियो के नोट्स में यह लिखा है:",
-    "mr" to "स्टुडिओच्या नोंदींमध्ये हे लिहिले आहे:",
-)
-private val NO_MATCH = mapOf(
-    "en" to "I don't have notes on that. Please ask Ramit ji in class or in the WhatsApp group.",
-    "hi" to "इस बारे में मेरे पास जानकारी नहीं है। कृपया कक्षा में या व्हाट्सऐप ग्रुप में रमित जी से पूछें।",
-    "mr" to "याबद्दल माझ्याकडे माहिती नाही. कृपया वर्गात किंवा व्हॉट्सॲप ग्रुपमध्ये रमित जींना विचारा.",
-)
-private val SAVED = mapOf(
-    "en" to "I have saved that: “%s”",
-    "hi" to "मैंने यह सेव कर लिया है: “%s”",
-    "mr" to "मी हे सेव्ह केले आहे: “%s”",
-)

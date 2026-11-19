@@ -93,6 +93,10 @@ fun WelcomeScreen(vm: AppViewModel, onLanguage: (String) -> Unit) {
         Spacer(Modifier.height(if (role == null) 48.dp else 8.dp))
         BrandHeader(large = role == null)
         Text(stringResource(R.string.welcome_sub), style = MaterialTheme.typography.bodyLarge, color = Palette.muted, textAlign = TextAlign.Center)
+        vm.studio?.takeIf { role == null }?.let { studio -> // from the server: the first sign that the app can reach it
+            Text(studio.tagline, style = MaterialTheme.typography.labelLarge, color = Palette.saffron, textAlign = TextAlign.Center)
+            Text("${studio.teacherName} · ${studio.teacherTitle}", style = MaterialTheme.typography.bodyMedium, color = Palette.muted, textAlign = TextAlign.Center)
+        }
         Spacer(Modifier.height(4.dp))
         LanguageChips(vm.prefs.lang, onLanguage)
         Spacer(Modifier.height(12.dp))
@@ -111,6 +115,10 @@ fun WelcomeScreen(vm: AppViewModel, onLanguage: (String) -> Unit) {
                 Text(stringResource(R.string.i_am_teacher))
             }
             if (BuildConfig.DEBUG) ServerAddress(vm)
+            val words = vm.words()
+            Spacer(Modifier.height(20.dp))
+            Text(words.blessing, style = MaterialTheme.typography.bodyMedium, color = Palette.saffron, textAlign = TextAlign.Center)
+            Text(words.blessingMeaning, style = MaterialTheme.typography.labelMedium, color = Palette.muted, textAlign = TextAlign.Center)
             return@Column
         }
 

@@ -7,25 +7,31 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.sattchittanand.yoga.companion.labels
 import kotlinx.coroutines.launch
+import org.json.JSONException
 import org.json.JSONObject
+import java.time.LocalDate
+import java.time.ZoneId
 
 /** All screen state, and every call to the server. Errors land in [error] as the server's code. */
 class AppViewModel(app: Application) : AndroidViewModel(app) {
     val prefs = Prefs(app)
     private val api = Api(prefs)
-    /** The companion on this phone; [gemma] is where its model stands (downloading, loading, ready…). */
-    private val companion = PhoneCompanion(app, api)
+    private val studioFile = JSONObject(app.assets.open("studio/studio.json").bufferedReader().use { it.readText() })
+    private val companion = PhoneCompanion(app, api, studioFile)
+    /** Where Gemma on this phone stands (too little memory, downloading, loading, ready…). */
     val gemma = companion.gemma
-    /** The signed-in account's chat and notes, kept on this phone. */
+    /** The signed-in student's chat and health notes, kept on this phone. */
     private var store: LocalStore? = null
-    private var storeUser: Int? = null
 
     var starting by mutableStateOf(true); private set
+    /** For the first screen, before signing in. */
+    var studio by mutableStateOf<Studio?>(null); private set
     var user by mutableStateOf<User?>(null); private set
     var home by mutableStateOf<Home?>(null); private set
     var stats by mutableStateOf<Stats?>(null); private set
+    /** The classes the student joined in the last two weeks, newest first. */
+    var practice by mutableStateOf<List<JoinedClass>>(emptyList()); private set
     var teacherHome by mutableStateOf<TeacherHome?>(null); private set
     var students by mutableStateOf<List<Student>>(emptyList()); private set
     var insights by mutableStateOf<Insights?>(null); private set
@@ -41,10 +47,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var notice by mutableStateOf<String?>(null)
 
     init {
-        if (prefs.token == null) starting = false else launchCall(onDone = { starting = false }) { refreshAll() }
+        if (prefs.token == null) loadStudio() else launchCall { refreshAll() }
     }
 
-    private fun launchCall(onDone: () -> Unit = {}, block: suspend () -> Unit) {
+    private fun launchCall(block: suspend () -> Unit) {
         viewModelScope.launch {
             busy = true
             error = null
@@ -52,21 +58,27 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 block()
             } catch (e: ApiError) {
                 if (e.code == "signed_out") signOutLocally() else error = e.code
-            } catch (e: org.json.JSONException) { // a reply missing a field the app expects
+            } catch (e: JSONException) { // a reply missing a field the app expects
                 error = "generic"
             } finally {
                 busy = false
-                onDone()
+                starting = false
             }
         }
     }
 
+    private fun loadStudio() = launchCall { studio = Studio.from(api.get("/studio?lang=${prefs.lang}")) }
+
+    /** The studio's own words (its blessing, the meaning of its name, its headings), in the chosen language. */
+    fun words() = StudioWords.from(studioFile, prefs.lang)
+
     private suspend fun refreshAll() {
         val me = api.get("/me")
-        user = User.from(me.getJSONObject("user"))
-        openStore(user!!)
+        val account = User.from(me.getJSONObject("user"))
+        if (user?.id != account.id) openStore(account)
+        user = account
         stats = Stats.from(me.getJSONObject("stats"))
-        if (user!!.isTeacher) {
+        if (account.isTeacher) {
             teacherHome = TeacherHome.from(api.get("/teacher/home?lang=${prefs.lang}"))
         } else {
             home = Home.from(api.get("/home?lang=${prefs.lang}"))
@@ -106,16 +118,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private fun signOutLocally() {
         prefs.token = null
         user = null; home = null; stats = null; teacherHome = null; insights = null
-        students = emptyList(); notes = emptyList(); sharedNotes = emptyList()
+        practice = emptyList(); students = emptyList(); notes = emptyList(); sharedNotes = emptyList()
         chat.clear()
         store = null // the chat and notes stay on the phone, under this account, for its next sign-in
-        storeUser = null
+        loadStudio()
     }
 
-    /** This account's chat and notes on the phone. */
     private fun openStore(account: User) {
-        if (storeUser == account.id) return
-        storeUser = account.id
         store = LocalStore(getApplication<Application>().filesDir, account.id).also {
             chat.clear()
             chat.addAll(it.chat())
@@ -123,10 +132,22 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** Saves the language on the phone (and on the server once signed in). The activity then restarts in it. */
+    /** Saves the language on the phone (and on the server once signed in) and reloads what the server words in it.
+     *  The activity then restarts in it. */
     fun setLanguage(lang: String) {
         prefs.lang = lang
-        if (user != null) viewModelScope.launch { try { api.post("/me", JSONObject().put("lang", lang)) } catch (_: ApiError) { } }
+        if (user == null) {
+            loadStudio()
+        } else {
+            viewModelScope.launch { try { api.post("/me", JSONObject().put("lang", lang)) } catch (_: ApiError) { } }
+            refresh()
+        }
+    }
+
+    /** A debug build's server address, from the first screen. */
+    fun saveServer(address: String) {
+        prefs.server = address
+        loadStudio()
     }
 
     fun enterGroupCode(code: String) = launchCall {
@@ -134,16 +155,22 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         refreshAll()
     }
 
-    fun sendFeedback(screen: String, text: String, thanks: String) = launchCall {
-        api.post("/feedback", JSONObject().put("screen", screen).put("text", text))
+    fun sendFeedback(text: String, thanks: String) = launchCall {
+        api.post("/feedback", JSONObject().put("screen", "me").put("text", text))
         notice = thanks
     }
 
     // ---------- student ----------
 
-    fun checkin(sessionId: Int, phase: String, mood: Int, then: () -> Unit = {}) = launchCall(onDone = then) {
+    fun checkin(sessionId: Int, phase: String, mood: Int, then: () -> Unit = {}) = launchCall {
         stats = Stats.from(api.post("/sessions/$sessionId/checkin", JSONObject().put("phase", phase).put("mood", mood)).getJSONObject("stats"))
         home = Home.from(api.get("/home?lang=${prefs.lang}"))
+        then()
+    }
+
+    fun loadPractice() = launchCall {
+        val today = LocalDate.now(ZoneId.of("Asia/Kolkata"))
+        practice = api.get("/me/practice?days=14&lang=${prefs.lang}").getJSONArray("classes").map { JoinedClass.from(it, today) }.reversed()
     }
 
     /** Sends [question] to the companion on this phone: the student's line shows at once, the reply when it comes.
@@ -158,8 +185,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         kept.add(line)
         asking = true
         viewModelScope.launch {
-            val reply = companion.answer(account, kept, line.text, prefs.lang, history)
-            val answer = ChatLine(reply.text, fromStudent = false, tools = labels(reply.tools), mode = reply.mode)
+            val answer = companion.answer(account, kept, line.text, prefs.lang, history)
             kept.add(answer)
             chat.add(answer)
             notes = kept.notes() // a tool, or the "Remember that…" rule, may have saved one
@@ -167,34 +193,32 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** The Ask tab opened: Gemma picks up where it was (a download, a check, a load). */
-    fun openAsk() = gemma.refresh()
-
-    fun downloadGemma() = gemma.download()
-    fun cancelDownload() = gemma.cancel()
-    fun useMobileData() = gemma.useMobileData()
-
     fun clearChat() {
         if (asking) return
         store?.clearChat()
         chat.clear()
     }
 
-    fun loadNotes() {
-        notes = store?.notes() ?: emptyList()
+    fun addNote(text: String) {
+        val kept = store ?: return
+        kept.addNote(text)
+        notes = kept.notes()
     }
 
     /** Forgets a note on this phone. One already shared stays with the teacher, as the share dialog says. */
     fun forgetNote(note: Note) {
-        store?.forget(note.id)
-        loadNotes()
+        val kept = store ?: return
+        kept.forget(note.id)
+        notes = kept.notes()
     }
 
-    /** Sends this one note to the teacher: the only thing from the companion that leaves the phone. */
+    /** Sends this one note to the teacher: the only thing from the chat and the notes that leaves the phone. */
     fun shareNote(note: Note, done: String) = launchCall {
         val reply = api.post("/me/shared", JSONObject().put("text", note.text))
-        store?.markShared(note.id, reply.getInt("id"))
-        loadNotes()
+        store?.let {
+            it.markShared(note.id, reply.getInt("id"))
+            notes = it.notes()
+        }
         notice = done
     }
 
@@ -211,10 +235,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         share(api.get("/teacher/sessions/$sessionId/share?lang=${prefs.lang}").getString("text"))
     }
 
-    fun saveSettings(groupLink: String?, defaultMeetLink: String?, saved: String) = launchCall {
+    fun saveSettings(groupLink: String, defaultMeetLink: String, saved: String) = launchCall {
         val body = JSONObject()
-        if (!groupLink.isNullOrBlank()) body.put("group_link", groupLink)
-        if (!defaultMeetLink.isNullOrBlank()) body.put("default_meet_link", defaultMeetLink)
+        if (groupLink.isNotBlank()) body.put("group_link", groupLink)
+        if (defaultMeetLink.isNotBlank()) body.put("default_meet_link", defaultMeetLink)
         api.put("/teacher/settings", body)
         teacherHome = TeacherHome.from(api.get("/teacher/home?lang=${prefs.lang}"))
         notice = saved
@@ -251,11 +275,6 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun loadInsights() = launchCall {
         insights = Insights.from(api.get("/teacher/insights"))
         loadSharedNotes() // the "Notes shared" tile
-    }
-
-    fun saveServer(address: String) {
-        prefs.server = address
-        if (user != null || prefs.token != null) launchCall { refreshAll() }
     }
 
     /** Coming back to the app (from Meet, say) reloads, so the after-class question appears when it is due. */

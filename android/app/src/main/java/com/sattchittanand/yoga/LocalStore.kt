@@ -1,14 +1,15 @@
 package com.sattchittanand.yoga
 
 import org.json.JSONArray
+import org.json.JSONException
 import org.json.JSONObject
 import java.io.File
 import java.time.Instant
 
 /**
- * The companion's chat and the notes it keeps, on this phone only: one small JSON file per account in the app's
- * private storage (not in device backups: allowBackup is off). The server never sees them; a note reaches the teacher
- * only when the student shares it ([Note.sharedId] is then the server's id for it).
+ * The student's chat and health notes, on this phone only: one small JSON file per account in the app's private
+ * storage (not in device backups: allowBackup is off). The server never sees them; a note reaches the teacher only
+ * when the student shares it ([Note.sharedId] is then the server's id for it).
  */
 class LocalStore(dir: File, userId: Int) {
     private val file = File(dir, "companion/$userId.json")
@@ -26,7 +27,7 @@ class LocalStore(dir: File, userId: Int) {
                         if (n.isNull("shared_id")) null else n.getInt("shared_id"))
                 }
                 nextId = o.optInt("next_id", (notes.maxOfOrNull { it.id } ?: 0) + 1)
-            } catch (e: org.json.JSONException) { // a damaged file: start again rather than crash at every launch
+            } catch (e: JSONException) { // a damaged file: start again rather than crash at every launch
                 file.renameTo(File(file.path + ".damaged"))
             }
         }
@@ -38,8 +39,10 @@ class LocalStore(dir: File, userId: Int) {
     @Synchronized fun add(line: ChatLine) { chat += line; save() }
     @Synchronized fun clearChat() { chat.clear(); save() }
 
-    @Synchronized fun addNote(text: String): Note =
-        Note(nextId++, text.trim().take(500), Instant.now()).also { notes += it; save() }
+    @Synchronized fun addNote(text: String) {
+        notes += Note(nextId++, text.trim().take(500), Instant.now())
+        save()
+    }
 
     @Synchronized fun forget(id: Int) { notes.removeAll { it.id == id }; save() }
 
@@ -60,7 +63,7 @@ class LocalStore(dir: File, userId: Int) {
     }
 
     private fun toJson(line: ChatLine) = JSONObject().put("text", line.text).put("student", line.fromStudent)
-        .put("tools", JSONArray(line.tools)).put("mode", line.mode ?: JSONObject.NULL)
+        .put("tools", JSONArray(line.tools)).put("urgent", line.urgent)
 
-    private fun fromJson(o: JSONObject) = ChatLine(o.getString("text"), o.getBoolean("student"), o.getJSONArray("tools").strings(), o.str("mode"))
+    private fun fromJson(o: JSONObject) = ChatLine(o.getString("text"), o.getBoolean("student"), o.getJSONArray("tools").strings(), o.optBoolean("urgent"))
 }

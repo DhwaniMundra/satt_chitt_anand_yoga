@@ -29,15 +29,13 @@ import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.security.MessageDigest
-import java.util.Locale
 import java.util.concurrent.Executors
 
-/** The model file: Gemma 4 E2B for LiteRT-LM, the same file the laptop's evaluation ran (docs/evals/companion_v0.5_e2b.md). */
+/** The model file: Gemma 4 E2B for LiteRT-LM. */
 object GemmaFile {
     const val NAME = "gemma-4-E2B-it.litertlm"
     const val SIZE = 2_588_147_712L
@@ -59,7 +57,7 @@ sealed interface GemmaState {
     data class Downloading(val done: Long, val total: Long, val waiting: Waiting?) : GemmaState
     data class Checking(val done: Long, val total: Long) : GemmaState
     data object Loading : GemmaState
-    data class Ready(val backend: String, val loadSeconds: Double) : GemmaState
+    data object Ready : GemmaState
     data class Failed(val problem: Problem) : GemmaState
 }
 
@@ -74,7 +72,8 @@ enum class Problem { NO_SPACE, WRONG_FILE, DOWNLOAD, START }
 class GemmaOnPhone private constructor(private val context: Context) {
     companion object {
         private const val TAG = "SCA-Gemma"
-        private const val CHAT_NGRAM_WINDOW = 16 // as the server (sca/assistant.py): a list may repeat "8:00" on each line
+        // No 8-token sequence may repeat within 16 tokens: that stops a word loop, and a list may still say "8:00" on each line.
+        private const val CHAT_NGRAM_WINDOW = 16
 
         @Volatile private var instance: GemmaOnPhone? = null
         fun get(context: Context): GemmaOnPhone =
@@ -86,12 +85,12 @@ class GemmaOnPhone private constructor(private val context: Context) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val thread = Executors.newSingleThreadExecutor { Thread(it, "gemma") }.asCoroutineDispatcher()
     private val dir: File get() = context.getExternalFilesDir("models")!!.apply { mkdirs() }
-    val file: File get() = File(dir, GemmaFile.NAME)
+    private val file: File get() = File(dir, GemmaFile.NAME)
     private var engine: Engine? = null
     private var watching: Job? = null
     private var foreign: List<Int>? = null
 
-    val totalMemory: Long = ActivityManager.MemoryInfo().also { context.getSystemService(ActivityManager::class.java).getMemoryInfo(it) }.totalMem
+    private val totalMemory: Long = ActivityManager.MemoryInfo().also { context.getSystemService(ActivityManager::class.java).getMemoryInfo(it) }.totalMem
     private val _state = MutableStateFlow<GemmaState>(
         if (totalMemory < GemmaFile.MIN_MEMORY) GemmaState.TooLittleMemory(totalMemory) else GemmaState.NotDownloaded,
     )
@@ -136,7 +135,6 @@ class GemmaOnPhone private constructor(private val context: Context) {
             .setAllowedOverRoaming(false)
         val id = downloads.enqueue(request)
         prefs.edit().putLong("download", id).putInt("from", from).putBoolean("mobile", mobileData).remove("verified").apply()
-        Log.i(TAG, "download $id from ${urls[from]}")
         _state.value = GemmaState.Downloading(0, GemmaFile.SIZE, null)
         watch()
     }
@@ -204,7 +202,6 @@ class GemmaOnPhone private constructor(private val context: Context) {
             return
         }
         _state.value = GemmaState.Checking(0, size)
-        val started = System.nanoTime()
         val digest = MessageDigest.getInstance("SHA-256")
         val buffer = ByteArray(1 shl 20)
         var done = 0L
@@ -218,7 +215,6 @@ class GemmaOnPhone private constructor(private val context: Context) {
             }
         }
         val hex = digest.digest().joinToString("") { "%02x".format(it) }
-        Log.i(TAG, "SHA-256 checked in %.1f s".format(Locale.US, (System.nanoTime() - started) / 1e9))
         if (hex != GemmaFile.SHA256) {
             Log.w(TAG, "SHA-256 $hex is not Gemma's")
             fail(next)
@@ -245,19 +241,16 @@ class GemmaOnPhone private constructor(private val context: Context) {
         else -> listOf("GPU", "CPU")
     }
 
-    fun load() {
+    private fun load() {
         if (_state.value is GemmaState.Loading || engine != null) return
         if (prefs.getBoolean("gpu_trying", false)) prefs.edit().putBoolean("gpu_crashed", true).apply()
         _state.value = GemmaState.Loading
         scope.launch(thread) {
             for (backend in backends()) {
-                val started = System.nanoTime()
                 try {
                     if (backend == "GPU") prefs.edit().putBoolean("gpu_trying", true).commit()
                     engine = start(backend)
-                    val seconds = (System.nanoTime() - started) / 1e9
-                    Log.i(TAG, "loaded on $backend in %.1f s (memory %.1f GB)".format(Locale.US, seconds, totalMemory / 1e9))
-                    _state.value = GemmaState.Ready(backend, seconds)
+                    _state.value = GemmaState.Ready
                     return@launch
                 } catch (t: Throwable) {
                     Log.w(TAG, "start on $backend failed", t)
@@ -276,7 +269,7 @@ class GemmaOnPhone private constructor(private val context: Context) {
                 backend = if (backend == "GPU") Backend.GPU() else Backend.CPU(),
                 visionBackend = null, // text only: no image or audio encoders in memory
                 audioBackend = null,
-                maxNumTokens = 8192, // room for the tools, the notes handed over and six earlier messages, as on the server
+                maxNumTokens = 8192, // room for the tools, the notes handed over and six earlier messages
                 cacheDir = context.cacheDir.path,
             ),
         )
@@ -292,18 +285,15 @@ class GemmaOnPhone private constructor(private val context: Context) {
         return e
     }
 
-    /** Waits while Gemma is loading; returns the state it settles in. */
-    suspend fun settled(): GemmaState = _state.first { it !is GemmaState.Loading && it !is GemmaState.Checking }
-
-    /** Tokens with a letter or digit that is neither Latin nor Devanagari, banned from Marathi answers as on the server
-     *  (made from the model by backend/scripts/foreign_tokens.py, since the Android API cannot detokenize). */
+    /** Tokens with a letter or digit that is neither Latin nor Devanagari, banned from Marathi answers (listed from the
+     *  model by scripts/foreign_tokens.py, since the Android API cannot turn a token back into text). */
     private fun foreignTokens(): List<Int> = foreign ?: context.assets.open("gemma4_foreign_tokens.bin").use { it.readBytes() }.let { bits ->
         (0 until bits.size * 8).filter { (bits[it / 8].toInt() shr (it % 8)) and 1 == 1 }
     }.also { foreign = it }
 
     /**
      * One reply in a conversation that starts with [preface] (earlier messages: from the student?, text) and may call
-     * [tools], which the runtime runs for Gemma until it has its answer. Greedy decoding, as on the server.
+     * [tools], which the runtime runs for Gemma until it has its answer. Greedy decoding.
      */
     suspend fun reply(system: String, preface: List<Pair<Boolean, String>>, message: String, tools: List<ToolSet>, banForeign: Boolean): String =
         withContext(thread) {
