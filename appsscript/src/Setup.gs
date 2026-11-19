@@ -10,7 +10,6 @@ const SETTING_NOTES_ = [
   ['group_code', 'Students who sign up with this code are approved at once. The teacher can change it in the app.'],
   ['group_link', 'The WhatsApp group invite link, set by the teacher in the app.'],
   ['default_meet_link', 'The standing Meet or Zoom link for classes without their own, set by the teacher in the app.'],
-  ['public_url', 'Optional: the web app URL, added to the invite message under "Server address".'],
 ];
 const TIME_FORMAT_ = 'yyyy-mm-dd hh:mm:ss';
 const DATE_FORMAT_ = 'yyyy-mm-dd';

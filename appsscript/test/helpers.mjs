@@ -32,9 +32,9 @@ export function setSetting(b, key, value) {
   b.context.onEdit({}); // what a hand edit triggers
 }
 
-export function signup(b, phone, { role = 'student', code = '', consent = false, name } = {}) {
+export function signup(b, phone, { role = 'student', code = '', name } = {}) {
   const r = b.call('POST', '/auth/signup', {
-    body: { name: name || role + ' ' + phone, phone, password: 'secret1', role, code, research_consent: consent },
+    body: { name: name || role + ' ' + phone, phone, password: 'secret1', role, code },
   });
   assert.equal(r.status, 200, JSON.stringify(r));
   return { token: r.body.token, user: r.body.user };

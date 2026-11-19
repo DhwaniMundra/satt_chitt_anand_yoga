@@ -16,7 +16,7 @@ test('dist/ is the build of src/ and studio.json', () => {
 
 test('the studio constant is studio.json, in a fresh build too', () => {
   const b = loadBackend({ code: bundle().code });
-  const studio = JSON.parse(readFileSync(join(ROOT, '..', 'backend', 'content', 'studio.json'), 'utf8'));
+  const studio = JSON.parse(readFileSync(join(ROOT, '..', 'content', 'studio.json'), 'utf8'));
   assert.deepEqual(JSON.parse(b.evaluate('JSON.stringify(STUDIO)')), studio);
 });
 
@@ -41,7 +41,7 @@ test('setup builds the tabs, makes the codes once, and can run again', () => {
   assert.ok(!names.includes('Sheet1'), 'the empty first tab is removed');
   assert.equal(b.ss.timeZone, 'Asia/Kolkata');
   assert.deepEqual(b.ss.getSheetByName('users').rows()[0],
-    ['id', 'name', 'phone', 'role', 'status', 'pw_hash', 'lang', 'research_consent', 'created_at']);
+    ['id', 'name', 'phone', 'role', 'status', 'pw_hash', 'lang', 'created_at']);
   assert.ok(b.ss.getSheetByName('settings').isSheetHidden() && b.ss.getSheetByName('tokens').isSheetHidden());
   const teacherCode = setting(b, 'teacher_code');
   const groupCode = setting(b, 'group_code');

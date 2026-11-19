@@ -1,1 +1,0 @@
-"""Satt Chitt Anand backend."""

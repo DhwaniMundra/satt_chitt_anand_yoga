@@ -158,6 +158,18 @@ fun StudentsScreen(vm: AppViewModel) {
     var shownPassword by rememberSaveable { mutableStateOf<Pair<String, String>?>(null) }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text(stringResource(R.string.students_title), style = MaterialTheme.typography.headlineSmall)
+        if (vm.sharedNotes.isNotEmpty()) { // what students chose to share from their companion, one note at a time
+            Label(stringResource(R.string.shared_title))
+            Text(stringResource(R.string.shared_help), style = MaterialTheme.typography.bodyMedium, color = Palette.muted)
+            vm.sharedNotes.forEach { n ->
+                SectionCard(tint = Palette.cream) {
+                    Text("“${n.text}”", style = MaterialTheme.typography.bodyLarge)
+                    Text("${n.student} · ${dayLabel(n.sharedAt)}", style = MaterialTheme.typography.labelMedium, color = Palette.muted)
+                }
+            }
+            Spacer(Modifier.height(4.dp))
+            Label(stringResource(R.string.students_title))
+        }
         if (vm.students.isEmpty() && !vm.busy) Text(stringResource(R.string.no_students), color = Palette.muted)
         vm.students.forEach { (student, joined) ->
             SectionCard(tint = if (student.status == "pending") Palette.saffronLight else Palette.paper) {
@@ -203,7 +215,7 @@ fun InsightsScreen(vm: AppViewModel) {
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             StatTile(data.approved.toString(), stringResource(R.string.students_title), Modifier.weight(1f))
             StatTile(data.moodChange?.let { String.format(Locale.US, "%+.1f", it) } ?: "–", stringResource(R.string.avg_lift), Modifier.weight(1f))
-            StatTile(data.questions.toString(), stringResource(R.string.questions_asked), Modifier.weight(1f))
+            StatTile(vm.sharedNotes.size.toString(), stringResource(R.string.notes_shared), Modifier.weight(1f))
         }
         if (data.moodPairs > 0) Text(stringResource(R.string.pairs, data.moodPairs), style = MaterialTheme.typography.bodyMedium, color = Palette.muted)
 
