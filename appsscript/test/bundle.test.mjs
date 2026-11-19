@@ -74,7 +74,7 @@ test('sign up, log in and the Today screen', () => {
   const home = b.call('GET', '/home', { token: login.body.token, query: { lang: 'hi' } });
   assert.equal(home.status, 200);
   assert.equal(home.body.sessions.length, 7);
-  assert.equal(home.body.studio.name, 'सत् चित् आनंद योग');
+  assert.equal(home.body.studio.name, 'सत्·चित्·आनन्द योग');
   assert.match(home.body.sessions[0].starts_at, /^\d{4}-\d\d-\d\dT02:30:00Z$/); // 8:00 in India
   assert.equal(b.ss.getSheetByName('class_sessions').rows().length, 8);
   b.state.offsetMs = 3 * 3600000; // 9:00, the day's class over: the other six days' classes until midnight
