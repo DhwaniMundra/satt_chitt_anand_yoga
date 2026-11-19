@@ -462,7 +462,7 @@ def create_app(config: Config) -> FastAPI:
     @app.get("/chat")
     def chat_history(user: sqlite3.Row = Depends(current_user), conn: sqlite3.Connection = Depends(get_db)) -> dict:
         """This student's conversation with the companion, oldest first. Only they can read it."""
-        return {"messages": [{"role": r["role"], "text": r["text"], "tools": json.loads(r["tools"]),
+        return {"messages": [{"role": r["role"], "text": r["text"], "tools": json.loads(r["tools"]), "mode": r["mode"],
                               "created_at": r["created_at"]} for r in chat_rows(conn, user["id"], 60)]}
 
     @app.post("/chat")
@@ -478,8 +478,8 @@ def create_app(config: Config) -> FastAPI:
         conn.execute("INSERT INTO chat_messages (user_id, role, text, created_at) VALUES (?, 'student', ?, ?)",
                      (user["id"], body.message.strip(), moment))
         labels = tools_json(reply.tools)
-        conn.execute("INSERT INTO chat_messages (user_id, role, text, tools, created_at) VALUES (?, 'companion', ?, ?, ?)",
-                     (user["id"], reply.text, labels, moment))
+        conn.execute("INSERT INTO chat_messages (user_id, role, text, tools, mode, created_at) VALUES (?, 'companion', ?, ?, ?, ?)",
+                     (user["id"], reply.text, labels, reply.mode, moment))
         # What the studio may see, as for /ask: without research consent, not the words, not the topic, not who asked.
         consent = bool(user["research_consent"])
         conn.execute(
@@ -636,7 +636,7 @@ def create_app(config: Config) -> FastAPI:
             "AND a.session_id = b.session_id AND a.phase = 'after' WHERE b.phase = 'before'"
         ).fetchone()
         counts = dict(conn.execute("SELECT status, COUNT(*) FROM users WHERE role = 'student' GROUP BY status").fetchall())
-        asked = conn.execute("SELECT COUNT(*), AVG(CASE WHEN mode = 'gemma' THEN latency_s END) FROM questions").fetchone()
+        asked = conn.execute("SELECT COUNT(*), AVG(CASE WHEN mode IN ('gemma', 'companion') THEN latency_s END) FROM questions").fetchone()
         notes = conn.execute(
             "SELECT f.screen, f.text, f.created_at, u.name FROM feedback f JOIN users u ON u.id = f.user_id "
             "ORDER BY f.created_at DESC LIMIT 20"

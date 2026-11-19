@@ -87,6 +87,7 @@ TRANSLATED_RULE = """
    question, and always copy the point about the doctor or about stopping when the notes have one. Do not translate
    them again and do not change any word."""
 TRANSLATED_LANGS = ("mr",)  # languages with a `<notes>.<lang>.md` translation next to the English notes
+CHAT_NGRAM_WINDOW = 16  # tokens the companion's repeat ban looks back over (see Gemma.chat)
 
 
 class Busy(Exception):
@@ -98,6 +99,7 @@ class Section:
     title: str
     text: str
     terms: Counter
+    keys: frozenset[str] = frozenset()  # the words of its title and Keywords line
 
 
 @dataclass(frozen=True)
@@ -122,10 +124,11 @@ def load_sections(path: Path) -> list[Section]:
         title, _, body = part.partition("\n")
         keywords = "\n".join(line for line in body.splitlines() if line.startswith("Keywords:"))
         text = "\n".join(line for line in body.splitlines() if not line.startswith("Keywords:")).strip()
+        keys = tokenize(f"{title} {keywords}")
         terms = Counter(tokenize(text))
         for _ in range(KEYWORD_WEIGHT):
-            terms.update(tokenize(f"{title} {keywords}"))
-        sections.append(Section(title.strip(), text, terms))
+            terms.update(keys)
+        sections.append(Section(title.strip(), text, terms, frozenset(keys)))
     return sections
 
 
@@ -166,6 +169,16 @@ class Retriever:
         stems = [t for t in self.idf if len(t) >= 4 and word.startswith(t)]
         return max(stems, key=len) if stems else word
 
+    def named(self, question: str, ignore: tuple[str, ...] = ()) -> Section | None:
+        """The best-matching section when the question names its topic, with a word of its title or Keywords line;
+        None when the best match rests only on words of its text ("how MANY classes in the LAST month" finds
+        "Stress, anxiety and sleep" that way). Words starting with one of `ignore` do not count as naming it."""
+        query = [self.expand(w) for w in tokenize(question)]
+        score, index = max((self.score(s, query), i) for i, s in enumerate(self.sections))
+        section = self.sections[index]
+        names = {w for w in query if not w.startswith(ignore)} if ignore else set(query)
+        return section if score > 0 and section.keys & names else None
+
     def top(self, question: str, k: int = 3, keep: float = 0.55) -> list[Section]:
         """Up to `k` sections, dropping any that score under `keep` times the best: a weak third match is noise
         in the prompt and misleading in the list of sources shown to the student."""
@@ -185,6 +198,14 @@ def normalise(text: str) -> str:
 
 def is_urgent(question: str) -> bool:
     return URGENT.search(normalise(question)) is not None
+
+
+def is_foreign(text: str) -> bool:
+    """Whether `text` holds a letter or a digit from a script other than Latin and Devanagari: 0-9 and ०-९ are
+    fine, Bengali ০-৯ or Arabic ٠-٩ are not. Punctuation, symbols and marks never count."""
+    return any((ch.isalpha() or ch.isdecimal())
+               and not ("0" <= ch <= "9" or unicodedata.name(ch, "").startswith(("LATIN", "DEVANAGARI")))
+               for ch in text)
 
 
 class Gemma:
@@ -207,8 +228,9 @@ class Gemma:
         self.name = f"{model_path.stem} ({backend})"
 
     def foreign_tokens(self) -> list[int]:
-        """Tokens holding a letter that is neither Latin nor Devanagari (about 80,000 of 262,144; listed once, < 1 s).
-        Marathi answers otherwise slip in a Japanese, Korean or Arabic word now and then (ともに, 전에, يكا)."""
+        """Tokens holding a letter or digit that is neither Latin nor Devanagari (see `is_foreign`; about 80,000 of
+        262,144, listed once, < 1 s). Marathi answers otherwise slip in a Japanese, Korean or Arabic word now and then
+        (ともに, 전에, يكا), or Bengali digits in a time (8:০০, docs/iterations/v0.5.md)."""
         if self._foreign is None:
             ids = []
             for i in itertools.count():
@@ -216,7 +238,7 @@ class Gemma:
                     text = self._engine.detokenize([i])
                 except RuntimeError:  # past the end of the vocabulary
                     break
-                if any(ch.isalpha() and not unicodedata.name(ch, "").startswith(("LATIN", "DEVANAGARI")) for ch in text):
+                if is_foreign(text):
                     ids.append(i)
             self._foreign = ids
         return self._foreign
@@ -252,7 +274,11 @@ class Gemma:
                 system_message=system,
             )
             try:
-                options = {"no_repeat_ngram_config": self._lm.NoRepeatNgramConfig(no_repeat_ngram_size=8)}
+                # The 8-token ban only looks back CHAT_NGRAM_WINDOW tokens: a word loop is still stopped, but a list may
+                # repeat "नोव्हेंबर रोजी सकाळी ८:००" on each line. Banned over the whole reply, the second "००" was
+                # forbidden, and Gemma wrote a look-alike instead (८:০০ in Bengali digits, or ८:०७).
+                options = {"no_repeat_ngram_config": self._lm.NoRepeatNgramConfig(no_repeat_ngram_size=8,
+                                                                                   window_size=CHAT_NGRAM_WINDOW)}
                 if ban_foreign_scripts:
                     options["suppress_tokens_config"] = self._lm.SuppressTokensConfig(suppress_tokens=self.foreign_tokens())
                 answer = conversation.send_message(message, **options).to_json()

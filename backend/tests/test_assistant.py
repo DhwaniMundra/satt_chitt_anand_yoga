@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from sca.assistant import Assistant, Busy, is_urgent, load_sections, load_translation, tokenize
+from sca.assistant import Assistant, Busy, is_foreign, is_urgent, load_sections, load_translation, tokenize
 
 NOTES = Path(__file__).resolve().parents[1] / "knowledge" / "yoga_health.md"
 
@@ -105,6 +105,16 @@ def test_urgent_signs_however_they_are_written(question):
 @pytest.mark.parametrize("question", ["How do I breathe in cat-cow?", "Chest opening poses for posture?", "सांस कैसे लें?", "श्वास कसा घ्यावा?"])
 def test_ordinary_breathing_questions_are_not_urgent(question):
     assert not is_urgent(question)
+
+
+@pytest.mark.parametrize("text", ["8:০০", "ともに", "전에", "يكا", "٣", "０"])
+def test_other_scripts_letters_and_digits_are_banned_from_marathi_answers(text):
+    assert is_foreign(text)
+
+
+@pytest.mark.parametrize("text", ["8:00", "८:००", "सकाळी", "Hatha", "café", "॥", "—", "😊"])
+def test_latin_and_devanagari_letters_and_digits_are_allowed(text):
+    assert not is_foreign(text)
 
 
 def test_marathi_answers_from_marathi_notes_when_gemma_is_off(assistant):

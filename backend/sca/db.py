@@ -61,6 +61,7 @@ CREATE TABLE IF NOT EXISTS chat_messages (
   role TEXT NOT NULL CHECK (role IN ('student', 'companion')),
   text TEXT NOT NULL,
   tools TEXT NOT NULL DEFAULT '[]',
+  mode TEXT NOT NULL DEFAULT 'companion',
   created_at TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS companion_notes (
@@ -96,6 +97,9 @@ def connect(path: Path) -> sqlite3.Connection:
     conn.execute("PRAGMA foreign_keys = ON")
     conn.execute("PRAGMA journal_mode = WAL")
     conn.executescript(SCHEMA)
+    columns = {row["name"] for row in conn.execute("PRAGMA table_info(chat_messages)")}
+    if "mode" not in columns:  # databases made before replies kept their kind (urgent, notes, companion)
+        conn.execute("ALTER TABLE chat_messages ADD COLUMN mode TEXT NOT NULL DEFAULT 'companion'")
     return conn
 
 
