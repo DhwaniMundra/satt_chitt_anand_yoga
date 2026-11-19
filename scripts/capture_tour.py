@@ -1,6 +1,7 @@
 """Walks through the app on the emulator and saves the same screenshots and two screen recordings every time,
-so each iteration can be compared with the last: .local/visualization/viz_<major>/screens/<version>/ (gitignored;
-scripts/make_figures.py turns the best of it into the committed GIFs and contact sheets in docs/media/).
+so each iteration can be compared with the last: screenshots in .local/visualization/viz_<major>/screens/<version>/,
+recordings and their small copies in viz_<major>/tours/ (gitignored; scripts/make_figures.py turns the best of it into
+the committed GIFs and contact sheets in docs/media/).
 
 Needs: `source scripts/env.sh`, the 6 GB emulator running (SCA_AVD=sca_phone_big scripts/run_emulator.sh) with
 Gemma downloaded in Ask, and nothing else on port 8000. The tour starts the dev backend on a fresh copy of the
@@ -75,7 +76,7 @@ def tour(version: str) -> None:
     p.launch(fresh=True)
 
     # ---- Asha: today's class ----
-    video = p.Recording(viz.folder(version) / f"student_tour_{version}.mp4")
+    video = p.Recording(viz.tours(version) / f"student_tour_{version}.mp4")
     shot("01_welcome")
     p.tap("I'm a student")
     shot("02_signup")
@@ -121,7 +122,7 @@ def tour(version: str) -> None:
     log_out("Me")
 
     # ---- the teacher: Today, Neha placed, Rohan moved, the class's review, then feedback for Asha ----
-    video = p.Recording(viz.folder(version) / f"teacher_tour_{version}.mp4")
+    video = p.Recording(viz.tours(version) / f"teacher_tour_{version}.mp4")
     p.tap("I'm the teacher")
     log_in(*TEACHER)
     shot("24_teacher_today")
@@ -278,7 +279,7 @@ def tour(version: str) -> None:
     tap_scrolling("Log out")
 
     for name in ("student_tour", "teacher_tour"):
-        make_small(viz.folder(version) / f"{name}_{version}.mp4", out / f"{name}_small.mp4")
+        make_small(viz.tours(version) / f"{name}_{version}.mp4", viz.tours(version) / f"{name}_{version}_small.mp4")
     print(f"saved to {out}")
 
 

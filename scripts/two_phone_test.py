@@ -99,7 +99,7 @@ def run(version: str, teacher_code: str) -> None:
         """Starts recording both phones at once (screenrecord stops by itself after 3 minutes, hence parts)."""
         for serial, who in ((TEACHER, "teacher"), (STUDENT, "student")):
             on(serial)
-            recordings.append((serial, p.Recording(out / f"{part}_{who}.mp4", f"/sdcard/{part}.mp4")))
+            recordings.append((serial, p.Recording(viz.tours(version) / f"{part}_{who}.mp4", f"/sdcard/{part}.mp4")))
 
     def stop_recording() -> None:
         while recordings:
@@ -234,7 +234,7 @@ def run(version: str, teacher_code: str) -> None:
     shot("12_student_placed")
 
     stop_recording()
-    side_by_side(out, viz.folder(version) / f"two_phones_{version.removesuffix('-two-phones')}.mp4")
+    side_by_side(viz.tours(version), f"two_phones_{version.removesuffix('-two-phones')}.mp4")
 
     passed = sum(ok for _, ok in results)
     report = ROOT / "docs" / "evals" / f"two_phones_{version.removesuffix('-two-phones')}.md"
@@ -244,14 +244,15 @@ def run(version: str, teacher_code: str) -> None:
         f"- **Phones:** {TEACHER} (teacher), {STUDENT} (students), Android 16 emulators\n"
         f"- **Passed:** {passed}/{len(results)}\n\n"
         + "".join(f"- {'✅' if ok else '❌'} {what}\n" for what, ok in results)
-        + f"\nTest people only. Screenshots and the recording are kept locally in .local/visualization/{viz.folder(version).name}/.\n",
+        + f"\nTest people only. Screenshots and the recording are kept locally in .local/visualization/{viz.folder(version).name}/"
+        " (screens/ and tours/).\n",
         encoding="utf-8",
     )
     print(f"{passed}/{len(results)} passed; {report}")
 
 
-def side_by_side(out: Path, final: Path) -> None:
-    """Teacher on the left, student on the right, both parts in sequence, into `final`."""
+def side_by_side(out: Path, name: str) -> None:
+    """Teacher on the left, student on the right, both parts (recorded into `out`) in sequence, into `out` / `name`."""
     parts = []
     for part in ("part1", "part2"):
         joined = out / f"{part}.mp4"
@@ -265,7 +266,7 @@ def side_by_side(out: Path, final: Path) -> None:
     listing = out / "parts.txt"
     listing.write_text("".join(f"file '{p.name}'\n" for p in parts))
     subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", str(listing), "-c", "copy",
-                    "-movflags", "+faststart", str(final)], check=True)
+                    "-movflags", "+faststart", str(out / name)], check=True)
     for leftover in [listing, *parts, *out.glob("part*_*.mp4")]:
         leftover.unlink()
 

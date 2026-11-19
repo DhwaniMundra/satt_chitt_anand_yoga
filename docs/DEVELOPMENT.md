@@ -69,9 +69,9 @@ checks are coarse: read every answer before trusting a pass.
 
 ## Tour it and make the media
 
-Raw screenshots and recordings stay in `.local/visualization/` (git ignores it): `viz_<major>/` holds the videos on
-top and each version's screenshots in `screens/<version>/`. Only what the README and the iteration log show goes in
-`docs/media/`.
+Raw screenshots and recordings stay in `.local/visualization/` (git ignores it): in `viz_<major>/`, each version's
+screenshots are in `screens/<version>/` and its recordings and the videos made from them in `tours/`. Only what the
+README and the iteration log show goes in `docs/media/`.
 
 ```bash
 python3 scripts/capture_tour.py v1.0                       # one version's screenshots and recordings (6 GB emulator)
