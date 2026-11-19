@@ -211,7 +211,11 @@ def run(version: str, teacher_code: str) -> None:
     sign_up("Meera (test)", "09800000103", "WRONG1")  # the number typed with a leading 0
     check("a wrong group code is refused", f"Ask {p.TEACHER_NAME} for the group code")
     shot("10_student_wrong_code")
-    p.type_into("WRONG1", group_code)  # the code box, still filled
+    p.tap("WRONG1", exact=True)  # the code box, still filled: emptied, then the right code
+    p.adb("shell", "input", "keyevent", "KEYCODE_MOVE_END")
+    for _ in range(len("WRONG1")):
+        p.adb("shell", "input", "keyevent", "KEYCODE_DEL")
+    p.type_text(group_code)
     p.hide_keyboard()
     p.tap("Create account", exact=True, last=True)
     time.sleep(3)
