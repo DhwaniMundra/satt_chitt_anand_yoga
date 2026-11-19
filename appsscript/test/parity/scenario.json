@@ -5,7 +5,7 @@
   {"call": ["GET", "/studio", {"lang": "mr"}]},
   {"call": ["GET", "/studio", {"lang": "fr"}]},
   {"call": ["POST", "/auth/signup", {}, {"name": "x", "phone": "9000000001", "password": "secret1", "role": "teacher", "code": "nope"}]},
-  {"call": ["POST", "/auth/signup", {}, {"name": "Ramit ji", "phone": "+91 90000 00001", "password": "secret1", "role": "teacher", "code": " teach123 "}], "save": "t"},
+  {"call": ["POST", "/auth/signup", {}, {"name": "Teacher One", "phone": "+91 90000 00001", "password": "secret1", "role": "teacher", "code": " teach123 "}], "save": "t"},
   {"call": ["POST", "/auth/signup", {}, {"name": "x", "phone": "9000000009", "password": "secret1", "role": "teacher", "code": "TEACH123"}]},
   {"call": ["GET", "/teacher/home", {}, null, "t"]},
   {"call": ["GET", "/teacher/home", {"lang": "mr"}, null, "t"]},

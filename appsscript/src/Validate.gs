@@ -10,6 +10,8 @@ const F_ = {
   str: (opts) => Object.assign({ type: 'str' }, opts || {}),
   int: (opts) => Object.assign({ type: 'int' }, opts || {}),
   oneOf: (values, opts) => Object.assign({ type: 'enum', values: values }, opts || {}),
+  /** A list of objects, each checked against `fields`. */
+  list: (fields, opts) => Object.assign({ type: 'list', fields: fields }, opts || {}),
 };
 const REQUIRED_ = { required: true };
 
@@ -34,6 +36,15 @@ const BODY_ = {
   settings: { group_link: F_.str({ nullable: true, def: null }), default_meet_link: F_.str({ nullable: true, def: null }) },
   status: { status: F_.oneOf(['approved', 'rejected'], REQUIRED_) },
   shared: { text: F_.str({ required: true, min: 1, max: 500 }) },
+  curriculum: { curriculum: F_.str({ required: true, min: 1, max: 40 }) },
+  practice: {
+    entries: F_.list({
+      item: F_.str({ required: true, min: 1, max: 40 }),
+      reaction: F_.int({ nullable: true, def: null, ge: 1, le: 4 }),
+      pain: F_.int({ def: 0, ge: 0, le: 1 }),
+      note: F_.str({ nullable: true, def: null, max: 500 }),
+    }, { required: true, max: 60 }),
+  },
 };
 
 const QUERY_LANG_ = { lang: F_.oneOf(LANGS_, { def: 'en' }) };
@@ -69,12 +80,34 @@ function validateFields_(fields, source, loc, errors) {
       out[name] = null;
       return;
     }
+    if (field.type === 'list') {
+      out[name] = validateList_(field, value, where, errors);
+      return;
+    }
     const fromQuery = loc[0] !== 'body'; // query and path values arrive as text
     const result = coerce_(field, value, fromQuery);
     if (result.error) errors.push(Object.assign({ loc: where, input: value }, result.error));
     else out[name] = result.value;
   });
   return out;
+}
+
+function validateList_(field, value, loc, errors) {
+  if (!Array.isArray(value)) {
+    errors.push({ type: 'list_type', loc: loc, msg: 'Input should be a valid list', input: value });
+    return null;
+  }
+  if (field.max !== undefined && value.length > field.max) {
+    errors.push({ type: 'too_long', loc: loc, msg: 'List should have at most ' + plural_(field.max, 'item'), input: value, ctx: { max_length: field.max } });
+    return null;
+  }
+  return value.map((item, i) => {
+    if (item === null || typeof item !== 'object' || Array.isArray(item)) {
+      errors.push({ type: 'model_type', loc: loc.concat([i]), msg: 'Input should be an object', input: item });
+      return null;
+    }
+    return validateFields_(field.fields, item, loc.concat([i]), errors);
+  });
 }
 
 function coerce_(field, value, fromText) {

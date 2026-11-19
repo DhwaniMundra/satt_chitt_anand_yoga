@@ -10,13 +10,24 @@ const TABLES_ = {
     ['lang', 'text'], ['created_at', 'time']],
   tokens: [['token_hash', 'text'], ['user_id', 'int'], ['created_at', 'time']],
   class_sessions: [['id', 'int'], ['class_key', 'text'], ['starts_at', 'time'], ['duration_min', 'int'], ['meet_link', 'text?'],
-    ['updated_at', 'time']],
+    ['curriculum', 'text?'], ['updated_at', 'time']],
   // `class` and `class_date` copy the session's class name and India date, for the owner's queries; the app uses session_id.
   checkins: [['user_id', 'int'], ['session_id', 'int'], ['phase', 'text'], ['mood', 'int'], ['created_at', 'time'],
     ['class', 'text'], ['class_date', 'date']],
   feedback: [['id', 'int'], ['user_id', 'int'], ['screen', 'text'], ['text', 'text'], ['created_at', 'time']],
   shared_notes: [['id', 'int'], ['user_id', 'int'], ['text', 'text'], ['created_at', 'time']],
   settings: [['key', 'text'], ['value', 'text?']],
+  // The curriculum: seeded by setup() from content/curriculum.json while the tabs are empty, then the owner's to edit.
+  library: [['key', 'text'], ['type', 'text'], ['level', 'int'], ['sanskrit', 'text'], ['name', 'text'], ['english', 'text'],
+    ['aliases', 'text'], ['source', 'text']],
+  curricula: [['key', 'text'], ['name', 'text'], ['name_hi', 'text'], ['name_mr', 'text'], ['level', 'int'], ['about', 'text'],
+    ['about_hi', 'text'], ['about_mr', 'text'], ['source', 'text']],
+  curriculum_items: [['curriculum', 'text'], ['position', 'int'], ['item', 'text'], ['dose', 'int'], ['unit', 'text'], ['cue', 'text'],
+    ['cue_hi', 'text'], ['cue_mr', 'text']],
+  // How each item of a class went for a student: reaction 1 (not yet) to 4 (at ease), pain 1 for strain or pain.
+  // `item_name` and `week` (its Monday) copy the item's name and the class's week, for the owner's queries.
+  practice: [['id', 'int'], ['user_id', 'int'], ['session_id', 'int'], ['item', 'text'], ['reaction', 'int'], ['pain', 'int'],
+    ['note', 'text?'], ['created_at', 'time'], ['item_name', 'text'], ['week', 'date']],
 };
 
 const LOCK_WAIT_MS_ = 20000;

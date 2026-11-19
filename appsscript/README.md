@@ -28,7 +28,7 @@ Contents: [Set up](#set-up-5-minutes) · [How it works](#how-it-works) · [The e
    your account and click **Allow**. It asks for one permission: to see and edit the spreadsheet the script is
    installed in, and no other file. If Google shows "Google hasn't verified this app", that is expected for a script
    of one's own: click **Advanced** → **Go to … (unsafe)** → Allow. The execution log then shows the **teacher
-   sign-up code** (give it to Ramit ji; it works once) and the group code. Both stay in the hidden `settings` tab.
+   sign-up code** (give it to the teacher; it works once) and the group code. Both stay in the hidden `settings` tab.
 5. **Deploy.** Deploy → New deployment → the gear next to "Select type" → **Web app**. Description: "v1.0".
    Execute as: **Me**. Who has access: **Anyone**. Click Deploy (allow again if asked) and copy the **Web app URL**
    (it ends in `/exec`). Opening it in a browser shows `{"status":200,"body":{"ok":true,...}}`.
@@ -133,14 +133,18 @@ curl -sL "$URL" -H 'Content-Type: text/plain' \
 | `GET /me` | signed in | | `{user, stats: {classes_joined, streak_days, mood_change, mood_pairs}}` |
 | `POST /me` | signed in | yes | `{name?, lang?}` → `{user}` |
 | `POST /me/group_code` | signed in | yes | `{code}`: a pending student becomes approved → `{user}`; `bad_group_code`, 5 tries then `too_many_attempts` |
-| `GET /me/practice?days=&lang=` | approved student, teacher | | the student's classes over the last `days` (1 to 90, default 7) with the sums done: `{period_days, classes_joined, mood_scale, average_mood_before, average_mood_after, by_class, classes}`; `pending` |
+| `GET /me/practice?days=&lang=` | approved student, teacher | | the student's classes over the last `days` (1 to 90, default 7) with the sums done: `{period_days, classes_joined, mood_scale, average_mood_before, average_mood_after, by_class, classes}`, each class's `date` its India date (`2026-11-16`); `pending` |
 | `POST /me/shared` | approved student | yes | `{text}` (1 to 500) → `{ok, id}`; the same words again return the same id; `pending`, `empty_note` |
-| `GET /home?lang=` | signed in | the day's class, once | `{user, studio, sessions, after_checkin, group_link}`; links only for approved students |
+| `GET /home?lang=` | signed in | the day's class, once | `{user, studio, sessions, after_checkin, group_link}`; links only for approved students; each session's `curriculum`. `after_checkin` is the last class the student checked in to that ended (or is in its last 10 minutes) within 12 hours and that has no "after" check-in and no practice entries yet |
+| `GET /curricula?lang=` | signed in | | `{library: [{key, type, level, sanskrit, name, english, aliases}], curricula: [{key, name, level, about, items: [{item, dose, unit, cue}]}]}`, from the curriculum tabs, names, about and cues in `lang` |
 | `POST /sessions/{session_id}/checkin` | approved student | yes | `{phase: before\|after, mood: 1..5}` → `{ok, stats}`. "before" from an hour before class to its end; "after" from 10 minutes before the end to 12 hours after, once checked in before; `pending`, `no_session`, `checkin_closed` |
+| `POST /sessions/{session_id}/practice` | approved student | yes | `{entries: [{item, reaction: 1..4\|null, pain: 0\|1, note?}]}` (at most 60) → `{ok, saved}`: how each item went, replacing what was sent before for this class; entries with nothing said are not kept. Open when the "after" check-in is; `checkin_closed`, `unknown_item`, `pending`, `no_session` |
 | `POST /feedback` | signed in | yes | `{screen, text}` → `{ok}` |
-| `GET /teacher/home?lang=` | teacher | the day's class, once | `{sessions (with own_link, joined), settings, pending_students}` |
+| `GET /teacher/home?lang=` | teacher | the day's class, once | `{sessions (with own_link, joined, curriculum), settings, pending_students}` |
 | `PUT /teacher/sessions/{session_id}?lang=` | teacher | yes | `{meet_link}` (Meet or Zoom; `https://` added) → `{text, url, group_link}`; `bad_meet_link`, `no_session` |
 | `GET /teacher/sessions/{session_id}/share?lang=` | teacher | | the WhatsApp message `{text, url, group_link}`; `no_link`, `no_session` |
+| `PUT /teacher/sessions/{session_id}/curriculum` | teacher | yes | `{curriculum}` → `{ok, curriculum}`. A class without its own follows the curriculum last used for a class of its kind, else the first in the `curricula` tab; `no_curriculum`, `no_session` |
+| `GET /teacher/sessions/{session_id}/practice` | teacher | | how the class went: `{id, starts_at, curriculum, joined, answered, items: [{item, reactions: [not yet, with effort, steady, at ease], pain: [{name, note}], notes: [{name, text}]}]}`, items with strain or pain first, then the plan's order |
 | `PUT /teacher/settings` | teacher | yes | `{group_link?, default_meet_link?}`, both checked before either is saved → `{group_link, group_code, default_meet_link}` |
 | `POST /teacher/group_code` | teacher | yes | a new group code → `{group_code}` |
 | `GET /teacher/invite?lang=` | teacher | | `{text, url, group_link}` |
@@ -161,8 +165,12 @@ add columns of her own (to the right is tidiest); `setup()` adds back any column
 |---|---|---|
 | `Dashboard` | formulas | first tab; see below |
 | `users` | id, name, phone, role, status, pw_hash, lang, created_at | role `student`/`teacher`; status `pending`/`approved`/`rejected` |
-| `class_sessions` | id, class_key, starts_at, duration_min, meet_link, updated_at | one per day, made a week ahead |
+| `class_sessions` | id, class_key, starts_at, duration_min, meet_link, curriculum, updated_at | one per day, made a week ahead; `curriculum` when the teacher picked one |
 | `checkins` | user_id, session_id, phase, mood, created_at, class, class_date | phase `before`/`after`, mood 1 to 5. `class` and `class_date` copy the session's class name and India date, for queries; the code goes by session_id |
+| `practice` | id, user_id, session_id, item, reaction, pain, note, created_at, item_name, week | how each item of a class went: reaction 1 not yet, 2 with effort, 3 steady, 4 at ease (or blank), pain 1 for "felt strain or pain". `item_name` and `week` (its Monday) copy the item's name and the class's week, for queries |
+| `library` | key, type, level, sanskrit, name, english, aliases, source | the asanas, pranayama and meditation the curricula draw on; type `asana`/`pranayama`/`meditation`, level 1 to 3, aliases comma-separated |
+| `curricula` | key, name, name_hi, name_mr, level, about, about_hi, about_mr, source | the curricula the teacher picks from; the first is the default |
+| `curriculum_items` | curriculum, position, item, dose, unit, cue, cue_hi, cue_mr | each curriculum's items in order; unit `breaths`, `seconds`, `minutes`, `rounds` or `strokes` |
 | `feedback` | id, user_id, screen, text, created_at | |
 | `shared_notes` | id, user_id, text, created_at | notes students chose to share with the teacher |
 | `tokens` (hidden) | token_hash, user_id, created_at | SHA-256 of each login token |
@@ -173,6 +181,11 @@ How values are stored: text with a leading apostrophe, so Sheets keeps `+9198765
 name starting with `=` exactly as typed (never a number, a date or a formula); times as date cells shown in India
 time (the spreadsheet's time zone is set to Asia/Kolkata); ids, moods and minutes as numbers.
 
+The curriculum tabs (`library`, `curricula`, `curriculum_items`) are filled from
+[`content/curriculum.json`](../content/curriculum.json) while they are empty, and are the owner's to edit after that:
+a new curriculum is a row in `curricula` and its items in `curriculum_items`; a new item is a row in `library`. The
+seeded curricula are a mock for the teacher to confirm (the note on `curricula`'s first cell names the sources).
+
 Editing by hand: the data tabs have a warning-only protection (Sheets asks "are you sure?"), and any edit makes the
 script drop its cache. When typing text that looks like a number or a date (a code, a phone number), start it with
 an apostrophe. Deleting a student's row leaves their check-ins in place.
@@ -181,7 +194,9 @@ an apostrophe. Deleting a student's row leaves their check-ins in place.
 
 One tab of formulas, each block a single `QUERY` (click its first cell to read it): students by status, mood per
 class (average after and before, all time), every student with their check-in count, attendance per class by date,
-mood by class and date, feedback with the student's name, and shared notes, newest first. Times show in India time.
+mood by class and date, feedback with the student's name, shared notes, items with strain or pain in the last 14
+days, and the average reaction per item, week by week (one column per week, headed by its Monday). Times show in
+India time.
 
 To extend it, add blocks anywhere, for example in column Z:
 
@@ -222,9 +237,15 @@ on the live Sheet, so as not to write rows to it; from the parts above, expect a
   at the same moment would wait about ten seconds at worst.
 - *CacheService*: values up to 100 KB, kept at most 6 hours and possibly evicted earlier. An eviction costs only
   speed, except that recent failed logins are forgotten.
-- *10 million cells per spreadsheet.* A year of the class is about 365 sessions and 7,300 check-ins, some 60,000
-  cells. Each request reads whole tabs, so reading `checkins` grows slowly with the years; after several, move old
-  rows to an archive tab.
+- *10 million cells per spreadsheet.* A year of the class is about 365 sessions, 7,300 check-ins and 70,000 practice
+  rows (below), some 760,000 cells.
+
+**The practice tab grows fastest:** about 10 students × 19 items × 7 days ≈ 1,300 rows a week, 70,000 a year. Each
+request that reads it (a student's `/home`, the after-class send, the teacher's review of a class) reads the whole tab,
+so its time grows with the rows. Measured on the Node fakes with a seeded year (69,350 rows), each of those requests
+took 0.26 to 0.27 s, against 1 ms with a fresh tab; Sheets reads cells more slowly than the fakes, so the live cost is
+higher. The remedy, once a year: copy the `practice` tab, name the copy `practice_2026`, and delete the copied rows
+from `practice` (the app reads only `practice`).
 - No triggers run on a timer, no URL fetches, no e-mail: none of those quotas apply.
 
 ## Security
@@ -268,18 +289,22 @@ On the studio laptop, Node is in `tools/node/bin` (`export PATH=$PWD/tools/node/
 The fake Sheet behaves like Sheets where it matters: a fixed grid, and text that looks like a number, a boolean, a
 date or a formula is read as one unless it starts with an apostrophe.
 
-- [`bundle.test.mjs`](test/bundle.test.mjs): `dist/` is the build of `src/` and `studio.json`; the one scope;
+- [`bundle.test.mjs`](test/bundle.test.mjs): `dist/` is the build of `src/` and the content files; the one scope;
   `setup()`; the main path.
 - [`api.test.mjs`](test/api.test.mjs): every route's rules: one teacher and the teacher code in any case, the group
   code, pending and approved, phone numbers however typed, links cleaned and both-or-neither settings, check-in
   windows, the streak, lockouts and their expiry, password resets, the invite, the week of classes.
 - [`practice.test.mjs`](test/practice.test.mjs): `/me/practice` (the sums, the days clamp, languages, rounding as
   Python's `round()`), `/me/shared` and `/teacher/shared`.
+- [`curriculum.test.mjs`](test/curriculum.test.mjs): the curriculum tabs seeded once, `/curricula` in each
+  language, each class's curriculum and its default, the after-class practice send (its window, its checks,
+  replacing), and the teacher's review of a class.
 - [`store.test.mjs`](test/store.test.mjs): the envelope, validation shapes, text kept as typed, hashed tokens and
   passwords, columns by name, ids, the lock (busy, always let go), a failure inside a route, growing tabs, the cache
   and its invalidation, the Dashboard's formulas.
 - [`parity.test.mjs`](test/parity.test.mjs): a regression snapshot, 101 requests and their recorded answers
-  ([`test/parity/`](test/parity/)); every status and every body must match.
+  ([`test/parity/`](test/parity/)); every status and every body must match. After a deliberate change to the
+  answers, `node appsscript/test/parity/record.mjs` records them again; read its diff before committing.
 
 [`scripts/smoke.mjs`](scripts/smoke.mjs) checks the deployed web app with requests that write no row:
 `SCA_WEBAPP_URL=<url> node appsscript/scripts/smoke.mjs 5`. Its failed logins use numbers that cannot be real
@@ -291,9 +316,11 @@ teacher has signed up, run it at most once a quarter of an hour.
 - [`src/`](src/): `Main.gs` (the envelope, the router, the request context and the lock), `Validate.gs` (input
   checks), `Store.gs` (tabs, encoding, the cache), `Auth.gs` (passwords, tokens, codes, phone numbers, lockouts,
   who is asking), `Studio.gs` (classes, India time, the week, the sums, WhatsApp messages), `Routes.gs` (one function
-  per route), `Setup.gs` (`setup()` and the Dashboard), `appsscript.json`.
+  per route), `Practice.gs` (the curriculum, each class's plan, how each item went), `Setup.gs` (`setup()`, the
+  curriculum seed and the Dashboard), `appsscript.json`.
 - `node appsscript/scripts/build.mjs` writes `dist/Code.gs` and `dist/appsscript.json`; `--check` fails if they are
-  out of date (the tests check this too). Commit `dist/` with every change to `src/` or the studio content.
+  out of date (the tests check this too). Commit `dist/` with every change to `src/` or to `content/studio.json`
+  and `content/curriculum.json`.
 - Only `setup`, `doGet`, `doPost` and `onEdit` are public; every other function ends in `_`, so the editor's Run menu
   lists just those four (run `setup`; the others are for the web app and the edit trigger).
 - `loadBackend()` in [`test/fakes.mjs`](test/fakes.mjs) runs Code.gs locally, as a stand-in backend for app

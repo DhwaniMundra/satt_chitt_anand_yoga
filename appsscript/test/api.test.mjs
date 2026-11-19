@@ -369,7 +369,7 @@ test('the teacher home: a week of classes, with links and counts', () => {
   const { t, code } = teacherAndCode(b);
   const home = b.call('GET', '/teacher/home', { token: t.token, query: { lang: 'mr' } }).body;
   assert.equal(home.sessions.length >= 6, true);
-  assert.deepEqual(Object.keys(home.sessions[0]), ['id', 'starts_at', 'duration_min', 'class', 'meet_link', 'has_link', 'own_link', 'joined']);
+  assert.deepEqual(Object.keys(home.sessions[0]), ['id', 'starts_at', 'duration_min', 'class', 'meet_link', 'has_link', 'own_link', 'joined', 'curriculum']);
   assert.deepEqual(home.settings, { group_link: null, group_code: code, default_meet_link: null });
   const names = home.sessions.map((x) => x.class.name);
   assert.ok(names.every((name) => /[\u0900-\u097f]/.test(name)), names.join());

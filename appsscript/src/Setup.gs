@@ -1,9 +1,10 @@
 // ---------- Setup: the tabs, the codes and the Dashboard ----------
 // Run setup() once from the script editor (it asks for permission the first time). Running it again is safe: it adds
-// what is missing and leaves the data, the codes and an existing Dashboard alone. Only the classes tab, which comes
-// from the studio constant, is written afresh.
+// what is missing and leaves the data, the codes, the curriculum and an existing Dashboard alone. Only the classes
+// tab, which comes from the studio constant, is written afresh.
 
-const DATA_TABS_ = ['users', 'class_sessions', 'checkins', 'feedback', 'shared_notes', 'tokens', 'settings'];
+const DATA_TABS_ = ['users', 'class_sessions', 'checkins', 'practice', 'feedback', 'shared_notes', 'tokens', 'settings'];
+const CURRICULUM_TABS_ = ['library', 'curricula', 'curriculum_items']; // the owner's to edit: no warning on hand edits
 const HIDDEN_TABS_ = ['tokens', 'settings']; // login-token hashes and the codes: nothing to browse
 const SETTING_NOTES_ = [
   ['teacher_code', 'The one-time code the teacher signs up with. It stops working once the teacher has an account.'],
@@ -21,7 +22,8 @@ function setup() {
   let codes;
   try {
     ss.setSpreadsheetTimeZone('Asia/Kolkata');
-    DATA_TABS_.forEach((name) => ensureTab_(ss, name));
+    DATA_TABS_.concat(CURRICULUM_TABS_).forEach((name) => ensureTab_(ss, name));
+    seedCurriculum_(ss);
     writeClassesTab_(ss);
     codes = ensureSettings_(ss);
     if (!ss.getSheetByName('Dashboard')) writeDashboard_(ss);
@@ -31,7 +33,7 @@ function setup() {
   } finally {
     lock.releaseLock();
   }
-  const message = 'Set up. Teacher sign-up code: ' + codes.teacher_code + ' (for Ramit ji, used once). Group code: ' +
+  const message = 'Set up. Teacher sign-up code: ' + codes.teacher_code + ' (for ' + STUDIO.teacher.short.en + ', used once). Group code: ' +
     codes.group_code + '. Both are kept in the hidden "settings" tab (View > Hidden sheets). ' +
     'Next: Deploy > New deployment > Web app, Execute as Me, Who has access Anyone.';
   Logger.log(message);
@@ -75,6 +77,32 @@ function writeClassesTab_(ss) {
   sheet.setFrozenRows(1);
 }
 
+/** The curriculum tabs, filled from content/curriculum.json while they are empty, with "{teacher}" in its text
+ * written as the studio names the teacher; after that the Sheet's rows are the curriculum. The curricula tab's first
+ * cell notes where the mock curriculum comes from. */
+function seedCurriculum_(ss) {
+  const pick = (text) => LANGS_.map((lang) => fill_(text[lang], { teacher: STUDIO.teacher.short[lang] }));
+  const rows = {
+    library: CURRICULUM.library.map((i) => ({ key: i.key, type: i.type, level: i.level, sanskrit: i.sanskrit, name: i.name,
+      english: i.english, aliases: i.aliases.join(', '), source: i.source })),
+    curricula: CURRICULUM.curricula.map((c) => {
+      const [name, nameHi, nameMr] = pick(c.name);
+      const [about, aboutHi, aboutMr] = pick(c.about);
+      return { key: c.key, name: name, name_hi: nameHi, name_mr: nameMr, level: c.level, about: about, about_hi: aboutHi,
+        about_mr: aboutMr, source: c.source };
+    }),
+    curriculum_items: CURRICULUM.curricula.reduce((all, c) => all.concat(c.items.map((it, i) => {
+      const [cue, cueHi, cueMr] = pick(it.cue);
+      return { curriculum: c.key, position: i + 1, item: it.item, dose: it.dose, unit: it.unit, cue: cue, cue_hi: cueHi, cue_mr: cueMr };
+    })), []),
+  };
+  CURRICULUM_TABS_.forEach((name) => {
+    const table = new Table_(ss.getSheetByName(name), name);
+    if (!table.rows.length) table.insert(rows[name]);
+  });
+  ss.getSheetByName('curricula').getRange(1, 1).setNote(fill_(CURRICULUM.about, { teacher: STUDIO.teacher.short.en }));
+}
+
 /** The teacher and group codes, made once, and a row (with a note) for each setting. */
 function ensureSettings_(ss) {
   const sheet = ss.getSheetByName('settings');
@@ -100,7 +128,7 @@ function setRow_(table, have, key, value) {
 
 function arrangeTabs_(ss) {
   const ours = { Dashboard: true, classes: true };
-  DATA_TABS_.forEach((name) => {
+  DATA_TABS_.concat(CURRICULUM_TABS_).forEach((name) => {
     ours[name] = true;
   });
   const dashboard = ss.getSheetByName('Dashboard');
@@ -146,6 +174,7 @@ function dashboardBlocks_(ss) {
   const c = columnLetters_(ss, 'checkins');
   const f = columnLetters_(ss, 'feedback');
   const n = columnLetters_(ss, 'shared_notes');
+  const p = columnLetters_(ss, 'practice');
   const users = 'users!A1:' + u._last;
   const checkins = 'checkins!A1:' + c._last;
   const col = (tab, letter) => tab + '!' + letter + '2:' + letter;
@@ -180,12 +209,21 @@ function dashboardBlocks_(ss) {
       '=IFERROR(QUERY({' + [col('shared_notes', n.created_at), nameOf('shared_notes', n.user_id), col('shared_notes', n.text)].join(', ') +
         "}, \"select Col1, Col2, Col3 where Col1 is not null order by Col1 desc label Col1 'when', Col2 'student', Col3 'note'\", 0), " +
         '"No shared notes yet")', { 'V17:V': 'yyyy-mm-dd hh:mm' }],
+    ['Z16', 'Strain or pain, last 14 days', 'Items a student marked "felt strain or pain" after class, newest first.',
+      '=IFERROR(QUERY({' + [col('practice', p.created_at), nameOf('practice', p.user_id), col('practice', p.item_name),
+        col('practice', p.note), col('practice', p.pain)].join(', ') + "}, \"select Col1, Col2, Col3, Col4 where Col5 = 1 and Col1 >= " +
+        "datetime '\" & TEXT(TODAY() - 14, \"yyyy-mm-dd hh:mm:ss\") & \"' order by Col1 desc label Col1 'when', Col2 'student', " +
+        "Col3 'item', Col4 'note'\", 0), \"No strain or pain in the last 14 days\")", { 'Z17:Z': 'yyyy-mm-dd hh:mm' }],
+    ['AE16', 'Reactions per item, week by week', 'Average reaction after class: 1 not yet, 2 with effort, 3 steady, 4 at ease. ' +
+      'One column per week, headed by its Monday.',
+      '=IFERROR(QUERY(practice!A1:' + p._last + ', "select ' + p.item_name + ', avg(' + p.reaction + ') where ' + p.reaction +
+        ' is not null group by ' + p.item_name + ' pivot ' + p.week + '", 1), "No reactions yet")', { 'AF17:CB': '0.0', 'AF16:CB16': 'd mmm' }],
   ];
 }
 
 function writeDashboard_(ss) {
   const sheet = ss.insertSheet('Dashboard');
-  if (sheet.getMaxColumns() < 26) sheet.insertColumnsAfter(sheet.getMaxColumns(), 26 - sheet.getMaxColumns());
+  if (sheet.getMaxColumns() < 80) sheet.insertColumnsAfter(sheet.getMaxColumns(), 80 - sheet.getMaxColumns());
   sheet.getRange('A1').setValue('Satt Chitt Anand: the studio at a glance').setFontWeight('bold').setFontSize(14);
   sheet.getRange('A2').setValue('Each block is one formula over the tabs; click its first cell to read or change it. Times are ' +
     'India time. Add blocks of your own anywhere: setup() never rewrites this tab (delete it and run setup again for a fresh one).');

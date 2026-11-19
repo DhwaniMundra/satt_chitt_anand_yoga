@@ -14,10 +14,11 @@ test('dist/ is the build of src/ and studio.json', () => {
   assert.equal(readFileSync(MANIFEST_PATH, 'utf8'), manifest);
 });
 
-test('the studio constant is studio.json, in a fresh build too', () => {
+test('the studio and curriculum constants are their content files, in a fresh build too', () => {
   const b = loadBackend({ code: bundle().code });
-  const studio = JSON.parse(readFileSync(join(ROOT, '..', 'content', 'studio.json'), 'utf8'));
-  assert.deepEqual(JSON.parse(b.evaluate('JSON.stringify(STUDIO)')), studio);
+  const content = (file) => JSON.parse(readFileSync(join(ROOT, '..', 'content', file), 'utf8'));
+  assert.deepEqual(JSON.parse(b.evaluate('JSON.stringify(STUDIO)')), content('studio.json'));
+  assert.deepEqual(JSON.parse(b.evaluate('JSON.stringify(CURRICULUM)')), content('curriculum.json'));
 });
 
 test('the bundle asks for this spreadsheet only', () => {
@@ -35,7 +36,8 @@ test('setup builds the tabs, makes the codes once, and can run again', () => {
   const message = b.context.setup();
   const names = b.ss.getSheets().map((s) => s.getName());
   assert.equal(names[0], 'Dashboard');
-  for (const tab of ['users', 'class_sessions', 'checkins', 'feedback', 'shared_notes', 'tokens', 'settings', 'classes']) {
+  for (const tab of ['users', 'class_sessions', 'checkins', 'feedback', 'shared_notes', 'tokens', 'settings', 'classes', 'practice',
+    'library', 'curricula', 'curriculum_items']) {
     assert.ok(names.includes(tab), tab);
   }
   assert.ok(!names.includes('Sheet1'), 'the empty first tab is removed');
