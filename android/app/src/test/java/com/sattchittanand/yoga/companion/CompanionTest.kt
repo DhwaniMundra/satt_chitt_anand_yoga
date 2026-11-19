@@ -14,6 +14,26 @@ class CompanionTest {
     private val now = Instant.parse("2026-11-19T02:00:00Z") // Thursday 19 November, 7:30 in India
 
     /** The server, as the tools see it, with a fixed week of classes. */
+    private companion object {
+        val LIBRARY = listOf(
+            ItemName("vajrasana", "वज्रासन", "Vajrasana", "Thunderbolt pose", listOf("vajrasan", "vajra", "kneeling pose")),
+            ItemName("ardha_matsyendrasana", "अर्धमत्स्येन्द्रासन", "Ardha Matsyendrasana", "Half spinal twist", emptyList()),
+            ItemName("matsyasana", "मत्स्यासन", "Matsyasana", "Fish pose", emptyList()),
+            ItemName("setu_bandhasana", "सेतुबन्धासन", "Setu Bandhasana", "Bridge pose", listOf("bridge")),
+            ItemName("shashankasana", "शशांकासन", "Shashankasana", "Hare pose", listOf("child's pose", "balasana")),
+            ItemName("dhyana", "ध्यान", "Dhyana", "Meditation", emptyList()),
+        )
+        val VAJRASANA: Map<String, Any?> = linkedMapOf(
+            "item" to "vajrasana", "in_class" to 9, "solo" to 5, "first" to "2026-10-30", "last" to "2026-11-17",
+            "reaction_trend" to linkedMapOf("early_average" to 2.0, "recent_average" to 3.7, "each" to 3),
+            "holds" to linkedMapOf("recent_seconds" to 120, "longest_seconds" to 120),
+            "strain_or_pain" to linkedMapOf("times" to 6, "last" to "2026-11-10"),
+            "teacher_said" to linkedMapOf("date" to "2026-11-16", "text" to "Much steadier this week."),
+            "your_notes" to listOf(linkedMapOf("date" to "2026-11-14", "text" to "Cushion helped")),
+            "entries" to emptyList<Any>(), "feedback" to emptyList<Any>(),
+        )
+    }
+
     private class Server(val classes: List<UpcomingClass>, val reachable: Boolean = true) : StudentData {
         val saved = mutableListOf<String>()
         var practiceAsked: Pair<Int, String>? = null
@@ -27,8 +47,8 @@ class CompanionTest {
         override fun upcoming(lang: String): List<UpcomingClass> = if (reachable) classes else error("no network")
         override fun saveNote(text: String) { saved += text }
         override fun notes() = saved.map { KeptNote(it, Instant.parse("2026-11-18T08:00:00Z")) }
-        override fun library() = listOf(ItemName("vajrasana", "वज्रासन", "Vajrasana", "Thunderbolt pose", listOf("vajrasan", "kneeling")))
-        override fun itemProgress(key: String): Map<String, Any?> = mapOf("in_class" to 0, "solo" to 0)
+        override fun library() = LIBRARY
+        override fun itemProgress(key: String): Map<String, Any?> = if (!reachable) error("no network") else VAJRASANA
     }
 
     private val week = listOf(
@@ -131,5 +151,51 @@ class CompanionTest {
         assertNull(noteToSave("Do you remember that my knee hurts?", emptyList())) // asking, not telling
         assertNull(noteToSave("What did I tell you about my knee?", emptyList()))
         assertNull(noteToSave("Remember that my knee hurts", listOf("save_my_note"))) // Gemma saved it: not twice
+    }
+
+    @Test fun aNameIsFoundHoweverItIsWritten() {
+        for (asked in listOf("Vajrasana", "vajrasan", "vajra", "Vajrāsana", "वज्रासन", "वज्र आसन", "thunderbolt pose", "Thunderbolt", "VAJRASANA POSE")) {
+            assertEquals(asked, "vajrasana", resolveItem(asked, LIBRARY))
+        }
+        assertEquals("shashankasana", resolveItem("child's pose", LIBRARY))
+        assertEquals("setu_bandhasana", resolveItem("setu bandha", LIBRARY))
+        assertEquals("matsyasana", resolveItem("matsyasana", LIBRARY)) // not the half spinal twist, whose name contains it
+        assertEquals("matsyasana", resolveItem("matsy", LIBRARY)) // its name without "asana"
+        assertEquals(null, resolveItem("s", LIBRARY)) // the start of several names: not one item
+        assertEquals(null, resolveItem("lotus", LIBRARY))
+        assertEquals("Shashankasana", closestItems("shash", LIBRARY).first())
+    }
+
+    @Test fun asanaProgressGivesTheSumsWithWeekdaysAndTheTeachersWord() {
+        val t = tools()
+        val p = t.asanaProgress("वज्रासन")
+        assertEquals("Vajrasana (वज्रासन, Thunderbolt pose)", p["asana"])
+        assertEquals(listOf(9, 5), listOf(p["in_class"], p["solo"]))
+        assertEquals("Friday 30 October", p["first"])
+        assertEquals(mapOf("early_average" to 2.0, "recent_average" to 3.7, "early" to "first 3 times", "recent" to "last 3 times"), p["reaction_trend"])
+        assertEquals(mapOf("date" to "Monday 16 November", "text" to "Much steadier this week."), p["teacher_said"])
+        assertEquals(mapOf("times" to 6, "last" to "Tuesday 10 November"), p["strain_or_pain"])
+        assertEquals(listOf("asana_progress"), t.used)
+        assertTrue(t.asanaProgress("lotus")["error"].toString().startsWith("Nothing called \"lotus\" is in the studio's list."))
+        assertEquals(mapOf("error" to "The studio server could not be reached just now, so this is not available."),
+            tools(Server(week, reachable = false)).asanaProgress("vajrasana"))
+    }
+
+    @Test fun aMessageAboutOnesOwnAsanaGetsItsProgressUpFront() {
+        for ((message, lang) in listOf("How has my Vajrasana been?" to "en", "मेरा वज्रासन कैसा चल रहा है?" to "hi", "माझे वज्रासन कसे चालले आहे?" to "mr")) {
+            val t = tools(lang = lang)
+            val system = companion.system("Asha", message, lang, t)
+            assertTrue(message, "How Vajrasana (वज्रासन, Thunderbolt pose) has gone for this student (asana_progress)" in system)
+            assertTrue("- teacher_said: {date=Monday 16 November, text=Much steadier this week.}" in system)
+            assertEquals(listOf("asana_progress"), t.used)
+        }
+        val general = tools()
+        assertFalse("not about their own practice", "(asana_progress). Answer from it" in companion.system("Asha", "Is meditation good for sleep?", "en", general))
+        assertFalse("asana_progress" in general.used)
+    }
+
+    @Test fun theSystemMessageNamesTheStudentsBatch() {
+        assertTrue("Asha practises in the Intermediate batch" in companion.system("Asha", "Hello", "en", tools(), "Intermediate"))
+        assertFalse("batch;" in companion.system("Neha", "Hello", "en", tools()))
     }
 }

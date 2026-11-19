@@ -135,10 +135,12 @@
     <string name="ask_disclaimer">Knows your classes and how you felt, and what you ask it to remember. General guidance from the studio\'s notes, not medical advice.</string>
     <string name="sugg_1">How was my practice this week?</string>
     <string name="sugg_2">Yoga for back pain?</string>
-    <string name="sugg_3">Which class suits me tomorrow?</string>
+    <string name="sugg_3">When is my next class?</string>
     <string name="sugg_4">What does Sat Chit Ananda mean?</string>
+    <string name="sugg_asana">How is my %1$s going?</string>
     <string name="chat_clear">Clear</string>
     <string name="tool_practice">Looked at your practice</string>
+    <string name="tool_progress">Looked at that asana</string>
     <string name="tool_schedule">Checked the schedule</string>
     <string name="tool_notes">Read the studio notes</string>
     <string name="tool_saved">Saved a note</string>

@@ -294,12 +294,14 @@ class Tools(private val data: StudentData, private val notes: StudioNotes, priva
 /** The system message, with the coming classes and the matching notes handed over up front. */
 class PracticeCompanion(val notes: StudioNotes, private val studioName: String, private val teacher: String) {
 
-    fun system(firstName: String, message: String, lang: String, tools: Tools): String {
+    /** The system message for [message]; [batch] is the name of the student's batch, once the teacher has placed them. */
+    fun system(firstName: String, message: String, lang: String, tools: Tools, batch: String? = null): String {
         val base = SYSTEM.replace("{studio}", studioName).replace("{name}", firstName).replace("{teacher}", teacher)
             .replace("{language}", LANGUAGE_NAMES.getValue(lang))
+        val placed = batch?.let { "\n\n$firstName practises in the $it batch; their classes are that batch's, and a move to another batch is $teacher's to decide." }.orEmpty()
         val progress = preloadedProgress(message, tools)
         val schedule = preloadedSchedule(message, tools)
-        return base + progress + schedule + preloadedNotes(message, lang, tools.used, schedule = schedule.isNotEmpty())
+        return base + placed + progress + schedule + preloadedNotes(message, lang, tools.used, schedule = schedule.isNotEmpty())
     }
 
     /** How the asana a message about the student's own practice names has gone, as text for the system message (or

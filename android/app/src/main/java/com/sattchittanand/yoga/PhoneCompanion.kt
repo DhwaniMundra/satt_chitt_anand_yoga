@@ -36,14 +36,14 @@ class PhoneCompanion(context: Context, private val api: Api, studio: JSONObject)
         )
     }
 
-    /** The reply to [message]; [history] holds the earlier messages, oldest first. Emergency signs get the fixed
-     *  reply first, with no model. Never throws: if Gemma fails, the reply says so. */
-    suspend fun answer(user: User, store: LocalStore, message: String, lang: String, history: List<ChatLine>): ChatLine {
+    /** The reply to [message]; [history] holds the earlier messages, oldest first, and [batch] names the student's
+     *  batch. Emergency signs get the fixed reply first, with no model. Never throws: if Gemma fails, the reply says so. */
+    suspend fun answer(user: User, store: LocalStore, message: String, lang: String, history: List<ChatLine>, batch: String?): ChatLine {
         if (isUrgent(message)) return ChatLine(URGENT_REPLY.getValue(lang), fromStudent = false, urgent = true)
         return try {
             val tools = Tools(Data(api, store), companion.notes, lang)
             val firstName = user.name.trim().split(Regex("\\s+")).first()
-            val system = withContext(Dispatchers.IO) { companion.system(firstName, message, lang, tools) }
+            val system = withContext(Dispatchers.IO) { companion.system(firstName, message, lang, tools, batch) }
             val earlier = history.takeLast(HISTORY_TURNS).map { it.fromStudent to it.text }
             val text = gemma.reply(system, earlier, message, tools.toolSets(), banForeign = lang == "mr")
             check(text.isNotBlank()) { "empty reply" }

@@ -61,6 +61,7 @@ import java.util.Locale
 /** What a reply says it did, for each of the companion's tools. */
 private val TOOL_LABELS = mapOf(
     "get_my_practice" to R.string.tool_practice,
+    "asana_progress" to R.string.tool_progress,
     "get_upcoming_classes" to R.string.tool_schedule,
     "search_studio_notes" to R.string.tool_notes,
     "save_my_note" to R.string.tool_saved,
@@ -74,7 +75,10 @@ private fun gb(bytes: Long) = String.format(Locale.US, "%.1f GB", bytes / 1e9)
 @Composable
 fun AskScreen(vm: AppViewModel) {
     val gemma by vm.gemma.state.collectAsState()
-    LaunchedEffect(Unit) { vm.gemma.refresh() }
+    LaunchedEffect(Unit) {
+        vm.gemma.refresh()
+        vm.loadItems()
+    }
     Column(Modifier.fillMaxSize()) {
         when (val state = gemma) {
             is GemmaState.TooLittleMemory -> Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -125,7 +129,10 @@ private fun ColumnScope.Chat(vm: AppViewModel, gemma: GemmaState) {
                 }
                 GemmaCard(gemma, vm)
                 if (open && ready && vm.chat.isEmpty()) {
-                    val suggestions = listOf(R.string.sugg_1, R.string.sugg_2, R.string.sugg_3, R.string.sugg_4).map { stringResource(it) }
+                    // The student's own item that most needs attention, as a question about it.
+                    val mine = vm.items.firstOrNull()?.let { vm.curricula?.library?.get(it.item)?.short(vm.prefs.lang) }
+                    val suggestions = listOf(R.string.sugg_1, R.string.sugg_2, R.string.sugg_3, R.string.sugg_4).map { stringResource(it) } +
+                        listOfNotNull(mine?.let { stringResource(R.string.sugg_asana, it) })
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         suggestions.forEach { s -> SuggestionChip(onClick = { vm.ask(s) }, label = { Text(s) }) }
                     }
