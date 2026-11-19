@@ -102,16 +102,21 @@
     <string name="breathe_note">Breathe through the nose. Stop if you feel dizzy.</string>
 
     <!-- Ask -->
-    <string name="ask_title">Ask about yoga</string>
+    <string name="ask_title">Practice companion</string>
     <string name="ask_hint">Type your question…</string>
     <string name="ask_send">Send</string>
-    <string name="ask_disclaimer">General guidance from the studio\'s notes, not medical advice. For pain, illness or pregnancy, ask your doctor.</string>
+    <string name="ask_disclaimer">Knows your classes and how you felt, and what you ask it to remember. General guidance from the studio\'s notes, not medical advice.</string>
     <string name="ask_thinking">Thinking…</string>
-    <string name="sugg_1">I\'m a beginner. How do I start?</string>
+    <string name="sugg_1">How was my practice this week?</string>
     <string name="sugg_2">Yoga for back pain?</string>
-    <string name="sugg_3">What should I eat before class?</string>
+    <string name="sugg_3">Which class suits me tomorrow?</string>
     <string name="sugg_4">What does Sat Chit Ananda mean?</string>
-    <string name="sources">From the notes: %1$s</string>
+    <string name="chat_clear">Clear</string>
+    <string name="tool_practice">Looked at your practice</string>
+    <string name="tool_schedule">Checked the schedule</string>
+    <string name="tool_notes">Read the studio notes</string>
+    <string name="tool_saved">Saved a note</string>
+    <string name="tool_memory">Read your notes</string>
     <string name="urgent_label">Please get help now</string>
 
     <!-- Me -->
@@ -120,6 +125,9 @@
     <string name="streak">Day streak</string>
     <string name="mood_lift">Mood lift</string>
     <string name="mood_lift_help">How much better you feel after class, on average (−4 to +4).</string>
+    <string name="memory_title">What I remember</string>
+    <string name="memory_empty">Nothing yet. In Ask, say \"Remember that…\"</string>
+    <string name="forget_note">Forget this</string>
     <string name="research">Let the studio read my assistant questions</string>
     <string name="feedback_title">What should we improve?</string>
     <string name="feedback_hint">What worked? What was hard?</string>

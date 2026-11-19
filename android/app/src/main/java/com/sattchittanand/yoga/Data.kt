@@ -42,6 +42,7 @@ class Api(private val prefs: Prefs) {
     suspend fun get(path: String) = call("GET", path, null)
     suspend fun post(path: String, body: JSONObject = JSONObject()) = call("POST", path, body)
     suspend fun put(path: String, body: JSONObject) = call("PUT", path, body)
+    suspend fun delete(path: String) = call("DELETE", path, null)
 
     private suspend fun call(method: String, path: String, body: JSONObject?): JSONObject = withContext(Dispatchers.IO) {
         try {
@@ -75,6 +76,7 @@ class Api(private val prefs: Prefs) {
 fun JSONObject.str(key: String): String? = if (isNull(key)) null else getString(key)
 fun JSONObject.dbl(key: String): Double? = if (isNull(key)) null else getDouble(key)
 fun <T> JSONArray.map(transform: (JSONObject) -> T): List<T> = (0 until length()).map { transform(getJSONObject(it)) }
+fun JSONArray.strings(): List<String> = (0 until length()).map { getString(it) }
 
 data class User(val id: Int, val name: String, val phone: String, val role: String, val status: String, val lang: String, val researchConsent: Boolean) {
     val isTeacher get() = role == "teacher"
@@ -188,5 +190,23 @@ data class Insights(
     }
 }
 
-/** One line in the Ask conversation. `mode` is "gemma", "notes" or "urgent" for answers, null for the student's own. */
-data class ChatLine(val text: String, val fromStudent: Boolean, val mode: String? = null, val sources: List<String> = emptyList())
+/**
+ * One message in the chat with the practice companion. A reply's `tools` say what it looked at ("practice", "schedule",
+ * "notes", "saved", "memory"); its `mode` is "companion", "notes" or "urgent" (an urgent reply stays red after a
+ * restart: the server keeps the mode). The student's own messages have neither.
+ */
+data class ChatLine(val text: String, val fromStudent: Boolean, val tools: List<String> = emptyList(), val mode: String? = null) {
+    companion object {
+        fun from(o: JSONObject) = ChatLine(
+            o.getString("text"), o.getString("role") == "student", o.getJSONArray("tools").strings(),
+            o.optString("mode").takeIf { it.isNotEmpty() && o.getString("role") == "companion" },
+        )
+    }
+}
+
+/** Something the student asked the companion to remember. */
+data class Note(val id: Int, val text: String, val savedAt: Instant) {
+    companion object {
+        fun from(o: JSONObject) = Note(o.getInt("id"), o.getString("text"), Instant.parse(o.getString("created_at")))
+    }
+}

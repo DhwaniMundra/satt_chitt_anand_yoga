@@ -10,13 +10,19 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Button
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -35,6 +41,7 @@ fun MeScreen(vm: AppViewModel, onLanguage: (String) -> Unit) {
     var feedback by rememberSaveable { mutableStateOf("") }
     var server by rememberSaveable { mutableStateOf(vm.prefs.server) }
     val thanks = stringResource(R.string.feedback_thanks)
+    LaunchedEffect(user.isTeacher) { if (!user.isTeacher) vm.loadNotes() }
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text(user.name, style = MaterialTheme.typography.headlineSmall)
@@ -51,6 +58,25 @@ fun MeScreen(vm: AppViewModel, onLanguage: (String) -> Unit) {
                 StatTile(stats.moodChange?.let { String.format(Locale.US, "%+.1f", it) } ?: "–", stringResource(R.string.mood_lift), Modifier.weight(1f))
             }
             Text(stringResource(R.string.mood_lift_help), style = MaterialTheme.typography.bodyMedium, color = Palette.muted)
+        }
+
+        if (!user.isTeacher) {
+            Label(stringResource(R.string.memory_title))
+            SectionCard {
+                if (vm.notes.isEmpty()) Text(stringResource(R.string.memory_empty), style = MaterialTheme.typography.bodyMedium, color = Palette.muted)
+                vm.notes.forEachIndexed { i, note ->
+                    if (i > 0) HorizontalDivider(color = Palette.line)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(note.text, style = MaterialTheme.typography.bodyLarge)
+                            Text(dayLabel(note.savedAt), style = MaterialTheme.typography.labelMedium, color = Palette.muted)
+                        }
+                        IconButton(onClick = { vm.forgetNote(note.id) }) {
+                            Icon(Icons.Filled.Close, stringResource(R.string.forget_note), tint = Palette.muted)
+                        }
+                    }
+                }
+            }
         }
 
         Label(stringResource(R.string.language))
