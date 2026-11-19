@@ -3,7 +3,7 @@
 // what is missing and leaves the data, the codes, the curriculum and an existing Dashboard alone. Only the classes
 // tab, which comes from the studio constant, is written afresh.
 
-const DATA_TABS_ = ['users', 'class_sessions', 'checkins', 'practice', 'asana_feedback', 'feedback', 'shared_notes', 'tokens', 'settings'];
+const DATA_TABS_ = ['users', 'class_sessions', 'checkins', 'practice', 'solo_sessions', 'asana_feedback', 'feedback', 'shared_notes', 'tokens', 'settings'];
 const CURRICULUM_TABS_ = ['library', 'curricula', 'curriculum_items']; // the owner's to edit: no warning on hand edits
 const HIDDEN_TABS_ = ['tokens', 'settings']; // login-token hashes and the codes: nothing to browse
 const SETTING_NOTES_ = [
@@ -209,12 +209,12 @@ function dashboardBlocks_(ss) {
       '=IFERROR(QUERY({' + [col('shared_notes', n.created_at), nameOf('shared_notes', n.user_id), col('shared_notes', n.text)].join(', ') +
         "}, \"select Col1, Col2, Col3 where Col1 is not null order by Col1 desc label Col1 'when', Col2 'student', Col3 'note'\", 0), " +
         '"No shared notes yet")', { 'V17:V': 'yyyy-mm-dd hh:mm' }],
-    ['Z16', 'Strain or pain, last 14 days', 'Items a student marked "felt strain or pain" after class, newest first.',
+    ['Z16', 'Strain or pain, last 14 days', 'Items a student marked "felt strain or pain", after class or on their own, newest first.',
       '=IFERROR(QUERY({' + [col('practice', p.created_at), nameOf('practice', p.user_id), col('practice', p.item_name),
         col('practice', p.note), col('practice', p.pain)].join(', ') + "}, \"select Col1, Col2, Col3, Col4 where Col5 = 1 and Col1 >= " +
         "datetime '\" & TEXT(TODAY() - 14, \"yyyy-mm-dd hh:mm:ss\") & \"' order by Col1 desc label Col1 'when', Col2 'student', " +
         "Col3 'item', Col4 'note'\", 0), \"No strain or pain in the last 14 days\")", { 'Z17:Z': 'yyyy-mm-dd hh:mm' }],
-    ['AE16', 'Reactions per item, week by week', 'Average reaction after class: 1 not yet, 2 with effort, 3 steady, 4 at ease. ' +
+    ['AE16', 'Reactions per item, week by week', 'Average reaction, after class or on their own: 1 not yet, 2 with effort, 3 steady, 4 at ease. ' +
       'One column per week, headed by its Monday.',
       '=IFERROR(QUERY(practice!A1:' + p._last + ', "select ' + p.item_name + ', avg(' + p.reaction + ') where ' + p.reaction +
         ' is not null group by ' + p.item_name + ' pivot ' + p.week + '", 1), "No reactions yet")', { 'AF17:CB': '0.0', 'AF16:CB16': 'd mmm' }],

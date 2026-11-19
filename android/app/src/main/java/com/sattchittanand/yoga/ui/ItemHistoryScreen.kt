@@ -41,6 +41,13 @@ private fun reactionWord(average: Double) = stringResource(REACTIONS[(average.ro
 private fun wroteLabel(teacherViewing: Boolean) =
     if (teacherViewing) stringResource(R.string.you_wrote) else stringResource(R.string.teacher_wrote, LocalTeacher.current)
 
+/** How often, in class and solo: "9 times in class · 5 solo". */
+@Composable
+private fun timesLine(inClass: Int, solo: Int) = listOfNotNull(
+    pluralStringResource(R.plurals.times_in_class, inClass, inClass).takeIf { inClass > 0 },
+    pluralStringResource(R.plurals.times_solo, solo, solo).takeIf { solo > 0 },
+).joinToString(" · ")
+
 /** Each item a student has practised: how often, the first reactions against the latest, strain or pain, whether
  *  the teacher wrote; with [collapsed], that many until "Show all". [teacherViewing] when the teacher reads it. */
 @Composable
@@ -56,8 +63,8 @@ fun ItemList(vm: AppViewModel, items: List<ItemSummary>, teacherViewing: Boolean
             if (i > 0) HorizontalDivider(color = Palette.line)
             Column(Modifier.fillMaxWidth().clickable { open(s.item) }.padding(vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(curricula.library[s.item]?.title(vm.prefs.lang) ?: s.item, style = MaterialTheme.typography.bodyLarge)
-                Text(pluralStringResource(R.plurals.times_in_class, s.inClass, s.inClass) +
-                    (s.trend?.let { " · ${reactionWord(it.early)} → ${reactionWord(it.recent)}" } ?: ""),
+                Text(listOfNotNull(timesLine(s.inClass, s.solo).ifEmpty { null }, s.trend?.let { "${reactionWord(it.early)} → ${reactionWord(it.recent)}" })
+                    .joinToString(" · "),
                     style = MaterialTheme.typography.bodyMedium, color = Palette.muted)
                 if (s.painTimes > 0) Text(pluralStringResource(R.plurals.pain_times, s.painTimes, s.painTimes), style = MaterialTheme.typography.bodyMedium, color = Palette.danger)
                 if (s.teacherSaid != null) Text(wroteLabel(teacherViewing), style = MaterialTheme.typography.labelMedium, color = Palette.moss)
@@ -84,9 +91,10 @@ fun ItemHistoryScreen(vm: AppViewModel, item: String, student: Student?) {
         student?.let { Label(it.user.name) }
         Text(title, style = MaterialTheme.typography.headlineSmall)
         if (h == null) return@Column
-        Text(pluralStringResource(R.plurals.times_in_class, h.inClass, h.inClass) + (h.first?.let { " · " + stringResource(R.string.since, dayLabel(it)) } ?: ""),
-            style = MaterialTheme.typography.bodyLarge)
+        Text(listOfNotNull(timesLine(h.inClass, h.solo).ifEmpty { null }, h.first?.let { stringResource(R.string.since, dayLabel(it)) })
+            .joinToString(" · "), style = MaterialTheme.typography.bodyLarge)
         h.trend?.let { Text(stringResource(R.string.trend_line, reactionWord(it.early), reactionWord(it.recent)), style = MaterialTheme.typography.bodyLarge, color = Palette.moss) }
+        h.holds?.let { Text(stringResource(R.string.holds_line, stopwatch(it.longest), stopwatch(it.recent)), style = MaterialTheme.typography.bodyLarge) }
         if (h.painTimes > 0) Text(pluralStringResource(R.plurals.pain_times, h.painTimes, h.painTimes), color = Palette.danger)
         if (h.feedback.isNotEmpty()) {
             Label(wroteLabel(student != null))
@@ -98,7 +106,8 @@ fun ItemHistoryScreen(vm: AppViewModel, item: String, student: Student?) {
             }
         }
         if (student != null) {
-            OutlinedTextField(draft, { draft = it }, placeholder = { Text(stringResource(R.string.feedback_for, student.user.name)) },
+            val about = vm.curricula?.library?.get(item)?.short(vm.prefs.lang) ?: item
+            OutlinedTextField(draft, { draft = it }, placeholder = { Text(stringResource(R.string.feedback_for, student.user.name.substringBefore(' '), about)) },
                 minLines = 2, modifier = Modifier.fillMaxWidth())
             Button(onClick = { vm.sendItemFeedback(student.user.id, item, draft, sent); draft = "" }, enabled = draft.isNotBlank() && !vm.busy) {
                 Text(stringResource(R.string.send))
@@ -112,6 +121,10 @@ fun ItemHistoryScreen(vm: AppViewModel, item: String, student: Student?) {
                     Row(verticalAlignment = Alignment.Top) {
                         Text(dayLabel(e.date), Modifier.weight(0.4f), style = MaterialTheme.typography.bodyMedium, color = Palette.muted)
                         Column(Modifier.weight(0.6f)) {
+                            if (e.solo) {
+                                Text(e.heldSeconds?.let { stringResource(R.string.solo_held, stopwatch(it)) } ?: stringResource(R.string.solo),
+                                    style = MaterialTheme.typography.labelMedium, color = Palette.moss)
+                            }
                             e.reaction?.let { Text(stringResource(REACTIONS[it - 1]), style = MaterialTheme.typography.bodyLarge) }
                             if (e.pain) Text(stringResource(R.string.pain_flag), style = MaterialTheme.typography.bodyMedium, color = Palette.danger)
                             e.note?.let { Text("“$it”", style = MaterialTheme.typography.bodyMedium) }

@@ -1,7 +1,8 @@
 // ---------- Practice: the curriculum, each class's plan, how each item went, and each student's history ----------
 // The curriculum lives in three tabs (library, curricula, curriculum_items), so the owner can change it in the Sheet.
-// The teacher picks one curriculum per class; students react to its items after class, one tap each; the teacher
-// reads each student's history per item and can write feedback on an item, which the student sees with it.
+// The teacher picks one curriculum per class; students react to its items after class, one tap each, and practise
+// on their own with a stopwatch; the teacher reads each student's history per item and can write feedback on an
+// item, which the student sees with it.
 
 /** The curriculum as the Sheet holds it: the library by key, the curricula in tab order, each one's items in order. */
 function curriculum_(ctx) {
@@ -75,22 +76,50 @@ function sessionPractice_(ctx) {
   const joined = ctx.db.t('checkins').rows.some((c) => c.user_id === user.id && c.session_id === row.id && c.phase === 'before');
   if (!joined || ctx.now < end - 10 * 60000 || ctx.now > end + 12 * 3600000) throw new HttpError_(400, 'checkin_closed');
   const library = curriculum_(ctx).library;
+  const kept = saidEntries_(body.entries, library);
+  const table = ctx.db.t('practice');
+  table.remove(table.rows.filter((r) => r.user_id === user.id && r.session_id === row.id));
+  let id = table.nextId();
+  table.insert(kept.map((e) => ({ id: id++, user_id: user.id, session_id: row.id, item: e.item, reaction: e.reaction, pain: e.pain,
+    note: e.note, created_at: ctx.now, item_name: library[e.item].name, week: mondayOf_(row.starts_at) })));
+  return { ok: true, saved: kept.length };
+}
+
+/** Practice on the student's own: each item with the stopwatch's seconds, how it went, strain or pain and a note. The
+ * server dates it: the session ends now and began `minutes` ago. Items with nothing timed or said are not kept. */
+function soloPractice_(ctx) {
+  const user = member_(ctx);
+  const { body } = ctx.check({ body: BODY_.solo });
+  const library = curriculum_(ctx).library;
+  const kept = saidEntries_(body.entries, library);
+  if (!kept.length) throw new HttpError_(400, 'nothing_said');
+  const started = ctx.now - body.minutes * 60000;
+  const solo = ctx.db.t('solo_sessions');
+  const row = solo.insert([{ id: solo.nextId(), user_id: user.id, started_at: started, ended_at: ctx.now }])[0];
+  const table = ctx.db.t('practice');
+  let id = table.nextId();
+  table.insert(kept.map((e) => ({ id: id++, user_id: user.id, solo_id: row.id, item: e.item, hold_s: e.hold_s || null,
+    reaction: e.reaction, pain: e.pain, note: e.note, created_at: ctx.now, item_name: library[e.item].name, week: mondayOf_(started) })));
+  return { ok: true, id: row.id, saved: kept.length };
+}
+
+/** The entries worth keeping, one per item (the last wins), notes trimmed: those with a reaction, strain or pain, a
+ * note or a timed hold. An item outside the library is 400 unknown_item. */
+function saidEntries_(entries, library) {
   const byItem = {};
-  body.entries.forEach((e) => {
+  entries.forEach((e) => {
     if (!library[e.item]) throw new HttpError_(400, 'unknown_item');
     byItem[e.item] = e;
   });
-  const kept = Object.keys(byItem).map((k) => byItem[k])
+  return Object.keys(byItem).map((k) => byItem[k])
     .map((e) => Object.assign({}, e, { note: e.note === null ? null : e.note.trim() || null }))
-    .filter((e) => e.reaction !== null || e.pain === 1 || e.note !== null);
-  const table = ctx.db.t('practice');
-  table.remove(table.rows.filter((r) => r.user_id === user.id && r.session_id === row.id));
-  const day = istDay_(row.starts_at);
-  const week = istMidnight_(day - ((day + 3) % 7)); // the Monday of the class's week
-  let id = table.nextId();
-  table.insert(kept.map((e) => ({ id: id++, user_id: user.id, session_id: row.id, item: e.item, reaction: e.reaction, pain: e.pain,
-    note: e.note, created_at: ctx.now, item_name: library[e.item].name, week: week })));
-  return { ok: true, saved: kept.length };
+    .filter((e) => e.reaction !== null || e.pain === 1 || e.note !== null || Boolean(e.hold_s));
+}
+
+/** The Monday (midnight in India) of the week a moment falls in. */
+function mondayOf_(ms) {
+  const day = istDay_(ms);
+  return istMidnight_(day - ((day + 3) % 7));
 }
 
 /** How a class went, item by item, for the teacher: the reactions counted (not yet, with effort, steady, at ease),
@@ -134,14 +163,16 @@ function classReview_(ctx) {
 
 // ---------- each student's history per item, and the teacher's feedback on it ----------
 
-/** How one student's practice of one item has gone, worked out in code from its rows: the times in class, the
- * reaction trend (the first reactions against the latest, up to three of each), strain or pain, the teacher's latest
- * feedback, the student's notes, and every entry and piece of feedback, newest first. */
-function itemProgress_(item, rows, feedback, sessions) {
+/** How one student's practice of one item has gone, worked out in code from its rows: the times in class and on their
+ * own, the reaction trend (the first reactions against the latest, up to three of each), the holds timed on their own,
+ * strain or pain, the teacher's latest feedback, the student's notes, and every entry and piece of feedback, newest
+ * first. [when] gives a row's moment: its class's start, or its solo session's. */
+function itemProgress_(item, rows, feedback, when) {
   const entries = rows
-    .filter((r) => sessions[r.session_id])
-    .map((r) => ({ at: sessions[r.session_id].starts_at, reaction: r.reaction, pain: r.pain === 1, note: r.note }))
+    .map((r) => ({ at: when(r), solo: r.solo_id !== null, hold: r.hold_s, reaction: r.reaction, pain: r.pain === 1, note: r.note }))
+    .filter((e) => e.at !== null)
     .sort((a, b) => a.at - b.at);
+  const holds = entries.filter((e) => e.hold).map((e) => e.hold);
   const said = feedback.slice().sort((a, b) => a.created_at - b.created_at || a.id - b.id);
   const reactions = entries.filter((e) => e.reaction !== null).map((e) => e.reaction);
   const k = Math.min(3, Math.floor(reactions.length / 2));
@@ -149,14 +180,17 @@ function itemProgress_(item, rows, feedback, sessions) {
   const latest = said[said.length - 1];
   return {
     item: item,
-    in_class: entries.length,
+    in_class: entries.filter((e) => !e.solo).length,
+    solo: entries.filter((e) => e.solo).length,
     first: entries.length ? istDate_(entries[0].at) : null,
     last: entries.length ? istDate_(entries[entries.length - 1].at) : null,
     reaction_trend: k ? { early_average: average1_(reactions.slice(0, k)), recent_average: average1_(reactions.slice(-k)), each: k } : null,
+    holds: holds.length ? { recent_seconds: holds[holds.length - 1], longest_seconds: Math.max.apply(null, holds) } : null,
     strain_or_pain: { times: pains.length, last: pains.length ? istDate_(pains[pains.length - 1].at) : null },
     teacher_said: latest ? { date: istDate_(latest.created_at), text: latest.text } : null,
     your_notes: entries.filter((e) => e.note).slice(-5).map((e) => ({ date: istDate_(e.at), text: e.note })),
-    entries: entries.slice().reverse().map((e) => ({ date: istDate_(e.at), reaction: e.reaction, pain: e.pain ? 1 : 0, note: e.note })),
+    entries: entries.slice().reverse().map((e) => ({ date: istDate_(e.at), kind: e.solo ? 'solo' : 'class', hold_s: e.hold,
+      reaction: e.reaction, pain: e.pain ? 1 : 0, note: e.note })),
     feedback: said.slice().reverse().map((f) => ({ date: istDate_(f.created_at), text: f.text })),
   };
 }
@@ -172,29 +206,37 @@ function progressByItem_(ctx, userId) {
     if (f.student_id === userId) (feedback[f.item] || (feedback[f.item] = [])).push(f);
   });
   const sessions = sessionsById_(ctx);
+  const solos = {};
+  ctx.db.t('solo_sessions').rows.forEach((s) => {
+    if (s.user_id === userId) solos[s.id] = s;
+  });
+  const when = (r) => {
+    const at = r.solo_id !== null ? solos[r.solo_id] && solos[r.solo_id].started_at : sessions[r.session_id] && sessions[r.session_id].starts_at;
+    return at === undefined ? null : at;
+  };
   const out = {};
   Object.keys(rows).concat(Object.keys(feedback)).forEach((item) => {
-    if (!out[item]) out[item] = itemProgress_(item, rows[item] || [], feedback[item] || [], sessions);
+    if (!out[item]) out[item] = itemProgress_(item, rows[item] || [], feedback[item] || [], when);
   });
   return out;
 }
 
-/** For the Practice tab: each item with its count and trend. What needs attention comes first: items with strain or
+/** For the Practice tab: each item with its counts and trend. What needs attention comes first: items with strain or
  * pain, then those the teacher wrote on (the latest first), then the rest, the most practised first. */
 function itemList_(ctx, userId) {
   const all = progressByItem_(ctx, userId);
   return {
     items: Object.keys(all).map((item) => {
       const p = all[item];
-      return { item: item, in_class: p.in_class, last: p.last, reaction_trend: p.reaction_trend, pain_times: p.strain_or_pain.times,
-        teacher_said: p.teacher_said ? p.teacher_said.date : null };
+      return { item: item, in_class: p.in_class, solo: p.solo, last: p.last, reaction_trend: p.reaction_trend,
+        pain_times: p.strain_or_pain.times, teacher_said: p.teacher_said ? p.teacher_said.date : null };
     }).sort((a, b) => (b.pain_times > 0) - (a.pain_times > 0) || (b.teacher_said || '').localeCompare(a.teacher_said || '') ||
-      b.in_class - a.in_class || a.item.localeCompare(b.item)),
+      b.in_class + b.solo - a.in_class - a.solo || a.item.localeCompare(b.item)),
   };
 }
 
 function oneItem_(ctx, userId, item) {
-  return progressByItem_(ctx, userId)[item] || itemProgress_(item, [], [], {});
+  return progressByItem_(ctx, userId)[item] || itemProgress_(item, [], [], () => null);
 }
 
 /** The student the teacher asks about, or 404 no_student. */

@@ -25,10 +25,11 @@ test('the practice summary does the sums for one student', () => {
   assert.deepEqual(week.by_class['Hatha Yoga'], { times: 2, average_mood_before: 3, average_mood_after: 4.5 });
   assert.equal(week.by_class.Pranayama.average_mood_after, null);
   assert.deepEqual(Object.keys(week.by_class), ['Hatha Yoga', 'Pranayama']); // in the order first met, oldest first
-  assert.deepEqual(Object.keys(week), ['period_days', 'classes_joined', 'mood_scale', 'average_mood_before', 'average_mood_after', 'by_class', 'classes']);
+  assert.deepEqual(Object.keys(week), ['period_days', 'classes_joined', 'mood_scale', 'average_mood_before', 'average_mood_after', 'by_class', 'classes', 'solo']);
   assert.equal(week.mood_scale, '1 very low to 5 great');
   assert.deepEqual(week.classes.map((c) => [c.class, c.mood_before, c.mood_after]), [['Hatha Yoga', 3, 5], ['Pranayama', 2, null], ['Hatha Yoga', 3, 4]]);
   assert.match(week.classes[0].date, /^\d{4}-\d\d-\d\d$/); // the India date, ISO
+  assert.ok(week.classes.every((c) => c.curriculum === 'beginner'), 'each class with its curriculum, for repeating it alone');
 });
 
 test('the practice route is the summary for the signed-in student only', () => {
@@ -60,7 +61,7 @@ test('the practice is for members and the teacher', () => {
   assert.deepEqual(b.call('GET', '/me/practice', { token: pending.token, query: { days: 'bad' } }).body, { detail: 'pending' }); // who, before what
   const teacher = b.call('GET', '/me/practice', { token: t.token }).body;
   assert.deepEqual(new Set(Object.keys(teacher)),
-    new Set(['period_days', 'classes_joined', 'mood_scale', 'average_mood_before', 'average_mood_after', 'by_class', 'classes']));
+    new Set(['period_days', 'classes_joined', 'mood_scale', 'average_mood_before', 'average_mood_after', 'by_class', 'classes', 'solo']));
   assert.equal(teacher.average_mood_before, null);
   assert.deepEqual(teacher.by_class, {});
 });
