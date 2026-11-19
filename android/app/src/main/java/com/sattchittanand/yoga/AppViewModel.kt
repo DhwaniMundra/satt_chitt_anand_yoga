@@ -207,13 +207,14 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         readItems(null)
     }
 
-    /** After class: the mood, if picked, and how each item went, if anything was said. */
-    fun sendAfterClass(sessionId: Int, mood: Int?, items: List<ItemFeedback>, done: () -> Unit) = launchCall {
+    /** After class: the mood, if picked, and how each item went, if anything was said; [changing] what was said before. */
+    fun sendAfterClass(sessionId: Int, mood: Int?, items: List<ItemFeedback>, changing: Boolean, done: () -> Unit) = launchCall {
         if (mood != null) {
             stats = Stats.from(api.post("/sessions/$sessionId/checkin", JSONObject().put("phase", "after").put("mood", mood)).getJSONObject("stats"))
         }
         val said = items.filter { it.said }
-        if (said.isNotEmpty()) api.post("/sessions/$sessionId/practice", JSONObject().put("entries", JSONArray(said.map { it.json() })))
+        // Changing what was said replaces all of it, even with nothing, so an item cleared is cleared on the server too.
+        if (said.isNotEmpty() || changing) api.post("/sessions/$sessionId/practice", JSONObject().put("entries", JSONArray(said.map { it.json() })))
         home = Home.from(api.get("/home?lang=${prefs.lang}"))
         done()
     }
@@ -325,7 +326,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Where a student's practice per item is read: the student's own, or [studentId]'s for the teacher. */
     private fun itemsPath(studentId: Int?) = if (studentId == null) "/me/asanas" else "/teacher/students/$studentId/asanas"
 
-    fun loadItems(studentId: Int? = null) = launchCall { readItems(studentId) }
+    fun loadItems(studentId: Int? = null) = launchCall {
+        items = emptyList() // not the last student's list while this one loads
+        readItems(studentId)
+    }
 
     private suspend fun readItems(studentId: Int?) {
         items = api.get(itemsPath(studentId)).getJSONArray("items").map(ItemSummary::from)
@@ -349,7 +353,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun loadInsights() = launchCall {
-        insights = Insights.from(api.get("/teacher/insights"))
+        insights = Insights.from(api.get("/teacher/insights?lang=${prefs.lang}"))
         loadSharedNotes() // the "Notes shared" tile
     }
 

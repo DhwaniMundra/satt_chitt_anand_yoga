@@ -56,18 +56,18 @@ fun PracticeScreen(vm: AppViewModel) {
         vm.loadPractice()
         vm.loadItems()
     }
-    val stats = vm.stats ?: return
+    val stats = vm.stats ?: return Waiting(vm, vm::refresh)
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text(stringResource(R.string.my_practice), style = MaterialTheme.typography.headlineSmall)
         Button(onClick = { choosing = true }, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.practise_alone)) }
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            StatTile(stats.classesJoined.toString(), stringResource(R.string.classes_joined), Modifier.weight(1f))
-            StatTile(stats.streakDays.toString(), stringResource(R.string.streak), Modifier.weight(1f))
-            StatTile(stats.moodChange?.let { String.format(Locale.US, "%+.1f", it) } ?: "–", stringResource(R.string.mood_lift), Modifier.weight(1f))
-        }
+        StatTiles(
+            stats.classesJoined.toString() to stringResource(R.string.classes_joined),
+            stats.streakDays.toString() to stringResource(R.string.streak),
+            (stats.moodChange?.let { String.format(Locale.US, "%+.1f", it) } ?: "–") to stringResource(R.string.mood_lift),
+        )
         Text(stringResource(R.string.mood_lift_help), style = MaterialTheme.typography.bodyMedium, color = Palette.muted)
         Label(stringResource(R.string.each_item))
-        ItemList(vm, vm.items, teacherViewing = false, collapsed = 6) { open = it }
+        ItemList(vm, vm.items, teacherViewing = false, reload = { vm.loadItems() }, collapsed = 6) { open = it }
         val days = (vm.practice.map { it.date } + vm.soloSessions.map { it.date }).distinct().sortedDescending()
         if (days.isNotEmpty()) {
             Label(stringResource(R.string.last_two_weeks))
