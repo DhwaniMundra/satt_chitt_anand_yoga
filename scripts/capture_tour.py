@@ -19,6 +19,7 @@ about her own asana, Me with a health note shared, and Hindi and Marathi (07-20)
 Usage: python3 scripts/capture_tour.py v1.0
 """
 
+import re
 import subprocess
 import sys
 import time
@@ -97,6 +98,7 @@ def tour(version: str) -> None:
     p.tap_under("Surya Namaskar", "Add a note")
     p.type_under("Surya Namaskar", "Wrists ached in the plank; rested after round three")
     p.tap_under("Virabhadrasana", "At ease")
+    card_to_top("Sectional")  # the first item's card starts the screen, the mood card above it out of sight
     shot("05a_after_class_items")
     tap_scrolling("Done", exact=True)
     time.sleep(2)
@@ -135,6 +137,7 @@ def tour(version: str) -> None:
     shot("26_teacher_batches")
     p.tap("Students", exact=True)
     time.sleep(2)
+    bring("Neha Rao", 250)  # her whole card, below the shared notes: her name down to the approve button
     shot("27_students_waiting")  # the waiting student's answers and the batch they point to
     p.tap("See all", exact=True)
     time.sleep(1)
@@ -316,6 +319,25 @@ def bring(text: str, y: int) -> None:
     _, at = p.center(p.find(text))
     p.adb("shell", "input", "swipe", "540", "1200", "540", str(max(150, min(2200, 1200 + y - at))), "1500")
     time.sleep(1)
+
+
+def card_to_top(text: str) -> None:
+    """Scrolls so the card holding `text` starts one list gap below the top of the scrolling content: the row above
+    it is out of sight, not cut through. A slow swipe, measured again and corrected."""
+    for _ in range(3):
+        found = p.nodes()
+        bounds = lambda n: [int(v) for v in re.findall(r"\d+", n.get("bounds"))]  # noqa: E731
+        top = min(bounds(n)[1] for n, _ in found if n.get("scrollable") == "true")
+        title = next(n for n, _ in found if text in (n.get("text") or ""))
+        # The card's top: its title less the card's padding (20 dp), at the phone's 2.625 pixels to the dp.
+        card = bounds(title)[1] - 54
+        gap = 31  # the list's 12 dp between rows
+        move = top + gap - card
+        if abs(move) < 4:
+            return
+        slop = 21 if move > 0 else -21  # the first 8 dp of a drag only start it
+        p.adb("shell", "input", "swipe", "540", "1500", "540", str(1500 + move + slop), "2000")
+        time.sleep(1)
 
 
 def make_small(video: Path, small: Path) -> None:
