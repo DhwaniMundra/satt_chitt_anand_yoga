@@ -128,12 +128,11 @@ def run(version: str, teacher_code: str) -> None:
     shot("02_teacher_share")
     p.back()
 
-    # 2. Student A signs up with the group code, waits, and tells the teacher about herself.
+    # 2. Student A signs up with the group code and tells the teacher about herself, then waits to be placed.
     on(STUDENT)
     sign_up("Asha (test)", "9800000102", group_code)
-    check("student with the group code waits to be placed", "Waiting for")
-    shot("03_student_waiting")
-    p.tap(f"Tell {p.TEACHER_NAME} about yourself")
+    check("the intake opens after sign-up, saying first who sees it", f"These answers go to {p.TEACHER_NAME}")
+    shot("03_student_intake")
     p.type_into("Age", "34")
     p.type_into("Height (cm)", "160")
     p.type_into("Weight (kg)", "58")
@@ -147,9 +146,10 @@ def run(version: str, teacher_code: str) -> None:
             break
         except TimeoutError:
             p.scroll_down()
-    shot("04_student_intake")
+    shot("04_student_intake_sent")
     p.tap(f"Send to {p.TEACHER_NAME}", exact=True)
     check("the answers are sent", f"{p.TEACHER_NAME} will place you soon")
+    check("then she waits to be placed", "Waiting for")
 
     # 3. The teacher sees her answers and approves her into the batch they point to.
     on(TEACHER)
@@ -215,7 +215,9 @@ def run(version: str, teacher_code: str) -> None:
     p.hide_keyboard()
     p.tap("Create account", exact=True, last=True)
     time.sleep(3)
-    check("with the code, she waits to be placed", "Waiting for")
+    check("with the code, she is asked about herself", f"These answers go to {p.TEACHER_NAME}")
+    p.tap("Back", exact=True)  # the intake's back arrow: she can answer later, from Me
+    check("and waits to be placed", "Waiting for")
     on(TEACHER)
     p.tap("Students", exact=True)
     time.sleep(2)

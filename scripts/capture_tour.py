@@ -6,8 +6,8 @@ Needs: `source scripts/env.sh`, the 6 GB emulator running (SCA_AVD=sca_phone_big
 Gemma downloaded in Ask, and nothing else on port 8000. The tour starts the dev backend on a fresh copy of the
 synthetic demo (data/tour.json), where today's 8:00 Intermediate class has three students who joined; Asha says how it
 went, so run the tour after that class and within 12 hours of it (9:00 to 20:55 in India). It adds an Intermediate class
-starting in 20 minutes, for the before-class check-in, and starts the app signed out with no chat or notes, so a second
-run shows the same screens.
+under way, for the before-class check-in, and starts the app signed out with no chat or notes, so a second run shows the
+same screens.
 
 The student, Asha (Intermediate): Today, joining, how the class went, the Practice tab and an asana's history, a
 practice on her own with the stopwatch, Ask about her own asana, Me, then Hindi and Marathi. Neha, waiting to be
@@ -36,7 +36,9 @@ TEACHER = ("9800000001", "demo123")
 
 def main(version: str) -> None:
     with p.dev_backend(ROOT / "data" / "tour.json", demo=True):
-        p.add_class("intermediate", 20)  # its check-in is open; Asha skips the mood, so it stays out of Insights
+        # Under way 5 minutes (the schedule drops a made-up class still to come): the check-in is open, the after-class
+        # question not yet. Asha skips the mood, so it stays out of Insights.
+        p.add_class("intermediate", -5)
         tour(version)
 
 
