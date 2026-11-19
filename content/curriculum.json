@@ -126,6 +126,25 @@
         {"item": "dhyana", "dose": 10, "unit": "minutes", "cue": {"en": "Sit tall and still; return to the breath.", "hi": "सीधे और स्थिर बैठें; साँस पर लौटें।", "mr": "ताठ आणि स्थिर बसा; श्वासाकडे परत या."}},
         {"item": "shavasana", "dose": 5, "unit": "minutes", "cue": {"en": "Let the body be heavy; watch the breath.", "hi": "शरीर को भारी होने दें; साँस को देखें।", "mr": "शरीर जड होऊ द्या; श्वास पाहा."}}
       ]
+    },
+    {
+      "key": "pain_management", "level": 1,
+      "name": {"en": "Pain management", "hi": "दर्द प्रबंधन", "mr": "वेदना व्यवस्थापन"},
+      "about": {"en": "Gentle and supported, for knee, back and neck pain. Every item has an easier variant; stop at any sharp pain and tell {teacher} what hurts. Not a treatment: follow your doctor's advice.", "hi": "कोमल और सहारे के साथ, घुटने, पीठ और गर्दन के दर्द के लिए। हर आसन का आसान रूप है; तेज़ दर्द हो तो रुकें और {teacher} को बताएँ कि कहाँ दर्द है। यह इलाज नहीं है: अपने डॉक्टर की सलाह मानें।", "mr": "सौम्य आणि आधारासह, गुडघा, पाठ आणि मानदुखीसाठी. प्रत्येक आसनाचा सोपा प्रकार आहे; तीव्र वेदना झाल्यास थांबा आणि {teacher} यांना काय दुखते ते सांगा. हा उपचार नाही: तुमच्या डॉक्टरांचा सल्ला पाळा."},
+      "source": "Common Yoga Protocol (Ministry of AYUSH), its supine and seated practices; Bihar School of Yoga, Asana Pranayama Mudra Bandha (the pawanmuktasana series for the joints); Swami Kuvalayananda, Asanas (Kaivalyadhama), for the relaxing asanas",
+      "items": [
+        {"item": "sectional_breathing", "dose": 3, "unit": "minutes", "cue": {"en": "Lying down, knees bent and feet on the floor; belly, ribs, then chest.", "hi": "लेटकर, घुटने मोड़कर पैर ज़मीन पर; पेट, पसलियाँ, फिर छाती।", "mr": "झोपून, गुडघे वाकवून पाय जमिनीवर; पोट, बरगड्या, मग छाती."}},
+        {"item": "pavanamuktasana", "dose": 5, "unit": "breaths", "cue": {"en": "Each side, one knee at a time. Hold under the thigh, not over the knee; no pulling.", "hi": "दोनों ओर, एक-एक घुटना। जाँघ के नीचे से पकड़ें, घुटने के ऊपर से नहीं; खींचें नहीं।", "mr": "दोन्ही बाजूंनी, एकेक गुडघा. मांडीखाली धरा, गुडघ्यावर नाही; ओढू नका."}},
+        {"item": "setu_bandhasana", "dose": 5, "unit": "breaths", "cue": {"en": "Half bridge: lift the hips a hand's width, feet hip-width apart. Come down at any back or knee pain.", "hi": "आधा सेतु: कूल्हे एक हथेली भर उठाएँ, पैर कूल्हों जितने खुले। पीठ या घुटने में दर्द हो तो नीचे आ जाएँ।", "mr": "अर्धा सेतू: कंबर एक तळहाताइतकी उचला, पाय कंबरेइतके अंतरावर. पाठ किंवा गुडघा दुखल्यास खाली या."}},
+        {"item": "makarasana", "dose": 2, "unit": "minutes", "cue": {"en": "Rest face down, forehead on the hands; let the low back settle.", "hi": "पेट के बल आराम, माथा हथेलियों पर; कमर को ढीला होने दें।", "mr": "पोटावर विश्रांती, कपाळ हातांवर; कंबर सैल होऊ द्या."}},
+        {"item": "bhujangasana", "dose": 3, "unit": "rounds", "cue": {"en": "Low cobra on the forearms (sphinx); lift only as far as is easy, with no pain in the back.", "hi": "कोहनियों पर नीचा भुजंगासन; उतना ही उठें जितना आसान हो, पीठ में दर्द न हो।", "mr": "कोपरांवर कमी उंचीचे भुजंगासन; जितके सहज तितकेच उचला, पाठ दुखू नये."}},
+        {"item": "shalabhasana", "dose": 3, "unit": "rounds", "cue": {"en": "One leg at a time, a small lift; hips stay on the floor.", "hi": "एक-एक पैर, थोड़ा-सा उठाएँ; कूल्हे ज़मीन पर रहें।", "mr": "एकेक पाय, थोडासा उचला; कंबर जमिनीवरच राहू द्या."}},
+        {"item": "vakrasana", "dose": 5, "unit": "breaths", "cue": {"en": "Each side, seated on a chair or a cushion. Turn gently from the belly; never force the neck.", "hi": "दोनों ओर, कुर्सी या गद्दी पर बैठकर। पेट से धीरे मुड़ें; गर्दन पर ज़ोर न डालें।", "mr": "दोन्ही बाजूंनी, खुर्चीवर किंवा उशीवर बसून. पोटापासून हळू वळा; मानेवर जोर देऊ नका."}},
+        {"item": "tadasana", "dose": 5, "unit": "breaths", "cue": {"en": "Stand by a wall or a chair for support; weight even on both feet, knees soft, not locked.", "hi": "सहारे के लिए दीवार या कुर्सी के पास खड़े हों; दोनों पैरों पर बराबर भार, घुटने ढीले, कसे नहीं।", "mr": "आधारासाठी भिंतीजवळ किंवा खुर्चीजवळ उभे राहा; दोन्ही पायांवर समान भार, गुडघे सैल, ताठ नाही."}},
+        {"item": "nadi_shodhana", "dose": 5, "unit": "rounds", "cue": {"en": "Sit as is comfortable, on a chair if the knees or back ask; slow and even, no holding.", "hi": "जैसे आराम हो वैसे बैठें, घुटने या पीठ कहें तो कुर्सी पर; धीमी और बराबर, रोकें नहीं।", "mr": "आरामात बसा, गुडघे किंवा पाठ सांगत असल्यास खुर्चीवर; संथ आणि समान, रोखू नका."}},
+        {"item": "bhramari", "dose": 5, "unit": "rounds", "cue": {"en": "A soft hum on the out-breath; let the jaw and shoulders go.", "hi": "छोड़ती साँस के साथ धीमी गुंजन; जबड़ा और कंधे ढीले छोड़ें।", "mr": "सोडत्या श्वासासोबत हलका गुंजारव; जबडा आणि खांदे सैल सोडा."}},
+        {"item": "shavasana", "dose": 5, "unit": "minutes", "cue": {"en": "A cushion under the knees eases the back; a folded cloth under the head eases the neck.", "hi": "घुटनों के नीचे गद्दी पीठ को आराम देती है; सिर के नीचे मुड़ा कपड़ा गर्दन को।", "mr": "गुडघ्यांखाली उशी पाठीला आराम देते; डोक्याखाली घडी केलेले कापड मानेला."}}
+      ]
     }
   ]
 }

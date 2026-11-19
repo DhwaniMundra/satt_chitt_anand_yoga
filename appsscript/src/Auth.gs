@@ -163,5 +163,6 @@ function signIn_(ctx, user) {
 }
 
 function userJson_(u) {
-  return { id: u.id, name: u.name, phone: u.phone, role: u.role, status: u.status, lang: u.lang };
+  return { id: u.id, name: u.name, phone: u.phone, role: u.role, status: u.status, lang: u.lang, batch: u.batch || null,
+    batch_since: u.batch_since ? isoTime_(u.batch_since) : null };
 }

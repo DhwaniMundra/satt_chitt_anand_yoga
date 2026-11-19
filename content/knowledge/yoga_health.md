@@ -14,16 +14,17 @@ Keywords: who are you, assistant, help, doctor, medical advice, सहायक,
 - In an emergency, call 112.
 
 ## About the studio and classes
-Keywords: studio, classes, schedule, timing, time, when, Ramit, teacher, Google Meet, Zoom, free class, कक्षा, समय, शिक्षक, वर्ग, वेळ, गुरुजी
+Keywords: studio, classes, batch, schedule, timing, time, when, Ramit, teacher, Google Meet, Zoom, free class, कक्षा, बैच, समय, शिक्षक, वर्ग, बॅच, वेळ, गुरुजी
 
 - Satt Chitt Anand Yoga Classes has run since 1994. Sat-Chit-Ananda means truth, consciousness and bliss.
-- Classes are live online, every day, 8:00 to 8:55 AM India time, on Google Meet.
-- Weekly rhythm: Monday Hatha, Tuesday Pranayama, Wednesday Vinyasa Flow, Thursday Dhyana (meditation),
-  Friday Hatha, Saturday Yoga Nidra, Sunday Satsang and open practice.
-- There is also a Beginners' Path for foundations.
+- Classes are live online on Google Meet, in four batches by level: Beginner, Intermediate, Advanced, and Pain
+  management (gentle and supported, for knee, back and neck pain). Each batch meets at its own times, shown in the app.
+- Before a student joins, the teacher learns about them and places them in a batch; students move between batches
+  as they progress.
 - The teacher is Ramit M Tippannavar, trained for more than 12 years in the Kaivalyadhama lineage, certified in
   classical Hatha and therapeutic Pranayama.
-- The first class is free. The meeting link appears in the app on the day and is shared in the WhatsApp group.
+- The first class is free. Each batch has its own meeting link, which appears in the app and is shared in the
+  WhatsApp group.
 
 ## Getting ready for an online class
 Keywords: prepare, before class, mat, camera, space, clothes, what to bring, तैयारी, चटाई, कैमरा, कपड़े, तयारी, सतरंजी, कपडे
@@ -38,8 +39,8 @@ Keywords: prepare, before class, mat, camera, space, clothes, what to bring, त
 ## Starting as a beginner
 Keywords: beginner, start, new, first time, how often, शुरुआत, नया, पहली बार, सुरुवात, नवीन, पहिल्यांदा
 
-- Start with the Beginners' Path or Hatha. Two or three classes a week is a good start; daily practice is welcome
-  when it feels comfortable.
+- Start in the batch the teacher places you in: usually Beginner, or Pain management for knee, back or neck pain. Two
+  or three classes a week is a good start; daily practice is welcome when it feels comfortable.
 - Move slowly and breathe through the nose. Never hold the breath while straining.
 - A stretch should feel like a gentle pull, never sharp pain. Ease off if anything hurts.
 - Use props. Bending the knees in forward bends is fine.
@@ -148,7 +149,7 @@ Keywords: neck pain, shoulder, desk, laptop, posture, गर्दन दर्�
 - See a doctor if neck pain comes with arm numbness, tingling or weakness, or follows an injury.
 
 ## High blood pressure and the heart
-Keywords: blood pressure, BP, hypertension, heart, cardiac, रक्तचाप, बीपी, दिल, हृदय, रक्तदाब
+Keywords: blood pressure, BP, hypertension, heart, cardiac, kapalbhati, kapalabhati, bhastrika, रक्तचाप, बीपी, दिल, हृदय, रक्तदाब
 
 - Gentle yoga, slow breathing and relaxation suit many people with controlled blood pressure, as a complement to
   the doctor's treatment, never instead of it.
