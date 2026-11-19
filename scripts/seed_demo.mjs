@@ -78,8 +78,10 @@ const SOLO = [
   [0, 11, 15, [['vajrasana', 45, 2, 1, 'Knee again after 45 seconds'], ['tadasana', 60, 3], ['bhujangasana', 20, 2]]],
   [0, 9, 20, [['vajrasana', 60, 2], ['tadasana', 60, 3], ['bhujangasana', 25, 3]]],
   [0, 6, 18, [['vajrasana', 80, 3], ['bhujangasana', 30, 3], ['trikonasana', 30, 2]]],
-  [0, 4, 25, [['vajrasana', 100, 3, 0, 'Cushion, no pain'], ['bhujangasana', 30, 3], ['trikonasana', 30, 3], ['vrikshasana', 40, 2]]],
-  [0, 2, 22, [['vajrasana', 120, 4, 0, 'Two minutes, no pain'], ['bhujangasana', 40, 4], ['trikonasana', 40, 3], ['vrikshasana', 45, 3]]],
+  [0, 4, 25, [['vajrasana', 100, 3, 0, 'Cushion, no pain'], ['bhujangasana', 30, 3], ['trikonasana', 30, 3], ['vrikshasana', 40, 2],
+    ['trataka', 180, 2, 0, 'Candle at arm\'s length; eyes watered']]], // trataka only ever on her own
+  [0, 2, 22, [['vajrasana', 120, 4, 0, 'Two minutes, no pain'], ['bhujangasana', 40, 4], ['trikonasana', 40, 3], ['vrikshasana', 45, 3],
+    ['trataka', 240, 3]]],
   [1, 8, 30, [['trikonasana', 40, 3], ['nadi_shodhana', 300, 4], ['dhyana', 600, 3]]],
   [1, 3, 25, [['trikonasana', 45, 3], ['nadi_shodhana', 300, 4], ['dhyana', 600, 4]]],
   [3, 5, 12, [['pavanamuktasana', 60, 3, 0, 'Left knee fine with hands under the thigh'], ['makarasana', 120, 4]]],
