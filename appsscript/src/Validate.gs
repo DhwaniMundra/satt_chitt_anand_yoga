@@ -39,7 +39,9 @@ const BODY_ = {
 };
 
 const QUERY_LANG_ = { lang: F_.oneOf(LANGS_, { def: 'en' }) };
-const PATH_ID_ = { id: F_.int(REQUIRED_) };
+// Named as in app.py, since a 422 names the parameter.
+const PATH_SESSION_ = { session_id: F_.int(REQUIRED_) };
+const PATH_USER_ = { user_id: F_.int(REQUIRED_) };
 
 function validateBody_(fields, body, errors) {
   if (body === null || body === undefined) {

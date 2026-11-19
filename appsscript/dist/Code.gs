@@ -289,17 +289,17 @@ function routes_() {
     ['GET', '/me/practice', myPractice_],
     ['POST', '/me/shared', shareNote_, LOCK_],
     ['GET', '/home', home_],
-    ['POST', '/sessions/{id}/checkin', checkin_, LOCK_],
+    ['POST', '/sessions/{session_id}/checkin', checkin_, LOCK_],
     ['POST', '/feedback', feedback_, LOCK_],
     ['GET', '/teacher/home', teacherHome_],
-    ['PUT', '/teacher/sessions/{id}', setLink_, LOCK_],
-    ['GET', '/teacher/sessions/{id}/share', share_],
+    ['PUT', '/teacher/sessions/{session_id}', setLink_, LOCK_],
+    ['GET', '/teacher/sessions/{session_id}/share', share_],
     ['PUT', '/teacher/settings', updateSettings_, LOCK_],
     ['POST', '/teacher/group_code', rotateGroupCode_, LOCK_],
     ['GET', '/teacher/invite', invite_],
     ['GET', '/teacher/students', students_],
-    ['POST', '/teacher/students/{id}/status', setStatus_, LOCK_],
-    ['POST', '/teacher/students/{id}/password', resetPassword_],
+    ['POST', '/teacher/students/{user_id}/status', setStatus_, LOCK_],
+    ['POST', '/teacher/students/{user_id}/password', resetPassword_],
     ['GET', '/teacher/insights', insights_],
     ['GET', '/teacher/shared', sharedNotes_],
   ];
@@ -426,7 +426,9 @@ const BODY_ = {
 };
 
 const QUERY_LANG_ = { lang: F_.oneOf(LANGS_, { def: 'en' }) };
-const PATH_ID_ = { id: F_.int(REQUIRED_) };
+// Named as in app.py, since a 422 names the parameter.
+const PATH_SESSION_ = { session_id: F_.int(REQUIRED_) };
+const PATH_USER_ = { user_id: F_.int(REQUIRED_) };
 
 function validateBody_(fields, body, errors) {
   if (body === null || body === undefined) {
@@ -1429,9 +1431,9 @@ function home_(ctx) {
 
 function checkin_(ctx) {
   const user = currentUser_(ctx);
-  const { path, body } = ctx.check({ path: PATH_ID_, body: BODY_.checkin });
+  const { path, body } = ctx.check({ path: PATH_SESSION_, body: BODY_.checkin });
   if (user.status !== 'approved') throw new HttpError_(403, 'pending');
-  const row = sessionRow_(ctx, path.id);
+  const row = sessionRow_(ctx, path.session_id);
   const start = row.starts_at;
   const end = start + row.duration_min * 60000;
   const now = ctx.now;
@@ -1487,8 +1489,8 @@ function teacherHome_(ctx) {
 
 function setLink_(ctx) {
   teacher_(ctx);
-  const { path, query, body } = ctx.check({ path: PATH_ID_, query: QUERY_LANG_, body: BODY_.link });
-  const row = sessionRow_(ctx, path.id);
+  const { path, query, body } = ctx.check({ path: PATH_SESSION_, query: QUERY_LANG_, body: BODY_.link });
+  const row = sessionRow_(ctx, path.session_id);
   const link = cleanMeetLink_(body.meet_link);
   ctx.db.t('class_sessions').update(row, { meet_link: link, updated_at: ctx.now });
   return shareFor_(ctx, row, query.lang);
@@ -1496,8 +1498,8 @@ function setLink_(ctx) {
 
 function share_(ctx) {
   teacher_(ctx);
-  const { path, query } = ctx.check({ path: PATH_ID_, query: QUERY_LANG_ });
-  return shareFor_(ctx, sessionRow_(ctx, path.id), query.lang);
+  const { path, query } = ctx.check({ path: PATH_SESSION_, query: QUERY_LANG_ });
+  return shareFor_(ctx, sessionRow_(ctx, path.session_id), query.lang);
 }
 
 function updateSettings_(ctx) {
@@ -1533,15 +1535,15 @@ function students_(ctx) {
   });
   const rows = ctx.db.t('users').rows
     .filter((u) => u.role === 'student')
-    .sort((a, b) => (b.status === 'pending') - (a.status === 'pending') || b.created_at - a.created_at || b.id - a.id);
+    .sort((a, b) => (b.status === 'pending') - (a.status === 'pending') || b.created_at - a.created_at || a.id - b.id);
   return { students: rows.map((u) => Object.assign(userJson_(u), { joined: joined[u.id] || 0, created_at: isoTime_(u.created_at) })) };
 }
 
 function setStatus_(ctx) {
   teacher_(ctx);
-  const { path, body } = ctx.check({ path: PATH_ID_, body: BODY_.status });
+  const { path, body } = ctx.check({ path: PATH_USER_, body: BODY_.status });
   const users = ctx.db.t('users');
-  const student = users.rows.filter((u) => u.id === path.id && u.role === 'student')[0];
+  const student = users.rows.filter((u) => u.id === path.user_id && u.role === 'student')[0];
   if (!student) throw new HttpError_(404, 'no_student');
   users.update(student, { status: body.status });
   return { ok: true };
@@ -1551,8 +1553,8 @@ function setStatus_(ctx) {
  * Signs the student out everywhere. */
 function resetPassword_(ctx) {
   teacher_(ctx);
-  const { path } = ctx.check({ path: PATH_ID_ });
-  const isStudent = (u) => u.id === path.id && u.role === 'student';
+  const { path } = ctx.check({ path: PATH_USER_ });
+  const isStudent = (u) => u.id === path.user_id && u.role === 'student';
   if (!ctx.db.t('users').rows.some(isStudent)) throw new HttpError_(404, 'no_student');
   const password = newCode_(8);
   const pwHash = hashPassword_(password);
@@ -1597,7 +1599,7 @@ function insights_(ctx) {
   });
   const feedback = ctx.db.t('feedback').rows
     .filter((f) => Object.prototype.hasOwnProperty.call(names, f.user_id))
-    .sort((a, b) => b.created_at - a.created_at || b.id - a.id)
+    .sort((a, b) => b.created_at - a.created_at || a.id - b.id) // equal times keep table order, as SQLite's sort does
     .slice(0, 20)
     .map((f) => ({ screen: f.screen, text: f.text, created_at: isoTime_(f.created_at), name: names[f.user_id] }));
   return {
