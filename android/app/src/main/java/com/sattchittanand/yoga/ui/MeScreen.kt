@@ -64,7 +64,9 @@ fun MeScreen(vm: AppViewModel, onLanguage: (String) -> Unit) {
         SectionCard {
             Text(stringResource(R.string.feedback_title), style = MaterialTheme.typography.titleMedium)
             OutlinedTextField(feedback, { feedback = it }, placeholder = { Text(stringResource(R.string.feedback_hint)) }, minLines = 3, modifier = Modifier.fillMaxWidth())
-            Button(onClick = { vm.sendFeedback(feedback, thanks); feedback = "" }, enabled = feedback.isNotBlank()) { Text(stringResource(R.string.send)) }
+            Button(onClick = { vm.sendFeedback(feedback, thanks) { feedback = "" } }, enabled = feedback.isNotBlank() && !vm.busy) {
+                Text(stringResource(R.string.send))
+            }
         }
 
         OutlinedButton(onClick = vm::logout, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.logout)) }

@@ -171,18 +171,22 @@ fun progressSummary(item: ItemName, p: Map<String, Any?>, lang: String): Map<Str
     )
 }
 
-/** The next classes, each with an unambiguous day ("tomorrow, Friday 20 November"), so Gemma need not work out dates. */
-fun schedule(classes: List<UpcomingClass>, now: Instant, limit: Int = 5): Map<String, Any?> {
-    val today = now.atZone(IST).toLocalDate()
+/** The next classes, each with an unambiguous day on the student's own calendar ([zone], the phone's) and its time in
+ *  India, and the student's own time too when they are elsewhere: "tomorrow, Friday 20 November", "8:00 AM India time".
+ *  Gemma need not work out dates or time zones. */
+fun schedule(classes: List<UpcomingClass>, now: Instant, zone: ZoneId, limit: Int = 5): Map<String, Any?> {
+    val today = now.atZone(zone).toLocalDate()
     val listed = classes.take(limit).map { c ->
-        val start = c.startsAt.atZone(IST)
+        val start = c.startsAt.atZone(zone)
         val date = DATE.format(start)
         val day = when (ChronoUnit.DAYS.between(today, start.toLocalDate())) {
             0L -> "today, $date"
             1L -> "tomorrow, $date"
             else -> date
         }
-        linkedMapOf("day" to day, "time" to TIME.format(start) + " India time", "class" to c.name, "about" to c.about)
+        val india = TIME.format(c.startsAt.atZone(IST)) + " India time"
+        val time = if (zone.rules.getOffset(c.startsAt) == IST.rules.getOffset(c.startsAt)) india else "${TIME.format(start)} your time ($india)"
+        linkedMapOf("day" to day, "time" to time, "class" to c.name, "about" to c.about)
     }
     return linkedMapOf(
         "today_is" to DATE.format(today),
@@ -197,7 +201,13 @@ private const val UNREACHABLE = "The studio server could not be reached just now
  * The companion's six tools, bound to the student on this phone, each in its own [ToolSet] so Gemma sees them in
  * this order. Each records its name in [used].
  */
-class Tools(private val data: StudentData, private val notes: StudioNotes, private val lang: String, private val now: () -> Instant = Instant::now) {
+class Tools(
+    private val data: StudentData,
+    private val notes: StudioNotes,
+    private val lang: String,
+    private val zone: ZoneId = ZoneId.systemDefault(), // the student's own calendar, for "today" and "tomorrow"
+    private val now: () -> Instant = Instant::now,
+) {
     val used = mutableListOf<String>()
 
     fun getMyPractice(days: Int): Map<String, Any?> {
@@ -259,7 +269,7 @@ class Tools(private val data: StudentData, private val notes: StudioNotes, priva
     fun getUpcomingClasses(): Map<String, Any?> {
         used += "get_upcoming_classes"
         return try {
-            schedule(data.upcoming(lang), now())
+            schedule(data.upcoming(lang), now(), zone)
         } catch (e: Exception) {
             mapOf("error" to UNREACHABLE)
         }
@@ -379,14 +389,14 @@ class PracticeCompanion(val notes: StudioNotes, private val studioName: String, 
     }
 }
 
-/**
- * The note to save when [message] starts with the words the app teaches ("Remember that…") and Gemma did not call
- * save_my_note, which it sometimes skips while saying it has saved. Null when there is nothing to save.
- */
 /** A Hindi or Marathi reply without the English glosses Gemma adds in brackets ("नितंब (hips)"), which the prompt's rule
  *  alone does not stop: it translates the teacher's English feedback and keeps the word it started from. */
 fun withoutGlosses(reply: String): String = reply.replace(Regex("[ \\t]*\\([A-Za-z][A-Za-z ,'/-]*\\)"), "")
 
+/**
+ * The note to save when [message] starts with the words the app teaches ("Remember that…") and Gemma did not call
+ * save_my_note, which it sometimes skips while saying it has saved. Null when there is nothing to save.
+ */
 fun noteToSave(message: String, used: List<String>): String? {
     val match = REMEMBER.find(message) ?: return null
     val note = message.substring(match.range.last + 1).trim().take(500)

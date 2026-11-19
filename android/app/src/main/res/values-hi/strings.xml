@@ -28,7 +28,7 @@
     <string name="err_network">स्टूडियो सर्वर से जुड़ नहीं पा रहे। इंटरनेट जाँचें और फिर कोशिश करें।</string>
     <string name="err_short_password">पासवर्ड में कम से कम 6 अक्षर होने चाहिए।</string>
     <string name="err_generic">कुछ गड़बड़ हुई। कृपया फिर कोशिश करें।</string>
-    <string name="err_pending">%1$s की मंज़ूरी के बाद आप प्रश्न पूछ सकेंगे। ग्रुप कोड है? आज वाली स्क्रीन पर डालें।</string>
+    <string name="err_pending">%1$s के आपको किसी बैच में रखने के बाद यह खुलेगा।</string>
     <string name="err_busy">स्टूडियो का सर्वर व्यस्त है। कृपया एक मिनट बाद फिर कोशिश करें।</string>
     <string name="err_too_many_attempts">बहुत ज़्यादा कोशिशें हुईं। कृपया 15 मिनट बाद फिर कोशिश करें।</string>
     <string name="err_teacher_exists">इस स्टूडियो के शिक्षक पहले से हैं। विद्यार्थी के रूप में साइन अप करें।</string>
@@ -109,7 +109,7 @@
     <string name="pain_flag">खिंचाव या दर्द हुआ</string>
     <string name="add_note">नोट जोड़ें</string>
     <string name="done">हो गया</string>
-    <string name="todays_sequence">आज का क्रम</string>
+    <string name="sequence">क्रम</string>
     <string name="show_all">सभी %1$d देखें</string>
     <string name="show_less">कम दिखाएँ</string>
     <string name="mood_1">बहुत खराब</string>
@@ -146,7 +146,7 @@
     <string name="mood_lift">मूड में सुधार</string>
     <string name="mood_lift_help">कक्षा के बाद आप औसतन कितना बेहतर महसूस करते हैं (−4 से +4)।</string>
     <string name="memory_title">मेरे स्वास्थ्य नोट्स</string>
-    <string name="privacy">%1$s आपका नाम और नंबर, अपने बारे में आपके जवाब (उम्र, लंबाई, वज़न, खाना, दर्द), और आपका अभ्यास देखते हैं: चेक-इन, मूड, कक्षा में और स्वयं अभ्यास में हर आसन कैसा रहा और उस पर आपके नोट्स, और आपके सुझाव। आपकी Gemma चैट और स्वास्थ्य नोट्स इसी फ़ोन पर रहते हैं, जब तक आप कोई नोट साझा न करें।</string>
+    <string name="privacy">%1$s आपका नाम और नंबर, अपने बारे में आपके जवाब (उम्र, लंबाई, वज़न, खाना, दर्द, और आसन कैसे लगे), और आपका अभ्यास देखते हैं: चेक-इन, मूड, कक्षा में और स्वयं अभ्यास में हर आसन कैसा रहा और उस पर आपके नोट्स, और आपके सुझाव। आपकी Gemma चैट और स्वास्थ्य नोट्स इसी फ़ोन पर रहते हैं, जब तक आप कोई नोट साझा न करें। स्टूडियो के डैशबोर्ड पर ये जवाब सिर्फ़ गिनती में दिखते हैं।</string>
     <string name="memory_empty">अभी कोई नोट नहीं। नीचे लिखें, जैसे कोई पुरानी चोट जिसके बारे में %1$s को पता होना चाहिए।</string>
     <string name="note_hint">जैसे: वज्रासन में मेरे बाएँ घुटने में दर्द होता है</string>
     <string name="forget_note">भूल जाएँ</string>
@@ -258,6 +258,12 @@
     <string name="gemma_download_failed">डाउनलोड रुक गया। इंटरनेट देखें और फिर कोशिश करें।</string>
     <string name="gemma_start_failed">Gemma इस फ़ोन पर शुरू नहीं हो सका।</string>
     <string name="try_again">फिर कोशिश करें</string>
+    <string name="ok">ठीक है</string>
+    <string name="new_password_ask">%1$s के लिए नया पासवर्ड?</string>
+    <string name="new_password_why">इससे %1$s हर फ़ोन से साइन आउट हो जाएँगे। उन्हें नया पासवर्ड दें।</string>
+    <string name="closed_account">%1$s ने यह खाता बंद कर दिया है।</string>
+    <string name="unreachable">स्टूडियो से जुड़ नहीं सके</string>
+    <string name="unreachable_help">इंटरनेट देखें, फिर कोशिश करें। आप साइन इन रहेंगे।</string>
     <string name="gemma_download_title">सत्·चित्·आनन्द के लिए Gemma</string>
     <string name="gemma_download_note">आपके फ़ोन के लिए अभ्यास साथी (एक बार)</string>
     <string name="share_note">%1$s से साझा करें</string>

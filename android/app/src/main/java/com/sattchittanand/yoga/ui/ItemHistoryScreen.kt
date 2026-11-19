@@ -85,7 +85,7 @@ fun ItemList(vm: AppViewModel, items: List<ItemSummary>, teacherViewing: Boolean
 /** One item's history for one student: the summary, the teacher's feedback, and each time, newest first. For the
  *  teacher ([student] given), a box to write feedback on it. */
 @Composable
-fun ItemHistoryScreen(vm: AppViewModel, item: String, student: Student?) {
+fun ItemHistoryScreen(vm: AppViewModel, item: String, student: Student?, back: () -> Unit) {
     LaunchedEffect(item, student) { vm.loadItem(item, student?.user?.id) }
     val h = vm.itemHistory?.takeIf { it.item == item }
     val title = vm.curricula?.library?.get(item)?.title(vm.prefs.lang) ?: item
@@ -93,22 +93,22 @@ fun ItemHistoryScreen(vm: AppViewModel, item: String, student: Student?) {
     val sent = stringResource(R.string.feedback_sent)
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         student?.let { Label(it.user.name) }
-        Text(title, style = MaterialTheme.typography.headlineSmall)
+        BackHeader(title, back)
         if (h == null) {
             Waiting(vm, { vm.loadItem(item, student?.user?.id) }, Modifier.fillMaxWidth())
             return@Column
         }
-        Text(listOfNotNull(timesLine(h.inClass, h.solo).ifEmpty { null }, h.first?.let { stringResource(R.string.since, dayLabel(it)) })
+        Text(listOfNotNull(timesLine(h.inClass, h.solo).ifEmpty { null }, h.first?.let { stringResource(R.string.since, indiaDayLabel(it)) })
             .joinToString(" · "), style = MaterialTheme.typography.bodyLarge)
         h.trend?.let { Text(stringResource(R.string.trend_line, reactionWord(it.early), reactionWord(it.recent)), style = MaterialTheme.typography.bodyLarge, color = Palette.moss) }
         h.holds?.let { Text(stringResource(R.string.holds_line, stopwatch(it.longest), stopwatch(it.recent)), style = MaterialTheme.typography.bodyLarge) }
         if (h.painTimes > 0) Text(pluralStringResource(R.plurals.pain_times, h.painTimes, h.painTimes), color = Palette.danger)
         if (h.feedback.isNotEmpty()) {
             Label(wroteLabel(student != null))
-            h.feedback.forEach { (date, text) ->
+            h.feedback.forEach { (at, text) ->
                 SectionCard(tint = Palette.mossLight) {
                     Text("“$text”", style = MaterialTheme.typography.bodyLarge)
-                    Text(dayLabel(date), style = MaterialTheme.typography.labelMedium, color = Palette.muted)
+                    Text(dayLabel(at), style = MaterialTheme.typography.labelMedium, color = Palette.muted)
                 }
             }
         }
@@ -116,7 +116,7 @@ fun ItemHistoryScreen(vm: AppViewModel, item: String, student: Student?) {
             val about = vm.curricula?.library?.get(item)?.short(vm.prefs.lang) ?: item
             OutlinedTextField(draft, { draft = it }, placeholder = { Text(stringResource(R.string.feedback_for, student.user.name.substringBefore(' '), about)) },
                 minLines = 2, modifier = Modifier.fillMaxWidth())
-            Button(onClick = { vm.sendItemFeedback(student.user.id, item, draft, sent); draft = "" }, enabled = draft.isNotBlank() && !vm.busy) {
+            Button(onClick = { vm.sendItemFeedback(student.user.id, item, draft, sent) { draft = "" } }, enabled = draft.isNotBlank() && !vm.busy) {
                 Text(stringResource(R.string.send))
             }
         }
@@ -126,7 +126,7 @@ fun ItemHistoryScreen(vm: AppViewModel, item: String, student: Student?) {
                 h.entries.forEachIndexed { i, e ->
                     if (i > 0) HorizontalDivider(color = Palette.line)
                     Row(verticalAlignment = Alignment.Top) {
-                        Text(dayLabel(e.date), Modifier.weight(0.4f), style = MaterialTheme.typography.bodyMedium, color = Palette.muted)
+                        Text(dayLabel(e.at), Modifier.weight(0.4f), style = MaterialTheme.typography.bodyMedium, color = Palette.muted)
                         Column(Modifier.weight(0.6f)) {
                             if (e.solo) {
                                 Text(e.heldSeconds?.let { stringResource(R.string.solo_held, stopwatch(it)) } ?: stringResource(R.string.solo),
