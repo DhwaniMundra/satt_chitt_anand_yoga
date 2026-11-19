@@ -46,7 +46,6 @@ import java.util.Locale
 fun MeScreen(vm: AppViewModel, onLanguage: (String) -> Unit) {
     val user = vm.user ?: return
     var feedback by rememberSaveable { mutableStateOf("") }
-    var server by rememberSaveable { mutableStateOf(vm.prefs.server) }
     val thanks = stringResource(R.string.feedback_thanks)
     val sharedDone = stringResource(R.string.shared_note)
     // The note waiting for "Share" in the dialog. Not saveable: a note is not, and the dialog can simply be asked again.
@@ -120,12 +119,6 @@ fun MeScreen(vm: AppViewModel, onLanguage: (String) -> Unit) {
             Text(stringResource(R.string.feedback_title), style = MaterialTheme.typography.titleMedium)
             OutlinedTextField(feedback, { feedback = it }, placeholder = { Text(stringResource(R.string.feedback_hint)) }, minLines = 3, modifier = Modifier.fillMaxWidth())
             Button(onClick = { vm.sendFeedback("me", feedback, thanks); feedback = "" }, enabled = feedback.isNotBlank()) { Text(stringResource(R.string.send)) }
-        }
-
-        Label(stringResource(R.string.server))
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedTextField(server, { server = it }, singleLine = true, modifier = Modifier.weight(1f))
-            OutlinedButton(onClick = { vm.saveServer(server) }) { Text(stringResource(R.string.save)) }
         }
 
         OutlinedButton(onClick = vm::logout, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.logout)) }

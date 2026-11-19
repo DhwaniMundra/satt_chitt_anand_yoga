@@ -4,13 +4,14 @@ import android.content.Context
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
+import org.json.JSONException
 import org.json.JSONObject
 import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
 import java.time.Instant
 
-/** What the app keeps on the phone: the login token, the server address and the chosen language. */
+/** What the app keeps on the phone: the login token, the chosen language and, in a debug build, the server address. */
 class Prefs(context: Context) {
     private val store = context.getSharedPreferences("sca", Context.MODE_PRIVATE)
 
@@ -18,8 +19,9 @@ class Prefs(context: Context) {
         get() = store.getString("token", null)
         set(value) = store.edit().putString("token", value).apply()
 
+    /** The backend, fixed at build time. A debug build may be pointed elsewhere on its first screen. */
     var server: String
-        get() = store.getString("server", null) ?: BuildConfig.DEFAULT_SERVER
+        get() = store.getString("server", null)?.takeIf { BuildConfig.DEBUG } ?: BuildConfig.SERVER
         set(value) = store.edit().putString("server", value.trim().trimEnd('/')).apply()
 
     var lang: String
@@ -36,43 +38,68 @@ class Prefs(context: Context) {
 /** An error the server named ("bad_login", "pending", …) or "network" when it could not be reached. */
 class ApiError(val code: String) : Exception(code)
 
-/** JSON over HTTP to the backend, with the platform's own HttpURLConnection. */
+/**
+ * The backend's API. The backend is a Google Apps Script web app, which cannot read request headers or set a status,
+ * so every call is one POST of an envelope {"method", "path", "token", "body"} (the path carries the query string),
+ * and every answer is HTTP 200 with {"status", "body"}: `status` is the call's real status. Apps Script answers the
+ * POST with a redirect to script.googleusercontent.com, to be fetched with GET; the dev backend answers the same way.
+ */
 class Api(private val prefs: Prefs) {
 
     suspend fun get(path: String) = call("GET", path, null)
     suspend fun post(path: String, body: JSONObject = JSONObject()) = call("POST", path, body)
     suspend fun put(path: String, body: JSONObject) = call("PUT", path, body)
-    suspend fun delete(path: String) = call("DELETE", path, null)
 
     private suspend fun call(method: String, path: String, body: JSONObject?): JSONObject = withContext(Dispatchers.IO) { request(method, path, body) }
 
-    /** A GET on the calling thread, for the companion's tools, which Gemma runs on its own thread. */
+    /** A GET on the calling thread, for the companion's tools, which run on Gemma's own thread. */
     fun getNow(path: String): JSONObject = request("GET", path, null)
 
     private fun request(method: String, path: String, body: JSONObject?): JSONObject {
-        return try {
-            val conn = URL(prefs.server + path).openConnection() as HttpURLConnection
-            conn.requestMethod = method
-            conn.connectTimeout = 8_000
-            conn.readTimeout = 120_000 // the assistant can take a while on a busy laptop
-            prefs.token?.let { conn.setRequestProperty("Authorization", "Bearer $it") }
-            if (body != null) {
-                conn.doOutput = true
-                conn.setRequestProperty("Content-Type", "application/json; charset=utf-8")
-                conn.outputStream.use { it.write(body.toString().toByteArray()) }
-            }
-            val ok = conn.responseCode in 200..299
-            val text = (if (ok) conn.inputStream else conn.errorStream)?.bufferedReader()?.use { it.readText() } ?: "{}"
-            val json = JSONObject(text)
-            if (!ok) throw ApiError(json.optString("detail").takeIf { it.isNotEmpty() && !it.startsWith("[") } ?: "generic")
-            json
-        } catch (e: ApiError) {
-            throw e
+        val envelope = JSONObject().put("method", method).put("path", path).put("token", prefs.token ?: "").put("body", body ?: JSONObject.NULL)
+        val reply = try {
+            JSONObject(exchange(envelope.toString()))
         } catch (e: IOException) {
             throw ApiError("network")
-        } catch (e: Exception) { // not JSON: a router page, a wrong port, a server error page
+        } catch (e: JSONException) { // not JSON: a sign-in page, a wrong address
             throw ApiError("generic")
         }
+        val answer = reply.optJSONObject("body") ?: JSONObject()
+        if (reply.optInt("status") !in 200..299) {
+            throw ApiError(answer.optString("detail").takeIf { it.isNotEmpty() && !it.startsWith("[") } ?: "generic")
+        }
+        return answer
+    }
+
+    /** POSTs the envelope, then follows the redirect with GET. */
+    private fun exchange(envelope: String): String {
+        var conn = open(URL(prefs.server))
+        conn.requestMethod = "POST"
+        conn.doOutput = true
+        conn.setRequestProperty("Content-Type", "application/json; charset=utf-8")
+        conn.outputStream.use { it.write(envelope.toByteArray()) }
+        repeat(MAX_REDIRECTS + 1) {
+            val code = conn.responseCode
+            if (code !in 300..399) {
+                if (code != HttpURLConnection.HTTP_OK) throw IOException("HTTP $code")
+                return conn.inputStream.bufferedReader().use { it.readText() }
+            }
+            val location = conn.getHeaderField("Location") ?: throw IOException("redirect without a Location")
+            val next = URL(conn.url, location)
+            conn.disconnect()
+            conn = open(next)
+        }
+        throw IOException("too many redirects")
+    }
+
+    private fun open(url: URL) = (url.openConnection() as HttpURLConnection).apply {
+        instanceFollowRedirects = false
+        connectTimeout = 10_000
+        readTimeout = 30_000 // Apps Script can take some seconds to start
+    }
+
+    private companion object {
+        const val MAX_REDIRECTS = 3
     }
 }
 
