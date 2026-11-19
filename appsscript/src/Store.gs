@@ -7,7 +7,7 @@
 
 const TABLES_ = {
   users: [['id', 'int'], ['name', 'text'], ['phone', 'text'], ['role', 'text'], ['status', 'text'], ['pw_hash', 'text'],
-    ['lang', 'text'], ['research_consent', 'bool'], ['created_at', 'time']],
+    ['lang', 'text'], ['created_at', 'time']],
   tokens: [['token_hash', 'text'], ['user_id', 'int'], ['created_at', 'time']],
   class_sessions: [['id', 'int'], ['class_key', 'text'], ['starts_at', 'time'], ['duration_min', 'int'], ['meet_link', 'text?'],
     ['updated_at', 'time']],
@@ -167,14 +167,13 @@ function isDate_(v) {
 }
 
 function encode_(value, type) {
-  if (value === null || value === undefined) return type === 'bool' ? false : '';
+  if (value === null || value === undefined) return '';
   if (type === 'text' || type === 'text?') return value === '' ? '' : "'" + String(value);
   if (type === 'int') return Number(value);
-  if (type === 'bool') return Boolean(value);
   return new Date(Math.floor(value / 1000) * 1000); // time, date: milliseconds since 1970, kept to the second as the API sends them
 }
 
-/** A cell as the app's value: text, a number, a boolean, or milliseconds for times. `own` marks a value just encoded. */
+/** A cell as the app's value: text, a number, or milliseconds for times. `own` marks a value just encoded. */
 function decode_(value, type, own) {
   if (own && (type === 'text' || type === 'text?') && typeof value === 'string' && value.charAt(0) === "'") value = value.slice(1);
   if (type === 'text' || type === 'text?') {
@@ -182,7 +181,6 @@ function decode_(value, type, own) {
     return isDate_(value) ? isoTime_(value.getTime()) : String(value);
   }
   if (type === 'int') return value === '' || value === null ? null : Number(value);
-  if (type === 'bool') return value === true || value === 1 || String(value).toUpperCase() === 'TRUE';
   if (value === '' || value === null) return null;
   if (isDate_(value)) return Math.round(value.getTime() / 1000) * 1000;
   if (typeof value === 'number') return Math.round(((value - 25569) * 86400000 - IST_OFFSET_MS_) / 1000) * 1000; // a serial day number

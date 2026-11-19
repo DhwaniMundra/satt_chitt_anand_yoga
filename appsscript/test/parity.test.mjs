@@ -1,7 +1,6 @@
-// The same 101 requests (parity/scenario.json), answered by this backend and by the FastAPI server it replaces (its
-// answers recorded in parity/fastapi.json, at the same frozen moment): every status and every JSON body must match.
-// Login tokens and the two random values a step names (a reset password, a new group code) are left out; validation
-// errors are compared by (type, location), as their wording is pydantic's.
+// A regression snapshot of the API: 101 requests (parity/scenario.json) at a frozen moment, and the answers recorded for
+// them (parity/recorded.json). Every status and every JSON body must match. Login tokens and the two random values a
+// step names (a reset password, a new group code) are left out; validation errors are compared by (type, location).
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -11,7 +10,7 @@ import { attend, classStarted, setSetting } from './helpers.mjs';
 
 const HERE = join(ROOT, 'test', 'parity');
 const steps = JSON.parse(readFileSync(join(HERE, 'scenario.json'), 'utf8'));
-const recorded = JSON.parse(readFileSync(join(HERE, 'fastapi.json'), 'utf8'));
+const recorded = JSON.parse(readFileSync(join(HERE, 'recorded.json'), 'utf8'));
 
 function normalize(value, skip) {
   if (Array.isArray(value)) return value.map((v) => normalize(v, skip));
@@ -27,7 +26,7 @@ function normalize(value, skip) {
   return value;
 }
 
-test('every answer matches the FastAPI server’s', () => {
+test('every answer matches the recorded one', () => {
   const b = loadBackend();
   b.state.frozenMs = Date.parse('2026-11-18T03:00:00Z'); // 8:30 in India, during the day's class
   b.context.setup();
