@@ -163,11 +163,6 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         loadStudio()
     }
 
-    fun enterGroupCode(code: String) = launchCall {
-        api.post("/me/group_code", JSONObject().put("code", code))
-        refreshAll()
-    }
-
     fun sendFeedback(text: String, thanks: String) = launchCall {
         api.post("/feedback", JSONObject().put("screen", "me").put("text", text))
         notice = thanks
@@ -281,11 +276,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         share(api.get("/teacher/sessions/$sessionId/share?lang=${prefs.lang}").getString("text"))
     }
 
-    fun saveSettings(groupLink: String, defaultMeetLink: String, saved: String) = launchCall {
-        val body = JSONObject()
-        if (groupLink.isNotBlank()) body.put("group_link", groupLink)
-        if (defaultMeetLink.isNotBlank()) body.put("default_meet_link", defaultMeetLink)
-        api.put("/teacher/settings", body)
+    /** The group link and each batch's everyday Meet link ([links] by batch key), those changed. */
+    fun saveSettings(groupLink: String, links: Map<String, String>, saved: String) = launchCall {
+        val home = teacherHome
+        if (groupLink.isNotBlank() && groupLink != home?.settings?.groupLink) api.put("/teacher/settings", JSONObject().put("group_link", groupLink))
+        links.filter { (key, link) -> link.isNotBlank() && link != home?.batch(key)?.meetLink }.forEach { (key, link) ->
+            api.put("/teacher/batches/$key", JSONObject().put("meet_link", link))
+        }
         teacherHome = TeacherHome.from(api.get("/teacher/home?lang=${prefs.lang}"))
         notice = saved
     }
@@ -306,6 +303,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     private suspend fun loadSharedNotes() {
         sharedNotes = api.get("/teacher/shared").getJSONArray("shared").map(SharedNote::from)
+    }
+
+    /** Places a student in a batch: approving a new one, or moving one after a review, with the teacher's note. */
+    fun placeStudent(userId: Int, batch: String, note: String) = launchCall {
+        api.put("/teacher/students/$userId/batch", JSONObject().put("batch", batch).put("note", note.trim().ifEmpty { null } ?: JSONObject.NULL))
+        students = api.get("/teacher/students").getJSONArray("students").map(Student::from)
+        teacherHome = TeacherHome.from(api.get("/teacher/home?lang=${prefs.lang}"))
     }
 
     fun setStudentStatus(userId: Int, status: String) = launchCall {

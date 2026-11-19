@@ -5,7 +5,7 @@
     <string name="brand_latin" translatable="false">Satt Chitt Anand</string>
 
     <!-- Welcome and sign in -->
-    <string name="welcome_sub">Live yoga with %1$s, every morning at 8.</string>
+    <string name="welcome_sub">Live yoga with %1$s, in a batch that suits you.</string>
     <string name="language">Language</string>
     <string name="i_am_student">I\'m a student</string>
     <string name="i_am_teacher">I\'m the teacher</string>
@@ -14,8 +14,8 @@
     <string name="name">Your name</string>
     <string name="phone">WhatsApp number</string>
     <string name="password">Password (6 or more letters)</string>
-    <string name="group_code">Group code (from the WhatsApp group)</string>
-    <string name="group_code_help">No code? Sign up anyway and %1$s will approve you.</string>
+    <string name="group_code">Group code (from the class\'s WhatsApp invite)</string>
+    <string name="group_code_help">No code? Ask %1$s for it.</string>
     <string name="teacher_code">Teacher code</string>
     <string name="back">Back</string>
     <string name="role_student">Student</string>
@@ -24,7 +24,7 @@
     <string name="err_bad_phone">Please enter a valid WhatsApp number.</string>
     <string name="err_bad_login">Wrong number or password.</string>
     <string name="err_phone_taken">This number already has an account. Please log in.</string>
-    <string name="err_bad_group_code">That group code is not right. Check the WhatsApp group.</string>
+    <string name="err_bad_group_code">Ask %1$s for the group code; it\'s in the class\'s WhatsApp invite.</string>
     <string name="err_bad_teacher_code">That teacher code is not right.</string>
     <string name="err_bad_meet_link">Please paste a Google Meet or Zoom link.</string>
     <string name="err_bad_group_link">Please paste a WhatsApp group invite link (chat.whatsapp.com/…).</string>
@@ -56,9 +56,16 @@
     <string name="join_class">Join class</string>
     <string name="link_soon">The class link will appear here before class.</string>
     <string name="checked_in">You checked in ✓</string>
-    <string name="pending_title">Waiting for approval</string>
-    <string name="pending_body">%1$s will approve you soon. Have the group code from the WhatsApp group? Enter it here.</string>
-    <string name="enter_code">Enter code</string>
+    <string name="pending_title">Waiting for %1$s</string>
+    <string name="pending_body">%1$s will place you in the batch that suits you, then you can join its classes.</string>
+    <string name="your_batch">Your batch: %1$s</string>
+    <string name="batch_since">%1$s · since %2$s</string>
+    <string name="place_in_batch">Place in a batch</string>
+    <string name="approve_into">Approve into %1$s</string>
+    <string name="move_batch">Move to batch</string>
+    <string name="move_to">Move to %1$s</string>
+    <string name="batch_note">A note for the review (optional)</string>
+    <string name="take_back">Take back</string>
     <string name="open_group">Open WhatsApp group</string>
     <string name="how_feel_before">How do you feel right now?</string>
     <string name="how_feel_after">Class done! How do you feel now?</string>
@@ -86,7 +93,6 @@
     <string name="skip">Skip</string>
 
     <!-- Week -->
-    <string name="week_time">8:00 – 8:55 AM India time, live on Google Meet</string>
     <string name="first_class_free">Your first class is free.</string>
 
 
@@ -131,15 +137,15 @@
     <string name="meet_link">Google Meet link</string>
     <string name="save_share">Save and share on WhatsApp</string>
     <string name="share_whatsapp">Share on WhatsApp</string>
-    <string name="uses_standing_link">Using your everyday link</string>
+    <string name="uses_standing_link">Using the batch\'s everyday link</string>
     <string name="no_link_yet">No link yet</string>
     <plurals name="joined_count">
         <item quantity="one">%d joined</item>
         <item quantity="other">%d joined</item>
     </plurals>
     <string name="settings_title">Class links and group</string>
-    <string name="standing_link">Everyday Meet link</string>
-    <string name="standing_link_help">Used for every class that has no link of its own.</string>
+    <string name="standing_link">Each batch\'s everyday Meet link</string>
+    <string name="standing_link_help">Used for the batch\'s classes without a link of their own.</string>
     <string name="group_link">WhatsApp group invite link</string>
     <string name="group_code_label">Group code</string>
     <string name="invite_students">Invite students on WhatsApp</string>
@@ -149,7 +155,6 @@
     <string name="waiting">Waiting</string>
     <string name="approved">Approved</string>
     <string name="removed">Removed</string>
-    <string name="approve">Approve</string>
     <string name="remove">Remove</string>
     <string name="new_password">New password</string>
     <string name="new_password_is">New password for %1$s: %2$s</string>
