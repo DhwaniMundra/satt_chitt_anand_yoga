@@ -1,8 +1,9 @@
 """Where the local visualisations live (.local/visualization/, gitignored): one folder per major version, viz_<major>/,
-with the final videos on top and each version's screenshots and small recordings in screens/<version>/; build files
-go to work/. No dependencies, so any script can import it."""
+with each version's screenshots in screens/<version>/ and its recordings and videos in tours/; build files go to work/.
+No dependencies, so any script can import it."""
 
 import re
+import shutil
 from pathlib import Path
 
 LOCAL = Path(__file__).resolve().parents[1] / ".local" / "visualization"
@@ -29,3 +30,30 @@ def shot(path: str) -> Path:
     """A screenshot named "<version>/<file>", for example "v0.4/01_welcome.png"."""
     version, name = path.split("/", 1)
     return screens(version) / name
+
+
+def fresh_screens(version: str) -> Path:
+    """An empty folder beside screens/<version>/ to shoot into, so a run never leaves that set half-made; keep_screens()
+    swaps it in once the run has succeeded."""
+    new = screens(version).with_name(version + ".new")
+    shutil.rmtree(new, ignore_errors=True)
+    new.mkdir(parents=True)
+    return new
+
+
+def keep_screens(version: str) -> None:
+    """Swaps the run's screens in for the old set, carrying over the old set's files the run did not make (the
+    release's screens, say). A failed run never gets here, and the old set stays as it was."""
+    old = screens(version)
+    new = old.with_name(version + ".new")
+    if old.exists():
+        for file in old.iterdir():
+            if not (new / file.name).exists():
+                shutil.copy2(file, new / file.name)
+        aside = old.with_name(version + ".old")
+        shutil.rmtree(aside, ignore_errors=True)
+        old.rename(aside)
+        new.rename(old)
+        shutil.rmtree(aside)
+    else:
+        new.rename(old)

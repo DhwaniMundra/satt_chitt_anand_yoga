@@ -41,8 +41,7 @@ def main(version: str, teacher_code: str) -> None:
 
 
 def run(version: str, teacher_code: str) -> None:
-    out = viz.screens(version)
-    out.mkdir(parents=True, exist_ok=True)
+    out = viz.fresh_screens(version)  # swapped in for screens/<version>/ at the end of a run that succeeds
     results: list[tuple[str, bool]] = []
 
     def shot(name: str) -> None:
@@ -248,6 +247,7 @@ def run(version: str, teacher_code: str) -> None:
         " (screens/ and tours/).\n",
         encoding="utf-8",
     )
+    viz.keep_screens(version)
     print(f"{passed}/{len(results)} passed; {report}")
 
 
