@@ -20,8 +20,9 @@ flowchart LR
    each tour into one contact sheet in [`docs/media/iterations/`](../media/iterations/), so versions can be compared
    side by side.
 3. **Evaluate the assistant.** `backend/scripts/eval_assistant.py` asks a fixed set of questions in English,
-   Hindi and Marathi, runs coarse automatic checks, and writes every answer to `docs/evals/`. The checks only
-   catch obvious failures; a person reads every answer.
+   Hindi and Marathi (`eval_companion.py` holds whole conversations with the practice companion), runs coarse
+   automatic checks, and writes every answer to `docs/evals/`. The checks only catch obvious failures; a person
+   reads every answer.
 4. **Critique.** Look at every screenshot and read every answer as a student would. Each problem becomes a finding
    with the image or answer that shows it.
 5. **Fix and lock in.** Each fix gets a test where one is possible, so the same problem cannot quietly return
@@ -37,6 +38,7 @@ The people, check-ins and comments in the screenshots are demo data.
 | [v0.2](v0.2.md) | Fixes from the first tour: log-in switch, Hindi retrieval, sources, time zones | [screens](../media/iterations/v0.2.jpg), [`assistant_v0.2`](../evals/assistant_v0.2.md), [before and after](../media/figures/before_after.png) |
 | [v0.3](v0.3.md) | Assistant: Marathi answers checked by reading them; a first prompt fix | [`assistant_v0.3`](../evals/assistant_v0.3.md) |
 | [v0.4](v0.4.md) | An independent code review (15 fixes); Marathi answers from Marathi notes; two phones against one server; the narrated video; a README for readers | [screens](../media/iterations/v0.4.jpg), [two phones](../media/iterations/v0.4-two-phones.jpg), [`assistant_v0.4`](../evals/assistant_v0.4.md), [`marathi_experiments`](../evals/marathi_experiments.md), [`two_phones_v0.4`](../evals/two_phones_v0.4.md) |
+| [v0.5](v0.5.md) | Ask becomes a practice companion: Gemma with tools over the student's own classes, moods and notes; E2B chosen for phones | [screens](../media/iterations/v0.5.jpg), [`companion_v0.5_e2b`](../evals/companion_v0.5_e2b.md), [`companion_v0.5_e4b`](../evals/companion_v0.5_e4b.md) |
 
 ## Who did what
 
