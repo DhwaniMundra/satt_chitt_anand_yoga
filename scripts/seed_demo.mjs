@@ -19,6 +19,13 @@ const FEEDBACK = [
 ];
 const IST_MS = 330 * MIN;
 const CURRICULUM = JSON.parse(readFileSync(new URL('../content/curriculum.json', import.meta.url), 'utf8'));
+// The teacher's feedback on an item: (student, by index in STUDENTS; item; days ago; text).
+const TEACHER_FEEDBACK = [
+  [0, 'vajrasana', 8, 'Keep a cushion under the ankles, and come out at the first sign of knee pain.'],
+  [0, 'bhujangasana', 4, 'Lift with the back, not the hands; elbows close.'],
+  [0, 'vajrasana', 2, 'Much steadier this week. Two minutes is enough for now.'],
+  [1, 'trikonasana', 3, 'Hand on the shin is fine; keep the chest open.'],
+];
 // What Asha wrote after some classes, by item and days ago.
 const ASHA_NOTES = {
   'vajrasana:12': 'Left knee pinched after a minute',
@@ -101,6 +108,9 @@ function main(file) {
     });
     id++;
   }
+  TEACHER_FEEDBACK.forEach(([who, item, ago, text], i) => {
+    addRow(b, 'asana_feedback', { id: i + 1, student_id: students[who].user.id, item, text, created_at: b.clock() - ago * DAY });
+  });
   for (const [name, text] of FEEDBACK) {
     ok(b.call('POST', '/feedback', { token: students.find((s) => s.name === name).token, body: { screen: 'me', text } }));
   }

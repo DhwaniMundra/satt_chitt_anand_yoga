@@ -152,6 +152,15 @@
     <string name="review_open">हर आसन कैसा रहा</string>
     <string name="review_counts">%1$d जुड़े · %2$d ने बताया कैसा रहा</string>
     <string name="review_empty">अभी किसी ने नहीं बताया कि कैसा रहा।</string>
+    <string name="each_item">हर आसन कैसा चल रहा है</string>
+    <string name="no_items">कक्षा के बाद बताएँ कि हर आसन कैसा रहा; वह यहाँ दिखेगा।</string>
+    <string name="trend_line">शुरू में: %1$s · हाल में: %2$s</string>
+    <string name="teacher_wrote">%1$s ने लिखा</string>
+    <string name="you_wrote">आपने लिखा</string>
+    <string name="feedback_for">इस पर %1$s के लिए आपका सुझाव</string>
+    <string name="feedback_sent">भेज दिया</string>
+    <string name="since">%1$s से</string>
+    <string name="each_time">हर बार</string>
     <!-- Gemma on the phone -->
     <string name="ask_thinking_phone">आपके फ़ोन पर सोच रहे हैं…</string>
     <string name="gemma_title">आपके फ़ोन पर Gemma</string>
@@ -213,5 +222,17 @@
     <plurals name="dose_strokes">
         <item quantity="one">%d बार</item>
         <item quantity="other">%d बार</item>
+    </plurals>
+    <plurals name="students_waiting">
+        <item quantity="one">%d विद्यार्थी आपकी मंज़ूरी का इंतज़ार कर रहा है</item>
+        <item quantity="other">%d विद्यार्थी आपकी मंज़ूरी का इंतज़ार कर रहे हैं</item>
+    </plurals>
+    <plurals name="times_in_class">
+        <item quantity="one">कक्षा में %d बार</item>
+        <item quantity="other">कक्षा में %d बार</item>
+    </plurals>
+    <plurals name="pain_times">
+        <item quantity="one">खिंचाव या दर्द: %d बार</item>
+        <item quantity="other">खिंचाव या दर्द: %d बार</item>
     </plurals>
 </resources>

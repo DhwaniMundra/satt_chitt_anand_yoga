@@ -134,6 +134,8 @@ curl -sL "$URL" -H 'Content-Type: text/plain' \
 | `POST /me` | signed in | yes | `{name?, lang?}` → `{user}` |
 | `POST /me/group_code` | signed in | yes | `{code}`: a pending student becomes approved → `{user}`; `bad_group_code`, 5 tries then `too_many_attempts` |
 | `GET /me/practice?days=&lang=` | approved student, teacher | | the student's classes over the last `days` (1 to 90, default 7) with the sums done: `{period_days, classes_joined, mood_scale, average_mood_before, average_mood_after, by_class, classes}`, each class's `date` its India date (`2026-11-16`); `pending` |
+| `GET /me/asanas` | approved student, teacher | | `{items: [{item, in_class, last, reaction_trend, pain_times, teacher_said}]}`: each item the student practised in class or had feedback on: those with strain or pain first, then those with the teacher's feedback (the latest first), then the most practised; `teacher_said` is the date of the latest feedback |
+| `GET /me/asanas/{item}` | approved student, teacher | | one item's history, worked out in code: `{item, in_class, first, last, reaction_trend: {early_average, recent_average, each}, strain_or_pain: {times, last}, teacher_said: {date, text}, your_notes: [{date, text}], entries: [{date, reaction, pain, note}], feedback: [{date, text}]}`. The trend sets the first `each` reactions against the latest `each` (up to three) |
 | `POST /me/shared` | approved student | yes | `{text}` (1 to 500) → `{ok, id}`; the same words again return the same id; `pending`, `empty_note` |
 | `GET /home?lang=` | signed in | the day's class, once | `{user, studio, sessions, after_checkin, group_link}`; links only for approved students; each session's `curriculum`. `after_checkin` is the last class the student checked in to that ended (or is in its last 10 minutes) within 12 hours and that has no "after" check-in and no practice entries yet |
 | `GET /curricula?lang=` | signed in | | `{library: [{key, type, level, sanskrit, name, english, aliases}], curricula: [{key, name, level, about, items: [{item, dose, unit, cue}]}]}`, from the curriculum tabs, names, about and cues in `lang` |
@@ -150,6 +152,8 @@ curl -sL "$URL" -H 'Content-Type: text/plain' \
 | `GET /teacher/invite?lang=` | teacher | | `{text, url, group_link}` |
 | `GET /teacher/students` | teacher | | `{students: [user + joined, created_at]}`, pending first, then newest |
 | `POST /teacher/students/{user_id}/status` | teacher | yes | `{status: approved\|rejected}` → `{ok}`; `no_student` |
+| `GET /teacher/students/{user_id}/asanas`, `…/asanas/{item}` | teacher | | the same as `/me/asanas` and `/me/asanas/{item}`, for that student; `no_student` |
+| `POST /teacher/students/{user_id}/feedback` | teacher | yes | `{item, text}` → `{ok, id}`: the teacher's word on one item, which the student sees with its history; `unknown_item`, `no_student` |
 | `POST /teacher/students/{user_id}/password` | teacher | yes | a new 8-letter password, the student signed out everywhere → `{password}`; `no_student` |
 | `GET /teacher/insights` | teacher | | the last 14 days of classes, mood change, student counts, the last 20 feedback notes; `questions.count` is 0 |
 | `GET /teacher/shared` | teacher | | `{shared: [{id, user_id, name, text, created_at}]}`, newest first, at most 50 |
@@ -168,6 +172,7 @@ add columns of her own (to the right is tidiest); `setup()` adds back any column
 | `class_sessions` | id, class_key, starts_at, duration_min, meet_link, curriculum, updated_at | one per day, made a week ahead; `curriculum` when the teacher picked one |
 | `checkins` | user_id, session_id, phase, mood, created_at, class, class_date | phase `before`/`after`, mood 1 to 5. `class` and `class_date` copy the session's class name and India date, for queries; the code goes by session_id |
 | `practice` | id, user_id, session_id, item, reaction, pain, note, created_at, item_name, week | how each item of a class went: reaction 1 not yet, 2 with effort, 3 steady, 4 at ease (or blank), pain 1 for "felt strain or pain". `item_name` and `week` (its Monday) copy the item's name and the class's week, for queries |
+| `asana_feedback` | id, student_id, item, text, created_at | the teacher's feedback to one student on one item |
 | `library` | key, type, level, sanskrit, name, english, aliases, source | the asanas, pranayama and meditation the curricula draw on; type `asana`/`pranayama`/`meditation`, level 1 to 3, aliases comma-separated |
 | `curricula` | key, name, name_hi, name_mr, level, about, about_hi, about_mr, source | the curricula the teacher picks from; the first is the default |
 | `curriculum_items` | curriculum, position, item, dose, unit, cue, cue_hi, cue_mr | each curriculum's items in order; unit `breaths`, `seconds`, `minutes`, `rounds` or `strokes` |
@@ -289,6 +294,16 @@ On the studio laptop, Node is in `tools/node/bin` (`export PATH=$PWD/tools/node/
 The fake Sheet behaves like Sheets where it matters: a fixed grid, and text that looks like a number, a boolean, a
 date or a formula is read as one unless it starts with an apostrophe.
 
+No test reads the real clock: each runs at a fixed moment (`NOW` in [`test/helpers.mjs`](test/helpers.mjs),
+Wednesday 6:00 in India), and a test about a particular moment pins its own. To check that the suite holds at any
+moment, run it at others, for example just after a class, around midnight in India, and from Sunday into Monday:
+
+```bash
+for t in 2026-11-19T03:28:00Z 2026-11-18T18:31:00Z 2026-11-22T18:31:00Z; do
+  SCA_TEST_NOW=$t node --test 'appsscript/test/*.test.mjs' | grep '^# fail'
+done
+```
+
 - [`bundle.test.mjs`](test/bundle.test.mjs): `dist/` is the build of `src/` and the content files; the one scope;
   `setup()`; the main path.
 - [`api.test.mjs`](test/api.test.mjs): every route's rules: one teacher and the teacher code in any case, the group
@@ -299,6 +314,8 @@ date or a formula is read as one unless it starts with an apostrophe.
 - [`curriculum.test.mjs`](test/curriculum.test.mjs): the curriculum tabs seeded once, `/curricula` in each
   language, each class's curriculum and its default, the after-class practice send (its window, its checks,
   replacing), and the teacher's review of a class.
+- [`history.test.mjs`](test/history.test.mjs): a student's history per item (the trend, strain or pain, the notes,
+  the list), and the teacher's feedback on an item.
 - [`store.test.mjs`](test/store.test.mjs): the envelope, validation shapes, text kept as typed, hashed tokens and
   passwords, columns by name, ids, the lock (busy, always let go), a failure inside a route, growing tabs, the cache
   and its invalidation, the Dashboard's formulas.
@@ -316,7 +333,8 @@ teacher has signed up, run it at most once a quarter of an hour.
 - [`src/`](src/): `Main.gs` (the envelope, the router, the request context and the lock), `Validate.gs` (input
   checks), `Store.gs` (tabs, encoding, the cache), `Auth.gs` (passwords, tokens, codes, phone numbers, lockouts,
   who is asking), `Studio.gs` (classes, India time, the week, the sums, WhatsApp messages), `Routes.gs` (one function
-  per route), `Practice.gs` (the curriculum, each class's plan, how each item went), `Setup.gs` (`setup()`, the
+  per route), `Practice.gs` (the curriculum, each class's plan, how each item went, each student's history per
+  item, the teacher's feedback), `Setup.gs` (`setup()`, the
   curriculum seed and the Dashboard), `appsscript.json`.
 - `node appsscript/scripts/build.mjs` writes `dist/Code.gs` and `dist/appsscript.json`; `--check` fails if they are
   out of date (the tests check this too). Commit `dist/` with every change to `src/` or to `content/studio.json`

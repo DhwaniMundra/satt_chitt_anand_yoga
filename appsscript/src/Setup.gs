@@ -3,7 +3,7 @@
 // what is missing and leaves the data, the codes, the curriculum and an existing Dashboard alone. Only the classes
 // tab, which comes from the studio constant, is written afresh.
 
-const DATA_TABS_ = ['users', 'class_sessions', 'checkins', 'practice', 'feedback', 'shared_notes', 'tokens', 'settings'];
+const DATA_TABS_ = ['users', 'class_sessions', 'checkins', 'practice', 'asana_feedback', 'feedback', 'shared_notes', 'tokens', 'settings'];
 const CURRICULUM_TABS_ = ['library', 'curricula', 'curriculum_items']; // the owner's to edit: no warning on hand edits
 const HIDDEN_TABS_ = ['tokens', 'settings']; // login-token hashes and the codes: nothing to browse
 const SETTING_NOTES_ = [

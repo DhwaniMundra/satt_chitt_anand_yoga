@@ -1586,6 +1586,8 @@ function routes_() {
     ['POST', '/me', updateMe_, LOCK_],
     ['POST', '/me/group_code', joinGroup_, LOCK_],
     ['GET', '/me/practice', myPractice_],
+    ['GET', '/me/asanas', myItems_],
+    ['GET', '/me/asanas/{item}', myItem_],
     ['POST', '/me/shared', shareNote_, LOCK_],
     ['GET', '/home', home_],
     ['GET', '/curricula', curricula_],
@@ -1603,6 +1605,9 @@ function routes_() {
     ['GET', '/teacher/students', students_],
     ['POST', '/teacher/students/{user_id}/status', setStatus_, LOCK_],
     ['POST', '/teacher/students/{user_id}/password', resetPassword_],
+    ['GET', '/teacher/students/{user_id}/asanas', studentItems_],
+    ['GET', '/teacher/students/{user_id}/asanas/{item}', studentItem_],
+    ['POST', '/teacher/students/{user_id}/feedback', itemFeedback_, LOCK_],
     ['GET', '/teacher/insights', insights_],
     ['GET', '/teacher/shared', sharedNotes_],
   ];
@@ -1727,6 +1732,7 @@ const BODY_ = {
   status: { status: F_.oneOf(['approved', 'rejected'], REQUIRED_) },
   shared: { text: F_.str({ required: true, min: 1, max: 500 }) },
   curriculum: { curriculum: F_.str({ required: true, min: 1, max: 40 }) },
+  itemFeedback: { item: F_.str({ required: true, min: 1, max: 40 }), text: F_.str({ required: true, min: 1, max: 1000 }) },
   practice: {
     entries: F_.list({
       item: F_.str({ required: true, min: 1, max: 40 }),
@@ -1741,6 +1747,7 @@ const QUERY_LANG_ = { lang: F_.oneOf(LANGS_, { def: 'en' }) };
 // A 422 names the parameter, so they carry their names.
 const PATH_SESSION_ = { session_id: F_.int(REQUIRED_) };
 const PATH_USER_ = { user_id: F_.int(REQUIRED_) };
+const PATH_ITEM_ = { item: F_.str({ required: true, min: 1, max: 40 }) };
 
 function validateBody_(fields, body, errors) {
   if (body === null || body === undefined) {
@@ -1880,6 +1887,8 @@ const TABLES_ = {
   // `item_name` and `week` (its Monday) copy the item's name and the class's week, for the owner's queries.
   practice: [['id', 'int'], ['user_id', 'int'], ['session_id', 'int'], ['item', 'text'], ['reaction', 'int'], ['pain', 'int'],
     ['note', 'text?'], ['created_at', 'time'], ['item_name', 'text'], ['week', 'date']],
+  // The teacher's word to one student about one item of the library.
+  asana_feedback: [['id', 'int'], ['student_id', 'int'], ['item', 'text'], ['text', 'text'], ['created_at', 'time']],
 };
 
 const LOCK_WAIT_MS_ = 20000;
@@ -2563,9 +2572,10 @@ function shareUrl_(text) {
   return 'https://wa.me/?text=' + quoted;
 }
 
-// ---------- Practice: the curriculum, each class's plan, and how each item went ----------
+// ---------- Practice: the curriculum, each class's plan, how each item went, and each student's history ----------
 // The curriculum lives in three tabs (library, curricula, curriculum_items), so the owner can change it in the Sheet.
-// The teacher picks one curriculum per class; students react to its items after class, one tap each.
+// The teacher picks one curriculum per class; students react to its items after class, one tap each; the teacher
+// reads each student's history per item and can write feedback on an item, which the student sees with it.
 
 /** The curriculum as the Sheet holds it: the library by key, the curricula in tab order, each one's items in order. */
 function curriculum_(ctx) {
@@ -2694,6 +2704,111 @@ function classReview_(ctx) {
     answered: Object.keys(answered).length,
     items: items.filter((i) => i.pain.length).concat(items.filter((i) => !i.pain.length)),
   };
+}
+
+// ---------- each student's history per item, and the teacher's feedback on it ----------
+
+/** How one student's practice of one item has gone, worked out in code from its rows: the times in class, the
+ * reaction trend (the first reactions against the latest, up to three of each), strain or pain, the teacher's latest
+ * feedback, the student's notes, and every entry and piece of feedback, newest first. */
+function itemProgress_(item, rows, feedback, sessions) {
+  const entries = rows
+    .filter((r) => sessions[r.session_id])
+    .map((r) => ({ at: sessions[r.session_id].starts_at, reaction: r.reaction, pain: r.pain === 1, note: r.note }))
+    .sort((a, b) => a.at - b.at);
+  const said = feedback.slice().sort((a, b) => a.created_at - b.created_at || a.id - b.id);
+  const reactions = entries.filter((e) => e.reaction !== null).map((e) => e.reaction);
+  const k = Math.min(3, Math.floor(reactions.length / 2));
+  const pains = entries.filter((e) => e.pain);
+  const latest = said[said.length - 1];
+  return {
+    item: item,
+    in_class: entries.length,
+    first: entries.length ? istDate_(entries[0].at) : null,
+    last: entries.length ? istDate_(entries[entries.length - 1].at) : null,
+    reaction_trend: k ? { early_average: average1_(reactions.slice(0, k)), recent_average: average1_(reactions.slice(-k)), each: k } : null,
+    strain_or_pain: { times: pains.length, last: pains.length ? istDate_(pains[pains.length - 1].at) : null },
+    teacher_said: latest ? { date: istDate_(latest.created_at), text: latest.text } : null,
+    your_notes: entries.filter((e) => e.note).slice(-5).map((e) => ({ date: istDate_(e.at), text: e.note })),
+    entries: entries.slice().reverse().map((e) => ({ date: istDate_(e.at), reaction: e.reaction, pain: e.pain ? 1 : 0, note: e.note })),
+    feedback: said.slice().reverse().map((f) => ({ date: istDate_(f.created_at), text: f.text })),
+  };
+}
+
+/** Each item one student has practised or had feedback on: {item: progress}. */
+function progressByItem_(ctx, userId) {
+  const rows = {};
+  const feedback = {};
+  ctx.db.t('practice').rows.forEach((r) => {
+    if (r.user_id === userId) (rows[r.item] || (rows[r.item] = [])).push(r);
+  });
+  ctx.db.t('asana_feedback').rows.forEach((f) => {
+    if (f.student_id === userId) (feedback[f.item] || (feedback[f.item] = [])).push(f);
+  });
+  const sessions = sessionsById_(ctx);
+  const out = {};
+  Object.keys(rows).concat(Object.keys(feedback)).forEach((item) => {
+    if (!out[item]) out[item] = itemProgress_(item, rows[item] || [], feedback[item] || [], sessions);
+  });
+  return out;
+}
+
+/** For the Practice tab: each item with its count and trend. What needs attention comes first: items with strain or
+ * pain, then those the teacher wrote on (the latest first), then the rest, the most practised first. */
+function itemList_(ctx, userId) {
+  const all = progressByItem_(ctx, userId);
+  return {
+    items: Object.keys(all).map((item) => {
+      const p = all[item];
+      return { item: item, in_class: p.in_class, last: p.last, reaction_trend: p.reaction_trend, pain_times: p.strain_or_pain.times,
+        teacher_said: p.teacher_said ? p.teacher_said.date : null };
+    }).sort((a, b) => (b.pain_times > 0) - (a.pain_times > 0) || (b.teacher_said || '').localeCompare(a.teacher_said || '') ||
+      b.in_class - a.in_class || a.item.localeCompare(b.item)),
+  };
+}
+
+function oneItem_(ctx, userId, item) {
+  return progressByItem_(ctx, userId)[item] || itemProgress_(item, [], [], {});
+}
+
+/** The student the teacher asks about, or 404 no_student. */
+function studentRow_(ctx, id) {
+  const student = ctx.db.t('users').rows.filter((u) => u.id === id && u.role === 'student')[0];
+  if (!student) throw new HttpError_(404, 'no_student');
+  return student;
+}
+
+function myItems_(ctx) {
+  return itemList_(ctx, member_(ctx).id);
+}
+
+function myItem_(ctx) {
+  const user = member_(ctx);
+  const { path } = ctx.check({ path: PATH_ITEM_ });
+  return oneItem_(ctx, user.id, path.item);
+}
+
+function studentItems_(ctx) {
+  teacher_(ctx);
+  const { path } = ctx.check({ path: PATH_USER_ });
+  return itemList_(ctx, studentRow_(ctx, path.user_id).id);
+}
+
+function studentItem_(ctx) {
+  teacher_(ctx);
+  const { path } = ctx.check({ path: Object.assign({}, PATH_USER_, PATH_ITEM_) });
+  return oneItem_(ctx, studentRow_(ctx, path.user_id).id, path.item);
+}
+
+/** The teacher's word to one student about one item; the student sees it with that item's history. */
+function itemFeedback_(ctx) {
+  teacher_(ctx);
+  const { path, body } = ctx.check({ path: PATH_USER_, body: BODY_.itemFeedback });
+  const student = studentRow_(ctx, path.user_id);
+  if (!curriculum_(ctx).library[body.item]) throw new HttpError_(400, 'unknown_item');
+  const table = ctx.db.t('asana_feedback');
+  const row = table.insert([{ id: table.nextId(), student_id: student.id, item: body.item, text: body.text.trim(), created_at: ctx.now }])[0];
+  return { ok: true, id: row.id };
 }
 
 // ---------- Routes: one function per route ----------
@@ -3002,10 +3117,7 @@ function students_(ctx) {
 function setStatus_(ctx) {
   teacher_(ctx);
   const { path, body } = ctx.check({ path: PATH_USER_, body: BODY_.status });
-  const users = ctx.db.t('users');
-  const student = users.rows.filter((u) => u.id === path.user_id && u.role === 'student')[0];
-  if (!student) throw new HttpError_(404, 'no_student');
-  users.update(student, { status: body.status });
+  ctx.db.t('users').update(studentRow_(ctx, path.user_id), { status: body.status });
   return { ok: true };
 }
 
@@ -3092,7 +3204,7 @@ function sharedNotes_(ctx) {
 // what is missing and leaves the data, the codes, the curriculum and an existing Dashboard alone. Only the classes
 // tab, which comes from the studio constant, is written afresh.
 
-const DATA_TABS_ = ['users', 'class_sessions', 'checkins', 'practice', 'feedback', 'shared_notes', 'tokens', 'settings'];
+const DATA_TABS_ = ['users', 'class_sessions', 'checkins', 'practice', 'asana_feedback', 'feedback', 'shared_notes', 'tokens', 'settings'];
 const CURRICULUM_TABS_ = ['library', 'curricula', 'curriculum_items']; // the owner's to edit: no warning on hand edits
 const HIDDEN_TABS_ = ['tokens', 'settings']; // login-token hashes and the codes: nothing to browse
 const SETTING_NOTES_ = [

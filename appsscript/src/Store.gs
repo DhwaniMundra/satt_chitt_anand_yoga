@@ -28,6 +28,8 @@ const TABLES_ = {
   // `item_name` and `week` (its Monday) copy the item's name and the class's week, for the owner's queries.
   practice: [['id', 'int'], ['user_id', 'int'], ['session_id', 'int'], ['item', 'text'], ['reaction', 'int'], ['pain', 'int'],
     ['note', 'text?'], ['created_at', 'time'], ['item_name', 'text'], ['week', 'date']],
+  // The teacher's word to one student about one item of the library.
+  asana_feedback: [['id', 'int'], ['student_id', 'int'], ['item', 'text'], ['text', 'text'], ['created_at', 'time']],
 };
 
 const LOCK_WAIT_MS_ = 20000;
