@@ -175,8 +175,9 @@ export class FakeCache {
 /** A fresh backend: the bundle loaded into its own context with fake services. */
 export function loadBackend({ code } = {}) {
   const ss = new FakeSpreadsheet();
-  const state = { offsetMs: 0, lockFree: true, lockHeld: 0, locks: 0, logs: [], digests: 0 };
-  const clock = () => Date.now() + state.offsetMs;
+  // The clock: real time moved by offsetMs, or a fixed moment when frozenMs is set.
+  const state = { offsetMs: 0, frozenMs: null, lockFree: true, lockHeld: 0, locks: 0, logs: [], digests: 0 };
+  const clock = () => (state.frozenMs !== null ? state.frozenMs : Date.now()) + state.offsetMs;
   // Date, shifted by state.offsetMs, shared with the tests so Date objects compare across the boundary.
   class ShiftedDate extends Date {
     constructor(...args) { if (args.length === 0) super(clock()); else super(...args); }
