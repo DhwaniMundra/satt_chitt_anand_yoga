@@ -8,9 +8,10 @@ synthetic demo (data/tour.json), adds an Intermediate class under way so both ch
 signed out with no chat or notes, so a second run shows the same screens.
 
 The student, Asha (Intermediate): Today, joining, how the class went, the Practice tab and an asana's history, a
-practice on her own with the stopwatch, Ask about her own asana, Me, then Hindi and Marathi. The teacher: Today by
-batch, Students with a waiting student's answers, approving her into the batch they point to, Asha's asana with
-feedback, and the review of the class.
+practice on her own with the stopwatch, Ask about her own asana, Me, then Hindi and Marathi. Neha, waiting to be
+placed, and her answers about herself. The teacher: Today by batch and a batch's share, Students with Neha's answers,
+approving her into the batch they point to, moving a student with a note, Asha's asana with feedback, Insights and the
+review of the class.
 
 Usage: python3 scripts/capture_tour.py v1.0
 """
@@ -29,6 +30,7 @@ ROOT = Path(__file__).resolve().parents[1]
 APK = ROOT / "android" / "app" / "build" / "outputs" / "apk" / "debug" / "app-debug.apk"
 CLEAR_HI = "\u0938\u093e\u092b\u093c \u0915\u0930\u0947\u0902"  # "साफ़ करें" (Clear), spelt as in values-hi/strings.xml
 STUDENT = ("9800000002", "demo123")
+WAITING = ("9800000007", "demo123")  # Neha, who has told the teacher about herself and waits to be placed
 TEACHER = ("9800000001", "demo123")
 
 
@@ -179,43 +181,70 @@ def tour(version: str) -> None:
     tap_scrolling("Log out")
     time.sleep(1.5)
 
+    # ---- a student waiting to be placed: Neha, her answers given ----
+    p.tap("I'm a student")
+    log_in(*WAITING)
+    shot("21_waiting")
+    p.tap(f"Tell {p.TEACHER_NAME} about yourself")
+    time.sleep(2)
+    shot("22_intake")  # her answers, as she gave them
+    p.adb("shell", "input", "swipe", "540", "1700", "540", "500", "600")
+    time.sleep(1)
+    shot("23_intake_poses")
+    p.back()
+    p.tap("Me", exact=True)
+    tap_scrolling("Log out")
+    time.sleep(1.5)
+
     # ---- teacher ----
     video = p.Recording(viz.folder(version) / f"teacher_tour_{version}.mp4")
     p.tap("I'm the teacher")
     log_in(*TEACHER)
-    shot("21_teacher_today")
+    shot("24_teacher_today")
+    tap_scrolling("Share on WhatsApp", exact=True)  # the class under way, on its batch's everyday link
+    time.sleep(2.5)
+    shot("25_teacher_share")  # the message names the batch
+    p.back()
+    time.sleep(1)
     p.scroll_down()
-    shot("22_teacher_batches")
+    shot("26_teacher_batches")
     p.tap("Students", exact=True)
     time.sleep(2)
-    shot("23_students_waiting")  # the waiting student's answers and the batch they point to
+    shot("27_students_waiting")  # the waiting student's answers and the batch they point to
     p.tap("See all", exact=True)
     time.sleep(1)
-    shot("24_students_intake")
+    shot("28_students_intake")
     p.type_into("A note for the review (optional)", "Knee pain on stairs; start with the gentle sequence")
     p.hide_keyboard()
     tap_scrolling("Approve into")
     time.sleep(2)
     p.scroll_to_top()
-    shot("25_students_placed")
+    shot("29_students_placed")  # each with a batch and since when
+    p.tap_under("Rohan Desai", "Move to batch")
+    p.tap_under("Rohan Desai", "Intermediate")
+    p.type_under("Rohan Desai", "Steady in the standing poses; ready for longer holds")
+    shot("30_move_batch")
+    p.tap_under("Rohan Desai", "Move to Intermediate")
+    time.sleep(2)
+    p.scroll_to_top()
     p.tap_under("Asha Kulkarni", "How each item has gone ›")
     time.sleep(2)
-    shot("26_asha_items")
+    shot("31_asha_items")
     p.tap("Vajrasana")
     time.sleep(2)
     p.type_into("Write to Asha", "Good hold at 1:30. Keep the cushion, and come out at the first sign of knee pain.")
     p.hide_keyboard()
     p.tap("Send", exact=True)
     time.sleep(2)
-    shot("27_feedback_sent")
+    shot("32_feedback_sent")  # "You wrote"
     p.back()
     p.back()
     p.tap("Insights", exact=True)
     time.sleep(2)
-    shot("28_insights")
+    shot("33_insights")
     tap_scrolling("How each item went")
     time.sleep(2)
-    shot("29_class_review")
+    shot("34_class_review")  # strain or pain first
     video.stop()
 
     for name in ("student_tour", "teacher_tour"):
