@@ -72,9 +72,8 @@ function sessionPractice_(ctx) {
   const { path, body } = ctx.check({ path: PATH_SESSION_, body: BODY_.practice });
   if (user.status !== 'approved') throw new HttpError_(403, 'pending');
   const row = sessionRow_(ctx, path.session_id);
-  const end = row.starts_at + row.duration_min * 60000;
   const joined = ctx.db.t('checkins').rows.some((c) => c.user_id === user.id && c.session_id === row.id && c.phase === 'before');
-  if (!joined || ctx.now < end - 10 * 60000 || ctx.now > end + 12 * 3600000) throw new HttpError_(400, 'checkin_closed');
+  if (!joined || !afterOpen_(row, ctx.now)) throw new HttpError_(400, 'checkin_closed');
   const library = curriculum_(ctx).library;
   const kept = saidEntries_(body.entries, library);
   const table = ctx.db.t('practice');

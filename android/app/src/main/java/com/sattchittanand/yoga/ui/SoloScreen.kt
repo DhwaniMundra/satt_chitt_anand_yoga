@@ -47,7 +47,7 @@ private val TYPES = listOf("asana" to R.string.type_asana, "pranayama" to R.stri
 @Composable
 fun SoloChoose(vm: AppViewModel, close: () -> Unit) {
     BackHandler(onBack = close)
-    val curricula = vm.curricula ?: return
+    val curricula = vm.curricula ?: return Waiting(vm, vm::refresh)
     val lang = vm.prefs.lang
     var chosen by rememberSaveable { mutableStateOf(listOf<String>()) }
     var from by rememberSaveable { mutableStateOf<String?>(null) } // the sequence repeated, for its doses and cues
@@ -115,7 +115,7 @@ fun SoloPractise(vm: AppViewModel, run: SoloRun) {
             dismissButton = { TextButton(onClick = { leaving = false }) { Text(stringResource(R.string.keep_going)) } },
         )
     }
-    val curricula = vm.curricula ?: return
+    val curricula = vm.curricula ?: return Waiting(vm, vm::refresh)
     val f = run.current
     var now by remember { mutableLongStateOf(SystemClock.elapsedRealtime()) }
     LaunchedEffect(run.runningSince) {

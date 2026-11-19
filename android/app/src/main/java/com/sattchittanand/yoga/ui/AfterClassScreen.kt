@@ -33,14 +33,16 @@ import com.sattchittanand.yoga.AppViewModel
 import com.sattchittanand.yoga.ClassSession
 import com.sattchittanand.yoga.ItemFeedback
 import com.sattchittanand.yoga.R
+import com.sattchittanand.yoga.Said
 
-/** After class: the mood now, then how each item of the class's curriculum went. Every part can be skipped. */
+/** After class: the mood now, then how each item of the class's curriculum went. Every part can be skipped. With
+ *  [before], what was said already, to change. */
 @Composable
-fun AfterClassScreen(vm: AppViewModel, session: ClassSession, close: () -> Unit) {
+fun AfterClassScreen(vm: AppViewModel, session: ClassSession, before: Said?, close: () -> Unit) {
     val curricula = vm.curricula
     val plan = curricula?.find(session.curriculum)
-    var mood by rememberSaveable(session.id) { mutableStateOf<Int?>(null) }
-    val said = remember(session.id) { mutableStateMapOf<String, ItemFeedback>() }
+    var mood by rememberSaveable(session.id) { mutableStateOf(before?.mood) }
+    val said = remember(session.id) { mutableStateMapOf<String, ItemFeedback>().apply { before?.items?.forEach { put(it.item, it) } } }
     LazyColumn(
         Modifier.fillMaxSize(),
         contentPadding = PaddingValues(20.dp),
@@ -66,9 +68,8 @@ fun AfterClassScreen(vm: AppViewModel, session: ClassSession, close: () -> Unit)
             }
         }
         item {
-            vm.error?.let { Text(errorText(it), color = MaterialTheme.colorScheme.error) }
             Spacer(Modifier.height(4.dp))
-            Button(onClick = { vm.sendAfterClass(session.id, mood, said.values.toList(), close) }, enabled = !vm.busy,
+            Button(onClick = { vm.sendAfterClass(session.id, mood, said.values.toList(), before != null, close) }, enabled = !vm.busy,
                 modifier = Modifier.fillMaxWidth().height(52.dp)) { Text(stringResource(R.string.done)) }
         }
     }
@@ -77,7 +78,7 @@ fun AfterClassScreen(vm: AppViewModel, session: ClassSession, close: () -> Unit)
 /** One item: its four reactions in a row (tap again to clear), strain or pain, and a note. */
 @Composable
 private fun ItemCard(title: String, f: ItemFeedback, change: (ItemFeedback) -> Unit) {
-    var noting by rememberSaveable(f.item) { mutableStateOf(false) }
+    var noting by rememberSaveable(f.item) { mutableStateOf(f.note.isNotEmpty()) } // open when changing a note said before
     SectionCard {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(title, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)

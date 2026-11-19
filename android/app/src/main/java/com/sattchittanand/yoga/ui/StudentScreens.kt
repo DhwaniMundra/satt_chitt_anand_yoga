@@ -64,14 +64,14 @@ fun rememberNow(): Instant {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TodayScreen(vm: AppViewModel) {
-    val home = vm.home ?: return
+    val home = vm.home ?: return Waiting(vm, vm::refresh)
     val now = rememberNow()
     val words = vm.words()
     var afterClass by rememberSaveable { mutableStateOf(false) }
     val after = home.afterCheckin
     if (afterClass && after != null) {
         BackHandler { afterClass = false }
-        AfterClassScreen(vm, after) { afterClass = false }
+        AfterClassScreen(vm, after, home.afterSaid) { afterClass = false }
         return
     }
     PullToRefreshBox(isRefreshing = vm.busy, onRefresh = vm::refresh, modifier = Modifier.fillMaxSize()) {
@@ -79,11 +79,19 @@ fun TodayScreen(vm: AppViewModel) {
             Label(stringResource(R.string.brand_latin), Palette.saffron)
             Text(stringResource(R.string.greeting, home.user.name.substringBefore(' ')), style = MaterialTheme.typography.headlineSmall)
 
-            if (after != null) {
+            if (after != null && home.afterSaid == null) {
                 SectionCard(tint = Palette.saffronLight) {
                     Text(stringResource(R.string.how_did_it_go), style = MaterialTheme.typography.titleMedium)
                     Text(after.info.name, style = MaterialTheme.typography.bodyMedium, color = Palette.muted)
                     Button(onClick = { afterClass = true }) { Text(stringResource(R.string.tell_teacher, LocalTeacher.current)) }
+                }
+            } else if (after != null) { // said already: it can be changed until 12 hours after class
+                val closes = after.startsAt.plusSeconds(after.minutes * 60L + 12 * 3600L)
+                SectionCard(tint = Palette.mossLight) {
+                    Text(stringResource(R.string.told_teacher, LocalTeacher.current), style = MaterialTheme.typography.titleMedium)
+                    Text(after.info.name + " · " + stringResource(R.string.change_until, timeLabel(closes)), style = MaterialTheme.typography.bodyMedium,
+                        color = Palette.muted)
+                    TextButton(onClick = { afterClass = true }) { Text(stringResource(R.string.change)) }
                 }
             }
             if (!home.user.isApproved) PendingCard(vm)
@@ -188,7 +196,7 @@ private fun PendingCard(vm: AppViewModel) {
             OutlinedTextField(code, { code = it.uppercase() }, singleLine = true, label = { Text(stringResource(R.string.group_code_label)) }, modifier = Modifier.weight(1f))
             Button(onClick = { vm.enterGroupCode(code) }, enabled = code.isNotBlank() && !vm.busy) { Text(stringResource(R.string.enter_code)) }
         }
-        vm.error?.let { Text(errorText(it), color = MaterialTheme.colorScheme.error) }
+        vm.error?.takeIf { it == "bad_group_code" }?.let { Text(errorText(it), color = MaterialTheme.colorScheme.error) }
     }
 }
 

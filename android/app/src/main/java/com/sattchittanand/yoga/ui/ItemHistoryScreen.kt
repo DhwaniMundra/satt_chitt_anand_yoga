@@ -49,12 +49,16 @@ private fun timesLine(inClass: Int, solo: Int) = listOfNotNull(
 ).joinToString(" · ")
 
 /** Each item a student has practised: how often, the first reactions against the latest, strain or pain, whether
- *  the teacher wrote; with [collapsed], that many until "Show all". [teacherViewing] when the teacher reads it. */
+ *  the teacher wrote; with [collapsed], that many until "Show all". [teacherViewing] when the teacher reads it;
+ *  [reload] to try loading it again. */
 @Composable
-fun ItemList(vm: AppViewModel, items: List<ItemSummary>, teacherViewing: Boolean, collapsed: Int = items.size, open: (String) -> Unit) {
-    val curricula = vm.curricula ?: return
+fun ItemList(vm: AppViewModel, items: List<ItemSummary>, teacherViewing: Boolean, reload: () -> Unit, collapsed: Int = items.size,
+    open: (String) -> Unit) {
+    val curricula = vm.curricula
+    if (curricula == null || (items.isEmpty() && (vm.busy || vm.error != null))) return Waiting(vm, reload, Modifier.fillMaxWidth())
     if (items.isEmpty()) {
-        Text(stringResource(R.string.no_items), style = MaterialTheme.typography.bodyMedium, color = Palette.muted)
+        Text(stringResource(if (teacherViewing) R.string.no_items_teacher else R.string.no_items), style = MaterialTheme.typography.bodyMedium,
+            color = Palette.muted)
         return
     }
     var all by rememberSaveable { mutableStateOf(false) }
@@ -90,7 +94,10 @@ fun ItemHistoryScreen(vm: AppViewModel, item: String, student: Student?) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         student?.let { Label(it.user.name) }
         Text(title, style = MaterialTheme.typography.headlineSmall)
-        if (h == null) return@Column
+        if (h == null) {
+            Waiting(vm, { vm.loadItem(item, student?.user?.id) }, Modifier.fillMaxWidth())
+            return@Column
+        }
         Text(listOfNotNull(timesLine(h.inClass, h.solo).ifEmpty { null }, h.first?.let { stringResource(R.string.since, dayLabel(it)) })
             .joinToString(" · "), style = MaterialTheme.typography.bodyLarge)
         h.trend?.let { Text(stringResource(R.string.trend_line, reactionWord(it.early), reactionWord(it.recent)), style = MaterialTheme.typography.bodyLarge, color = Palette.moss) }

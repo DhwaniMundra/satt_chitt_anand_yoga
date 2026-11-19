@@ -130,6 +130,12 @@ function ensureWeek_(ctx) {
   });
 }
 
+/** Whether a class's after-class window is open at [now]: from 10 minutes before its end to 12 hours after it. */
+function afterOpen_(session, now) {
+  const end = session.starts_at + session.duration_min * 60000;
+  return end - 10 * 60000 <= now && now <= end + 12 * 3600000;
+}
+
 /** Sessions that have not ended yet, soonest first. */
 function upcoming_(ctx, limit) {
   ensureWeek_(ctx);

@@ -54,7 +54,7 @@ import kotlin.math.roundToInt
  *  language and signing out. */
 @Composable
 fun TeacherTodayScreen(vm: AppViewModel, onLanguage: (String) -> Unit, openStudents: () -> Unit) {
-    val home = vm.teacherHome ?: return
+    val home = vm.teacherHome ?: return Waiting(vm, vm::refresh)
     // The soonest class is open by default, and again whenever a sooner one appears.
     var expanded by rememberSaveable(home.sessions.firstOrNull()?.id) { mutableStateOf(home.sessions.firstOrNull()?.id ?: -1) }
     PullToRefreshBox(isRefreshing = vm.busy, onRefresh = vm::refresh, modifier = Modifier.fillMaxSize()) {
@@ -89,7 +89,7 @@ private fun SessionCard(vm: AppViewModel, s: ClassSession, open: Boolean, standi
                 Text("${dayLabel(s.startsAt)} · ${timeLabel(s.startsAt)}", style = MaterialTheme.typography.labelLarge, color = Palette.muted)
                 Text(s.info.name, style = MaterialTheme.typography.titleLarge)
             }
-            if (s.joined > 0) Pill(stringResource(R.string.joined_count, s.joined))
+            if (s.joined > 0) Pill(pluralStringResource(R.plurals.joined_count, s.joined, s.joined))
         }
         val status = when {
             s.ownLink -> s.meetLink!!
@@ -106,7 +106,7 @@ private fun SessionCard(vm: AppViewModel, s: ClassSession, open: Boolean, standi
                 link, { link = it }, label = { Text(stringResource(R.string.meet_link)) },
                 placeholder = { Text("meet.google.com/abc-defg-hij") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
             )
-            vm.error?.let { Text(errorText(it), color = MaterialTheme.colorScheme.error) }
+            vm.error?.takeIf { it == "bad_meet_link" }?.let { Text(errorText(it), color = MaterialTheme.colorScheme.error) }
             Button(
                 onClick = { vm.saveLinkAndShare(s.id, link) { shareToWhatsApp(context, it) } },
                 enabled = link.isNotBlank() && !vm.busy,
@@ -208,13 +208,15 @@ fun StudentsScreen(vm: AppViewModel) {
             Spacer(Modifier.height(4.dp))
             Label(stringResource(R.string.students_title))
         }
-        if (vm.students.isEmpty() && !vm.busy) Text(stringResource(R.string.no_students), color = Palette.muted)
+        if (vm.students.isEmpty()) {
+            if (vm.busy || vm.error != null) Waiting(vm, { vm.loadStudents() }, Modifier.fillMaxWidth()) else Text(stringResource(R.string.no_students), color = Palette.muted)
+        }
         vm.students.forEach { (student, joined) ->
             SectionCard(tint = if (student.status == "pending") Palette.saffronLight else Palette.paper) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text(student.name, style = MaterialTheme.typography.titleMedium)
-                        Text("${student.phone} · ${stringResource(R.string.joined_count, joined)}", style = MaterialTheme.typography.bodyMedium, color = Palette.muted)
+                        Text("${student.phone} · ${pluralStringResource(R.plurals.joined_count, joined, joined)}", style = MaterialTheme.typography.bodyMedium, color = Palette.muted)
                     }
                     Pill(
                         stringResource(
@@ -252,9 +254,9 @@ private fun StudentPractice(vm: AppViewModel, student: Student, open: (String) -
     LaunchedEffect(student.user.id) { vm.loadItems(student.user.id) }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text(student.user.name, style = MaterialTheme.typography.headlineSmall)
-        Text("${student.user.phone} · ${stringResource(R.string.joined_count, student.joined)}", color = Palette.muted)
+        Text("${student.user.phone} · ${pluralStringResource(R.plurals.joined_count, student.joined, student.joined)}", color = Palette.muted)
         Label(stringResource(R.string.each_item))
-        ItemList(vm, vm.items, teacherViewing = true, open = open)
+        ItemList(vm, vm.items, teacherViewing = true, reload = { vm.loadItems(student.user.id) }, open = open)
     }
 }
 
@@ -270,13 +272,16 @@ fun InsightsScreen(vm: AppViewModel) {
     }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text(stringResource(R.string.insights_title), style = MaterialTheme.typography.headlineSmall)
-        if (data == null) return@Column
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            StatTile(data.approved.toString(), stringResource(R.string.students_title), Modifier.weight(1f))
-            StatTile(data.moodChange?.let { String.format(Locale.US, "%+.1f", it) } ?: "–", stringResource(R.string.avg_lift), Modifier.weight(1f))
-            StatTile(vm.sharedNotes.size.toString(), stringResource(R.string.notes_shared), Modifier.weight(1f))
+        if (data == null) {
+            Waiting(vm, { vm.loadInsights() }, Modifier.fillMaxWidth())
+            return@Column
         }
-        if (data.moodPairs > 0) Text(stringResource(R.string.pairs, data.moodPairs), style = MaterialTheme.typography.bodyMedium, color = Palette.muted)
+        StatTiles(
+            data.approved.toString() to stringResource(R.string.students_title),
+            (data.moodChange?.let { String.format(Locale.US, "%+.1f", it) } ?: "–") to stringResource(R.string.avg_lift),
+            vm.sharedNotes.size.toString() to stringResource(R.string.notes_shared),
+        )
+        if (data.moodPairs > 0) Text(pluralStringResource(R.plurals.pairs, data.moodPairs, data.moodPairs), style = MaterialTheme.typography.bodyMedium, color = Palette.muted)
 
         Label(stringResource(R.string.last_two_weeks))
         val withCheckins = data.sessions.filter { it.joined > 0 }
@@ -288,7 +293,7 @@ fun InsightsScreen(vm: AppViewModel) {
                         Text(s.className, style = MaterialTheme.typography.titleMedium)
                         Text("${dayLabel(s.startsAt)} · ${timeLabel(s.startsAt)}", style = MaterialTheme.typography.bodyMedium, color = Palette.muted)
                     }
-                    Pill(stringResource(R.string.joined_count, s.joined))
+                    Pill(pluralStringResource(R.plurals.joined_count, s.joined, s.joined))
                 }
                 MoodRow(stringResource(R.string.before), s.moodBefore, Palette.moss)
                 MoodRow(stringResource(R.string.after), s.moodAfter, Palette.saffron)
@@ -312,8 +317,8 @@ fun InsightsScreen(vm: AppViewModel) {
 @Composable
 private fun MoodRow(label: String, mood: Double?, color: Color) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text(label, Modifier.width(72.dp), style = MaterialTheme.typography.bodyMedium, color = Palette.muted)
+        FitText(label, Modifier.width(72.dp), MaterialTheme.typography.bodyMedium, Palette.muted)
         Bar(((mood ?: 0.0) / 5.0).toFloat(), color, Modifier.weight(1f))
-        Text(mood?.let { MOODS[(it.roundToInt() - 1).coerceIn(0, 4)] + String.format(Locale.US, " %.1f", it) } ?: "–", Modifier.width(64.dp))
+        FitText(mood?.let { MOODS[(it.roundToInt() - 1).coerceIn(0, 4)] + String.format(Locale.US, " %.1f", it) } ?: "–", Modifier.width(64.dp))
     }
 }

@@ -3,6 +3,7 @@ package com.sattchittanand.yoga.ui
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
@@ -13,6 +14,7 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.SelfImprovement
 import androidx.compose.material.icons.filled.WbSunny
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
@@ -69,8 +71,7 @@ private fun Main(vm: AppViewModel, teacher: Boolean, onLanguage: (String) -> Uni
     val error = vm.error?.let { errorText(it) }
 
     LaunchedEffect(vm.notice) { vm.notice?.let { snackbar.showSnackbar(it); vm.notice = null } }
-    // Screens with their own form show errors inline; elsewhere a snackbar does.
-    LaunchedEffect(error, tab) { if (error != null && tab != "today") snackbar.showSnackbar(error) }
+    LaunchedEffect(vm.error, tab) { if (error != null && vm.error !in FORM_ERRORS) snackbar.showSnackbar(error) }
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbar) },
@@ -81,7 +82,7 @@ private fun Main(vm: AppViewModel, teacher: Boolean, onLanguage: (String) -> Uni
                         selected = tab == t.key,
                         onClick = { tab = t.key; vm.error = null },
                         icon = { Icon(t.icon, null) },
-                        label = { Text(stringResource(t.label)) },
+                        label = { FitText(stringResource(t.label)) },
                         colors = NavigationBarItemDefaults.colors(indicatorColor = Palette.mossLight, selectedIconColor = Palette.moss),
                     )
                 }
@@ -99,6 +100,8 @@ private fun Main(vm: AppViewModel, teacher: Boolean, onLanguage: (String) -> Uni
                 "students" -> StudentsScreen(vm)
                 "insights" -> InsightsScreen(vm)
             }
+            // A call to the server takes a second or more; Today shows it in its pull-to-refresh spinner.
+            if (vm.busy && tab != "today") LinearProgressIndicator(Modifier.fillMaxWidth().align(Alignment.TopCenter), color = Palette.moss)
         }
     }
 }
