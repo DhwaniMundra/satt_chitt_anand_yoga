@@ -56,8 +56,8 @@ CONVERSATIONS = [
     ("mr-next-pain", "9800000005", "mr", "sugg_3", ["get_upcoming_classes"], NEXT, []),
 ]
 
-# Written after the prompt was last changed and never used to change it, to see how the companion does on questions it
-# was not tuned on: an asana by its Hindi name (typed in Latin letters, as many write Hindi on WhatsApp), an item
+# Written after the prompt's last change, and asked without changing it again, to see how the companion does on questions
+# it was not tuned on: an asana by its Hindi name (typed in Latin letters, as many write Hindi on WhatsApp), an item
 # practised only alone, the schedule and an asana together, "remember that" in Hindi, and something off the topic.
 HELD_OUT = [
     ("held-asana-only-alone", "9800000002", "en", "How is my Trataka going?", ["asana_progress"], ["own", "alone", "solo"], []),
@@ -244,7 +244,7 @@ def add_held_out(report, results):
     text = report.read_text(encoding="utf-8").split("\n## Held-out questions\n")[0].rstrip("\n")
     passed = sum(all(r[6].values()) for r in results)
     section = ["", "## Held-out questions", "",
-               "Written after the prompt was last changed, and asked once; none was used to change it. "
+               "Written after the prompt's last change, and asked once; the prompt was not changed for them. "
                f"Passed the automatic checks: {passed}/{len(results)}.", "",
                "| id | lang | tools | language | includes | excludes | no loop | time |", "|---|---|---|---|---|---|---|---|"]
     section += table(results) + [""] + [line.replace("### ", "#### ", 1) for line in answers(results)]
