@@ -33,7 +33,7 @@
     <string name="err_short_password">The password needs at least 6 letters.</string>
     <string name="err_generic">Something went wrong. Please try again.</string>
     <string name="err_pending">Ask opens once Ramit ji approves you. Have the group code? Enter it on the Today screen.</string>
-    <string name="err_busy">Many questions are waiting. Please try again in a minute.</string>
+    <string name="err_busy">The studio server is busy. Please try again in a minute.</string>
     <string name="err_too_many_attempts">Too many tries. Please wait 15 minutes and try again.</string>
     <string name="err_teacher_exists">This studio already has its teacher. Sign up as a student.</string>
     <string name="err_checkin_closed">Check-in opens an hour before class.</string>
@@ -41,7 +41,6 @@
     <!-- Tabs -->
     <string name="tab_today">Today</string>
     <string name="tab_week">Week</string>
-    <string name="tab_breathe">Breathe</string>
     <string name="tab_ask">Ask</string>
     <string name="tab_me">Me</string>
     <string name="tab_classes">Classes</string>
@@ -72,12 +71,9 @@
     <string name="mood_4">Good</string>
     <string name="mood_5">Great</string>
     <string name="skip">Skip</string>
-    <string name="thanks">Thank you 🙏</string>
 
     <!-- Week -->
-    <string name="week_title">Every morning</string>
     <string name="week_time">8:00 – 8:55 AM India time, live on Google Meet</string>
-    <string name="your_teacher">Your teacher</string>
     <string name="first_class_free">Your first class is free.</string>
     <string name="mon">Mon</string>
     <string name="tue">Tue</string>
@@ -87,25 +83,12 @@
     <string name="sat">Sat</string>
     <string name="sun">Sun</string>
 
-    <!-- Breathe -->
-    <string name="breathe_title">Breathe with me</string>
-    <string name="breathe_in">Breathe in</string>
-    <string name="breathe_out">Breathe out</string>
-    <string name="hold">Hold</string>
-    <string name="pace_calm">Calm · 4 in, 6 out</string>
-    <string name="pace_even">Even · 5 in, 5 out</string>
-    <string name="pace_box">Box · 4 · 4 · 4 · 4</string>
-    <string name="start">Start</string>
-    <string name="stop">Stop</string>
-    <string name="breaths">%1$d breaths</string>
-    <string name="breathe_note">Breathe through the nose. Stop if you feel dizzy.</string>
 
     <!-- Ask -->
     <string name="ask_title">Practice companion</string>
     <string name="ask_hint">Type your question…</string>
     <string name="ask_send">Send</string>
     <string name="ask_disclaimer">Knows your classes and how you felt, and what you ask it to remember. General guidance from the studio\'s notes, not medical advice.</string>
-    <string name="ask_disclaimer_notes">General guidance from the studio\'s notes, not medical advice.</string>
     <string name="sugg_1">How was my practice this week?</string>
     <string name="sugg_2">Yoga for back pain?</string>
     <string name="sugg_3">Which class suits me tomorrow?</string>
@@ -124,9 +107,11 @@
     <string name="streak">Day streak</string>
     <string name="mood_lift">Mood lift</string>
     <string name="mood_lift_help">How much better you feel after class, on average (−4 to +4).</string>
-    <string name="memory_title">What I remember</string>
-    <string name="memory_empty">Nothing yet. In Ask, say \"Remember that…\"</string>
-    <string name="forget_note">Forget this</string>
+    <string name="memory_title">My health notes</string>
+    <string name="privacy">Your chat and health notes stay on this phone. Ramit ji sees your name and number, your check-ins and moods before and after class, your feedback, and any note you choose to share.</string>
+    <string name="memory_empty">No notes yet. Write one below, such as an old injury Ramit ji should know about.</string>
+    <string name="note_hint">For example: my left knee hurts in Vajrasana</string>
+    <string name="forget_note">Forget</string>
     <string name="feedback_title">What should we improve?</string>
     <string name="feedback_hint">What worked? What was hard?</string>
     <string name="send">Send</string>
@@ -169,10 +154,9 @@
     <string name="what_students_said">What students said</string>
     <string name="no_data">No check-ins yet.</string>
     <!-- Gemma on the phone -->
-    <string name="ask_privacy">Answered on your phone. Only what you share reaches Ramit ji.</string>
     <string name="ask_thinking_phone">Thinking on your phone…</string>
     <string name="gemma_title">Gemma on your phone</string>
-    <string name="gemma_offer">A one-time download of 2.6 GB, and Gemma answers here on your phone, with your classes and how you felt. Use Wi-Fi: the download goes on if you close the app. Until then, answers come straight from the studio\'s notes.</string>
+    <string name="gemma_offer">Chat with Gemma, an AI model that runs on this phone. It needs a one-time download of 2.6 GB; Wi-Fi recommended. The download goes on if you close the app.</string>
     <string name="gemma_download">Download on Wi-Fi (2.6 GB)</string>
     <string name="gemma_downloading">Downloading Gemma: %1$s of %2$s</string>
     <string name="gemma_keeps_going">It goes on if you close the app.</string>
@@ -182,22 +166,22 @@
     <string name="cancel">Cancel</string>
     <string name="gemma_checking">Checking the download…</string>
     <string name="gemma_loading">Starting Gemma on your phone… The first start takes a minute or two.</string>
-    <string name="gemma_too_little_memory">This phone has %1$s of memory and Gemma needs a 6 GB phone, so answers come from the studio\'s notes.</string>
+    <string name="chat_needs_memory">Chat needs a phone with more memory</string>
+    <string name="gemma_too_little_memory">Gemma runs on the phone itself and needs a phone with 6 GB of memory; this one has %1$s. Cloud model support coming soon.</string>
     <string name="gemma_no_space">Not enough space: Gemma needs about 3.6 GB free.</string>
     <string name="gemma_wrong_file">The file that came was not Gemma. Please try again later.</string>
     <string name="gemma_download_failed">The download stopped. Check the internet and try again.</string>
-    <string name="gemma_start_failed">Gemma could not start on this phone, so answers come from the studio\'s notes.</string>
+    <string name="gemma_start_failed">Gemma could not start on this phone.</string>
     <string name="try_again">Try again</string>
     <string name="gemma_download_title">Gemma for Satt Chitt Anand</string>
     <string name="gemma_download_note">The practice companion, for your phone (one time)</string>
-    <string name="memory_private">Kept on this phone. Only what you share reaches Ramit ji.</string>
     <string name="share_note">Share with Ramit ji</string>
     <string name="shared_note">Shared with Ramit ji</string>
     <string name="share_confirm_title">Share with Ramit ji?</string>
-    <string name="share_confirm_body">Ramit ji will see this note on his Students screen. Nothing else from your chat is sent, and forgetting the note here later does not take it back.</string>
+    <string name="share_confirm_body">Ramit ji will see this note on his Students screen. Forgetting it here later does not take it back.</string>
     <string name="share">Share</string>
     <string name="shared_title">Shared with you</string>
-    <string name="shared_help">Notes students chose to share from their practice companion.</string>
+    <string name="shared_help">Health notes students chose to share with you.</string>
     <string name="notes_shared">Notes shared</string>
     <plurals name="until_days">
         <item quantity="one">%d d</item>

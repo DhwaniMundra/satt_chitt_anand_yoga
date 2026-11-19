@@ -134,8 +134,10 @@ fun locale(): Locale = LocalConfiguration.current.locales[0]
 
 /** "Today", "Tomorrow" or "Mon 24 Nov", in the phone's time zone. */
 @Composable
-fun dayLabel(at: Instant): String {
-    val day = at.atZone(ZoneId.systemDefault()).toLocalDate()
+fun dayLabel(at: Instant): String = dayLabel(at.atZone(ZoneId.systemDefault()).toLocalDate())
+
+@Composable
+fun dayLabel(day: LocalDate): String {
     val today = LocalDate.now()
     return when (day) {
         today -> stringResource(R.string.today)

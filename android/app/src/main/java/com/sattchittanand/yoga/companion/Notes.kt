@@ -4,9 +4,8 @@ import java.text.Normalizer
 import kotlin.math.ln
 
 /*
- * The studio's notes on the phone, and the emergency check: a port of backend/sca/assistant.py, kept the same line for
- * line so the phone finds the same section for the same question (the tests in src/test ask the server's questions).
- * Plain Kotlin, no Android, so the JVM unit tests run it as it is.
+ * The studio's notes on the phone, the search over them, and the emergency check. Plain Kotlin, no Android, so the JVM
+ * unit tests run it as it is.
  */
 
 val STOPWORDS: Set<String> = (
@@ -15,11 +14,11 @@ val STOPWORDS: Set<String> = (
         // Common Hindi and Marathi function words.
         ("का की के को में से है हैं पर और या क्या कैसे करें कर मैं मुझे मेरा मेरी भी तो यह वह लिए नहीं " +
             "आहे आहेत मला माझा माझी मी ला ने चा ची चे मध्ये साठी आणि किंवा कसे काय करू करा शकते शकतो नाही").split(" ") +
-        listOf("योग", "योगा") // as uninformative here as "yoga"; it pulled up "Yoga Nidra" for every Hindi or Marathi question
+        listOf("योग", "योगा") // as uninformative here as "yoga": otherwise every Hindi or Marathi question finds "Yoga Nidra"
     ).filter { it.isNotEmpty() }.toSet()
 const val KEYWORD_WEIGHT = 3 // a word in a section's title or Keywords line counts as much as three in its text
 
-/** Python's `\w` (letters, numbers, underscore in any script) plus the Devanagari block, so vowel signs stay inside words. */
+/** Letters, numbers and underscore in any script, plus the Devanagari block, so vowel signs stay inside words. */
 private val WORD = Regex("[\\p{L}\\p{N}_\\u0900-\\u097F]+")
 
 /** Lowercase words, keeping Devanagari vowel signs inside words, without the stop words. */
@@ -84,7 +83,7 @@ class Retriever(val sections: List<Section>, private val k1: Double = 1.5, priva
         val query = tokenize(question).map(::expand)
         var best = Double.NEGATIVE_INFINITY
         var index = -1
-        sections.forEachIndexed { i, s -> score(s, query).let { if (it >= best) { best = it; index = i } } } // ties: the later section, as Python's max((score, i))
+        sections.forEachIndexed { i, s -> score(s, query).let { if (it >= best) { best = it; index = i } } } // ties: the later section, as in top()
         val section = sections[index]
         val names = if (ignore.isEmpty()) query.toSet() else query.filter { w -> ignore.none { w.startsWith(it) } }.toSet()
         return section.takeIf { best > 0 && section.keys.any { it in names } }
@@ -100,7 +99,8 @@ class Retriever(val sections: List<Section>, private val k1: Double = 1.5, priva
     }
 }
 
-/** The English notes and, for Marathi, the person-made translation the companion copies from (docs/evals/assistant_v0.4.md). */
+/** The English notes and, for Marathi, a translation made by a person, which the companion copies from: Gemma
+ *  translating the English notes itself changed facts. */
 class StudioNotes(english: String, marathi: String) {
     val retriever = Retriever(loadSections(english))
     val translations: Map<String, Map<String, String>> = mapOf("mr" to loadTranslation(marathi))
@@ -112,7 +112,7 @@ class StudioNotes(english: String, marathi: String) {
 // ---------- the emergency check: runs first, with no model ----------
 
 /** Emergency signs in the three languages, matched on [normalise]d text. `\s` is spelt out so the JVM and Android
- *  (whose regex engines read `\s` differently) match the same spaces, as Python's `\s` does. */
+ *  (whose regex engines read `\s` differently) match the same spaces, Unicode ones included. */
 private val URGENT = Regex(
     listOf(
         "chest[\\s\\p{Z}]*(pain|hurt|tight|pressure)", "pain in (my |the )?chest", "heart attack",

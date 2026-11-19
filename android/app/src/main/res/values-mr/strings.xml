@@ -30,14 +30,13 @@
     <string name="err_short_password">पासवर्डमध्ये किमान 6 अक्षरे हवीत.</string>
     <string name="err_generic">काहीतरी चुकले. कृपया पुन्हा प्रयत्न करा.</string>
     <string name="err_pending">रमित जींच्या मंजुरीनंतर तुम्ही प्रश्न विचारू शकाल. ग्रुप कोड आहे? आजच्या स्क्रीनवर टाका.</string>
-    <string name="err_busy">बरेच प्रश्न रांगेत आहेत. कृपया एका मिनिटाने पुन्हा प्रयत्न करा.</string>
+    <string name="err_busy">स्टुडिओचा सर्व्हर व्यस्त आहे. कृपया एका मिनिटाने पुन्हा प्रयत्न करा.</string>
     <string name="err_too_many_attempts">खूप प्रयत्न झाले. कृपया 15 मिनिटांनी पुन्हा प्रयत्न करा.</string>
     <string name="err_teacher_exists">या स्टुडिओचे शिक्षक आधीच आहेत. विद्यार्थी म्हणून साइन अप करा.</string>
     <string name="err_checkin_closed">चेक-इन वर्गाच्या एक तास आधी सुरू होते.</string>
 
     <string name="tab_today">आज</string>
     <string name="tab_week">आठवडा</string>
-    <string name="tab_breathe">श्वास</string>
     <string name="tab_ask">विचारा</string>
     <string name="tab_me">मी</string>
     <string name="tab_classes">वर्ग</string>
@@ -67,11 +66,8 @@
     <string name="mood_4">छान</string>
     <string name="mood_5">खूप छान</string>
     <string name="skip">वगळा</string>
-    <string name="thanks">धन्यवाद 🙏</string>
 
-    <string name="week_title">दररोज सकाळी</string>
     <string name="week_time">सकाळी 8:00 – 8:55 (भारतीय वेळ), Google Meet वर लाइव्ह</string>
-    <string name="your_teacher">तुमचे शिक्षक</string>
     <string name="first_class_free">पहिला वर्ग मोफत आहे.</string>
     <string name="mon">सोम</string>
     <string name="tue">मंगळ</string>
@@ -81,23 +77,11 @@
     <string name="sat">शनि</string>
     <string name="sun">रवि</string>
 
-    <string name="breathe_title">माझ्यासोबत श्वास घ्या</string>
-    <string name="breathe_in">श्वास घ्या</string>
-    <string name="breathe_out">श्वास सोडा</string>
-    <string name="hold">थांबा</string>
-    <string name="pace_calm">शांत · 4 आत, 6 बाहेर</string>
-    <string name="pace_even">समान · 5 आत, 5 बाहेर</string>
-    <string name="pace_box">बॉक्स · 4 · 4 · 4 · 4</string>
-    <string name="start">सुरू करा</string>
-    <string name="stop">थांबवा</string>
-    <string name="breaths">%1$d श्वास</string>
-    <string name="breathe_note">नाकाने श्वास घ्या. चक्कर आल्यास थांबा.</string>
 
     <string name="ask_title">सराव सोबती</string>
     <string name="ask_hint">तुमचा प्रश्न लिहा…</string>
     <string name="ask_send">पाठवा</string>
     <string name="ask_disclaimer">याला तुमचे वर्ग आणि तुम्हाला कसे वाटले ते माहीत आहे, आणि तुम्ही लक्षात ठेवायला सांगितलेलेही. स्टुडिओच्या नोंदींतून सामान्य माहिती, वैद्यकीय सल्ला नाही.</string>
-    <string name="ask_disclaimer_notes">स्टुडिओच्या नोंदींतून सामान्य माहिती, वैद्यकीय सल्ला नाही.</string>
     <string name="sugg_1">या आठवड्यात माझा सराव कसा झाला?</string>
     <string name="sugg_2">पाठदुखीसाठी योग?</string>
     <string name="sugg_3">उद्या कोणता वर्ग मला योग्य आहे?</string>
@@ -115,8 +99,10 @@
     <string name="streak">सलग दिवस</string>
     <string name="mood_lift">मूडमध्ये सुधारणा</string>
     <string name="mood_lift_help">वर्गानंतर सरासरी तुम्हाला किती बरे वाटते (−4 ते +4).</string>
-    <string name="memory_title">मी लक्षात ठेवलेले</string>
-    <string name="memory_empty">अजून काही नाही. ‘विचारा’ मध्ये म्हणा: \"लक्षात ठेवा की…\"</string>
+    <string name="memory_title">माझ्या आरोग्याच्या नोंदी</string>
+    <string name="privacy">तुमची चॅट आणि आरोग्याच्या नोंदी याच फोनवर राहतात. रमित जी तुमचे नाव आणि नंबर, तुमचे चेक-इन आणि वर्गापूर्वी व नंतरचा मूड, तुमच्या सूचना, आणि तुम्ही शेअर करायचे ठरवलेली नोंद पाहतात.</string>
+    <string name="memory_empty">अजून नोंदी नाहीत. खाली लिहा, जसे एखादी जुनी दुखापत जी रमित जींना माहीत असावी.</string>
+    <string name="note_hint">उदा.: वज्रासनात माझा डावा गुडघा दुखतो</string>
     <string name="forget_note">विसरा</string>
     <string name="feedback_title">आम्ही काय सुधारावे?</string>
     <string name="feedback_hint">काय आवडले? काय अवघड होते?</string>
@@ -159,10 +145,9 @@
     <string name="what_students_said">विद्यार्थी काय म्हणाले</string>
     <string name="no_data">अजून चेक-इन नाहीत.</string>
     <!-- Gemma on the phone -->
-    <string name="ask_privacy">उत्तर तुमच्या फोनवरच तयार होते. तुम्ही शेअर केलेलेच रमित जींपर्यंत पोहोचते.</string>
     <string name="ask_thinking_phone">तुमच्या फोनवर विचार करत आहे…</string>
     <string name="gemma_title">तुमच्या फोनवर Gemma</string>
-    <string name="gemma_offer">2.6 GB चे एकदाच डाउनलोड, आणि मग Gemma इथेच तुमच्या फोनवर, तुमचे वर्ग आणि मूड पाहून उत्तर देईल. वाय-फायवर करा: ॲप बंद केले तरी डाउनलोड चालू राहते. तोपर्यंत उत्तरे थेट स्टुडिओच्या नोंदींमधून येतील.</string>
+    <string name="gemma_offer">Gemma शी चॅट करा, हे AI मॉडेल याच फोनवर चालते. त्यासाठी 2.6 GB चे एकदाच डाउनलोड लागते; वाय-फायवर करा. ॲप बंद केले तरी डाउनलोड चालू राहते.</string>
     <string name="gemma_download">वाय-फायवर डाउनलोड करा (2.6 GB)</string>
     <string name="gemma_downloading">Gemma डाउनलोड होत आहे: %2$s पैकी %1$s</string>
     <string name="gemma_keeps_going">ॲप बंद केले तरी हे चालू राहील.</string>
@@ -172,22 +157,22 @@
     <string name="cancel">रद्द करा</string>
     <string name="gemma_checking">डाउनलोड तपासत आहे…</string>
     <string name="gemma_loading">तुमच्या फोनवर Gemma सुरू होत आहे… पहिल्यांदा एक-दोन मिनिटे लागतात.</string>
-    <string name="gemma_too_little_memory">या फोनमध्ये %1$s मेमरी आहे आणि Gemma ला 6 GB चा फोन लागतो, म्हणून उत्तरे स्टुडिओच्या नोंदींमधून येतील.</string>
+    <string name="chat_needs_memory">चॅटसाठी जास्त मेमरी असलेला फोन हवा</string>
+    <string name="gemma_too_little_memory">Gemma फोनवरच चालते आणि त्याला 6 GB मेमरीचा फोन लागतो; या फोनमध्ये %1$s आहे. क्लाउड मॉडेलची सुविधा लवकरच येत आहे.</string>
     <string name="gemma_no_space">जागा कमी आहे: Gemma ला सुमारे 3.6 GB मोकळी जागा लागते.</string>
     <string name="gemma_wrong_file">आलेली फाइल Gemma नव्हती. कृपया नंतर पुन्हा प्रयत्न करा.</string>
     <string name="gemma_download_failed">डाउनलोड थांबले. इंटरनेट तपासा आणि पुन्हा प्रयत्न करा.</string>
-    <string name="gemma_start_failed">Gemma या फोनवर सुरू होऊ शकला नाही, म्हणून उत्तरे स्टुडिओच्या नोंदींमधून येतील.</string>
+    <string name="gemma_start_failed">Gemma या फोनवर सुरू होऊ शकले नाही.</string>
     <string name="try_again">पुन्हा प्रयत्न करा</string>
     <string name="gemma_download_title">सत् चित् आनंदसाठी Gemma</string>
     <string name="gemma_download_note">तुमच्या फोनसाठी सराव सोबती (एकदाच)</string>
-    <string name="memory_private">हे या फोनवरच राहते. तुम्ही शेअर केलेलेच रमित जींपर्यंत पोहोचते.</string>
     <string name="share_note">रमित जींना शेअर करा</string>
     <string name="shared_note">रमित जींना शेअर केले</string>
     <string name="share_confirm_title">रमित जींना शेअर करायचे?</string>
-    <string name="share_confirm_body">रमित जी ही नोंद त्यांच्या ‘विद्यार्थी’ स्क्रीनवर पाहतील. तुमच्या संभाषणातील दुसरे काहीही पाठवले जात नाही, आणि नंतर इथे नोंद विसरल्याने ती परत येत नाही.</string>
+    <string name="share_confirm_body">रमित जी ही नोंद त्यांच्या ‘विद्यार्थी’ स्क्रीनवर पाहतील. नंतर इथे नोंद विसरली तरी ती रमित जींकडून काढली जात नाही.</string>
     <string name="share">शेअर करा</string>
     <string name="shared_title">तुमच्याशी शेअर केलेले</string>
-    <string name="shared_help">विद्यार्थ्यांनी त्यांच्या सराव सोबत्यातून शेअर करायचे ठरवलेल्या नोंदी.</string>
+    <string name="shared_help">विद्यार्थ्यांनी तुमच्याशी शेअर केलेल्या आरोग्याच्या नोंदी.</string>
     <string name="notes_shared">शेअर केलेल्या नोंदी</string>
     <plurals name="until_days">
         <item quantity="one">%d दिवस</item>

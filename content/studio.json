@@ -86,5 +86,40 @@
       }
     }
   ],
-  "weekly": {"mon": "hatha", "tue": "pranayama", "wed": "vinyasa", "thu": "dhyana", "fri": "hatha", "sat": "nidra", "sun": "satsang"}
+  "weekly": {"mon": "hatha", "tue": "pranayama", "wed": "vinyasa", "thu": "dhyana", "fri": "hatha", "sat": "nidra", "sun": "satsang"},
+  "words": {
+    "blessing": {
+      "sa": "ॐ सर्वेषां स्वस्तिर्भवतु। सर्वेषां शान्तिर्भवतु।\nसर्वेषां पूर्णं भवतु। सर्वेषां मङ्गलं भवतु।\nॐ शान्तिः शान्तिः शान्तिः॥",
+      "en": "May there be well-being in all. May there be peace in all. May there be fulfilment in all. May there be auspiciousness in all.",
+      "hi": "सबका कल्याण हो। सबको शांति मिले। सब पूर्ण हों। सबका मंगल हो।",
+      "mr": "सर्वांचे कल्याण होवो. सर्वांना शांती लाभो. सर्व पूर्ण होवोत. सर्वांचे मंगल होवो."
+    },
+    "name": {
+      "map": {
+        "en": "Our name is not a title but a map.",
+        "hi": "हमारा नाम कोई शीर्षक नहीं, एक मानचित्र है।",
+        "mr": "आमचे नाव हे शीर्षक नाही, तर एक नकाशा आहे."
+      },
+      "parts": [
+        {"sa": "सत्", "name": "Satt", "meaning": {"en": "Truth · Being", "hi": "सत्य · अस्तित्व", "mr": "सत्य · अस्तित्व"}},
+        {"sa": "चित्", "name": "Chitt", "meaning": {"en": "Consciousness · Awareness", "hi": "चेतना · जागरूकता", "mr": "चैतन्य · जाणीव"}},
+        {"sa": "आनन्द", "name": "Anand", "meaning": {"en": "Bliss · Joy", "hi": "आनंद · प्रसन्नता", "mr": "आनंद · प्रसन्नता"}}
+      ]
+    },
+    "week": {
+      "en": "A rhythm to return to, week after week.",
+      "hi": "एक लय, जिसमें हर हफ़्ते लौटा जा सके।",
+      "mr": "दर आठवड्याला परत येण्यासाठी एक लय."
+    },
+    "classes": {
+      "en": "Each class is a door. Walk through whichever calls to you — the path joins them all in the end.",
+      "hi": "हर कक्षा एक द्वार है। जो आपको पुकारे, उसमें से चलिए — अंत में राह सबको जोड़ देती है।",
+      "mr": "प्रत्येक वर्ग एक दार आहे. जो तुम्हाला साद घालेल, त्यातून चला — शेवटी मार्ग सर्वांना जोडतो."
+    },
+    "teacher": {
+      "en": "A teacher who walks the way himself.",
+      "hi": "एक शिक्षक, जो स्वयं इस राह पर चलते हैं।",
+      "mr": "स्वतः या मार्गावर चालणारे शिक्षक."
+    }
+  }
 }

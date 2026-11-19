@@ -109,7 +109,7 @@ private fun NextClassCard(vm: AppViewModel, s: ClassSession, now: Instant) {
     val context = LocalContext.current
     var askMood by rememberSaveable(s.id) { mutableStateOf(false) }
     val live = now >= s.startsAt && now < s.endsAt
-    // The "before" check-in opens an hour before class (as on the server); earlier, Join just opens the link.
+    // The "before" check-in opens an hour before class, as the server allows; earlier, Join just opens the link.
     val checkinOpen = now >= s.startsAt.minusSeconds(60 * 60) && now <= s.endsAt
     SectionCard(tint = Palette.moss) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -180,11 +180,13 @@ private val DAY_NAMES = mapOf(
 @Composable
 fun WeekScreen(vm: AppViewModel) {
     val studio = vm.home?.studio ?: return
+    val words = vm.words()
     val today = LocalDate.now().dayOfWeek.value - 1 // Monday is 0, as in the studio's list
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Label(studio.tagline, Palette.saffron)
-        Text(stringResource(R.string.week_title), style = MaterialTheme.typography.headlineSmall)
+        Text(words.week, style = MaterialTheme.typography.headlineSmall)
         Text(stringResource(R.string.week_time), style = MaterialTheme.typography.bodyLarge, color = Palette.muted)
+        Text(words.classes, style = MaterialTheme.typography.bodyMedium, color = Palette.muted)
         SectionCard {
             studio.weekly.forEachIndexed { i, (day, info) ->
                 if (i > 0) HorizontalDivider(color = Palette.line)
@@ -202,11 +204,23 @@ fun WeekScreen(vm: AppViewModel) {
                 }
             }
         }
-        Label(stringResource(R.string.your_teacher))
+        Text(words.teacher, style = MaterialTheme.typography.titleLarge)
         SectionCard(tint = Palette.mossLight) {
             Text(studio.teacherName, style = MaterialTheme.typography.titleLarge, color = Palette.moss)
             Text(studio.teacherTitle, style = MaterialTheme.typography.labelLarge, color = Palette.muted)
             Text(studio.teacherBio, style = MaterialTheme.typography.bodyLarge)
+        }
+        SectionCard(tint = Palette.cream) {
+            Text(words.nameIsAMap, style = MaterialTheme.typography.titleMedium, color = Palette.moss)
+            words.name.forEach { (devanagari, latin, meaning) ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(devanagari, style = MaterialTheme.typography.titleLarge, color = Palette.saffron, modifier = Modifier.width(80.dp))
+                    Column {
+                        Text(latin, style = MaterialTheme.typography.titleMedium)
+                        Text(meaning, style = MaterialTheme.typography.bodyMedium, color = Palette.muted)
+                    }
+                }
+            }
         }
         Pill(stringResource(R.string.first_class_free), Palette.saffronLight, Palette.saffron)
         Spacer(Modifier.height(8.dp))
