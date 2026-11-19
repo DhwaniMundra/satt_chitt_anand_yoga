@@ -165,11 +165,12 @@ export class FakeCache {
   clear() { this.map.clear(); }
 }
 
-/** A fresh backend: the bundle loaded into its own context with fake services. */
-export function loadBackend({ code } = {}) {
+/** A fresh backend: the bundle loaded into its own context with fake services. Its clock is real time, or the
+ * moment [now] (ms) when given, as in the tests. */
+export function loadBackend({ code, now } = {}) {
   const ss = new FakeSpreadsheet();
-  // The clock: real time moved by offsetMs, or a fixed moment when frozenMs is set.
-  const state = { offsetMs: 0, frozenMs: null, lockFree: true, lockHeld: 0, locks: 0, logs: [], digests: 0 };
+  // The clock: real time, or the frozen moment frozenMs; either moved by offsetMs.
+  const state = { offsetMs: 0, frozenMs: now === undefined ? null : now, lockFree: true, lockHeld: 0, locks: 0, logs: [], digests: 0 };
   const clock = () => (state.frozenMs !== null ? state.frozenMs : Date.now()) + state.offsetMs;
   // Date, shifted by state.offsetMs, shared with the tests so Date objects compare across the boundary.
   class ShiftedDate extends Date {

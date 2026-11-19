@@ -304,10 +304,7 @@ function students_(ctx) {
 function setStatus_(ctx) {
   teacher_(ctx);
   const { path, body } = ctx.check({ path: PATH_USER_, body: BODY_.status });
-  const users = ctx.db.t('users');
-  const student = users.rows.filter((u) => u.id === path.user_id && u.role === 'student')[0];
-  if (!student) throw new HttpError_(404, 'no_student');
-  users.update(student, { status: body.status });
+  ctx.db.t('users').update(studentRow_(ctx, path.user_id), { status: body.status });
   return { ok: true };
 }
 

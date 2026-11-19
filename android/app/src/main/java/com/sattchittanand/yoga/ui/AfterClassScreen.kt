@@ -1,6 +1,5 @@
 package com.sattchittanand.yoga.ui
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -9,7 +8,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
@@ -17,7 +15,6 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -31,7 +28,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.sattchittanand.yoga.AppViewModel
 import com.sattchittanand.yoga.ClassSession
@@ -87,21 +83,8 @@ private fun ItemCard(title: String, f: ItemFeedback, change: (ItemFeedback) -> U
             Text(title, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
             if (!noting) TextButton(onClick = { noting = true }) { Text(stringResource(R.string.add_note)) }
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            REACTIONS.forEachIndexed { i, word ->
-                val value = i + 1
-                val on = f.reaction == value
-                Surface(
-                    onClick = { change(f.copy(reaction = if (on) null else value)) },
-                    shape = MaterialTheme.shapes.small,
-                    color = if (on) Palette.moss else Color.Transparent,
-                    border = BorderStroke(1.dp, if (on) Palette.moss else Palette.line),
-                    modifier = Modifier.weight(1f),
-                ) {
-                    Text(stringResource(word), Modifier.padding(vertical = 10.dp, horizontal = 4.dp), textAlign = TextAlign.Center,
-                        style = MaterialTheme.typography.labelMedium, color = if (on) Color.White else Palette.ink)
-                }
-            }
+        Choices(REACTIONS.map { stringResource(it) }, f.reaction?.minus(1)) { i ->
+            change(f.copy(reaction = if (f.reaction == i + 1) null else i + 1))
         }
         FilterChip(
             selected = f.pain, onClick = { change(f.copy(pain = !f.pain)) }, label = { Text(stringResource(R.string.pain_flag)) },

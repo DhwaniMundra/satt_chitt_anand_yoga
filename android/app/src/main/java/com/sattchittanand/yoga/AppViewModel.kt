@@ -38,6 +38,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var curricula by mutableStateOf<Curricula?>(null); private set
     /** For the teacher: how one class went, item by item. */
     var review by mutableStateOf<ClassReview?>(null); private set
+    /** A student's practice per item (the student's own, or the one the teacher opened), and one item's history. */
+    var items by mutableStateOf<List<ItemSummary>>(emptyList()); private set
+    var itemHistory by mutableStateOf<ItemHistory?>(null); private set
     /** The conversation with the practice companion, as kept on this phone. */
     val chat = mutableStateListOf<ChatLine>()
     var asking by mutableStateOf(false); private set
@@ -122,7 +125,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private fun signOutLocally() {
         prefs.token = null
         user = null; home = null; stats = null; teacherHome = null; insights = null; review = null
-        practice = emptyList(); students = emptyList(); notes = emptyList(); sharedNotes = emptyList()
+        practice = emptyList(); students = emptyList(); notes = emptyList(); sharedNotes = emptyList(); items = emptyList(); itemHistory = null
         chat.clear()
         store = null // the chat and notes stay on the phone, under this account, for its next sign-in
         loadStudio()
@@ -290,6 +293,25 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun setCurriculum(sessionId: Int, curriculum: String) = launchCall {
         api.put("/teacher/sessions/$sessionId/curriculum", JSONObject().put("curriculum", curriculum))
         teacherHome = TeacherHome.from(api.get("/teacher/home?lang=${prefs.lang}"))
+    }
+
+    /** Where a student's practice per item is read: the student's own, or [studentId]'s for the teacher. */
+    private fun itemsPath(studentId: Int?) = if (studentId == null) "/me/asanas" else "/teacher/students/$studentId/asanas"
+
+    fun loadItems(studentId: Int? = null) = launchCall {
+        items = api.get(itemsPath(studentId)).getJSONArray("items").map(ItemSummary::from)
+    }
+
+    fun loadItem(item: String, studentId: Int? = null) = launchCall {
+        itemHistory = null
+        itemHistory = ItemHistory.from(api.get(itemsPath(studentId) + "/$item"))
+    }
+
+    /** The teacher's word to one student on one item; the student sees it with that item's history. */
+    fun sendItemFeedback(studentId: Int, item: String, text: String, sent: String) = launchCall {
+        api.post("/teacher/students/$studentId/feedback", JSONObject().put("item", item).put("text", text))
+        itemHistory = ItemHistory.from(api.get(itemsPath(studentId) + "/$item"))
+        notice = sent
     }
 
     fun loadReview(sessionId: Int) = launchCall {

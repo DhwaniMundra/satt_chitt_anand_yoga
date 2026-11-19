@@ -83,6 +83,27 @@ fun Pill(text: String, background: Color = Palette.mossLight, color: Color = Pal
     }
 }
 
+/** Options side by side in one row, equal widths, at most one selected: the reactions after class, the curricula. */
+@Composable
+fun Choices(labels: List<String>, selected: Int?, enabled: Boolean = true, onPick: (Int) -> Unit) {
+    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        labels.forEachIndexed { i, label ->
+            val on = selected == i
+            Surface(
+                onClick = { onPick(i) },
+                enabled = enabled,
+                shape = MaterialTheme.shapes.small,
+                color = if (on) Palette.moss else Color.Transparent,
+                border = BorderStroke(1.dp, if (on) Palette.moss else Palette.line),
+                modifier = Modifier.weight(1f),
+            ) {
+                Text(label, Modifier.padding(vertical = 10.dp, horizontal = 4.dp), textAlign = TextAlign.Center,
+                    style = MaterialTheme.typography.labelMedium, color = if (on) Color.White else Palette.ink)
+            }
+        }
+    }
+}
+
 @Composable
 fun StatTile(value: String, label: String, modifier: Modifier = Modifier) {
     SectionCard(modifier, tint = Palette.mossLight) {

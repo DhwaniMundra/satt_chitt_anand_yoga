@@ -1,5 +1,6 @@
 package com.sattchittanand.yoga.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -12,6 +13,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -24,10 +29,20 @@ import com.sattchittanand.yoga.JoinedClass
 import com.sattchittanand.yoga.R
 import java.util.Locale
 
-/** The student's practice: the totals, then each class of the last two weeks with the mood before and after. */
+/** The student's practice: the totals, how each item has gone (each opens its history), then each class of the last
+ *  two weeks with the mood before and after. */
 @Composable
 fun PracticeScreen(vm: AppViewModel) {
-    LaunchedEffect(Unit) { vm.loadPractice() }
+    var open by rememberSaveable { mutableStateOf<String?>(null) }
+    open?.let { item ->
+        BackHandler { open = null }
+        ItemHistoryScreen(vm, item, null)
+        return
+    }
+    LaunchedEffect(Unit) {
+        vm.loadPractice()
+        vm.loadItems()
+    }
     val stats = vm.stats ?: return
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text(stringResource(R.string.my_practice), style = MaterialTheme.typography.headlineSmall)
@@ -37,6 +52,8 @@ fun PracticeScreen(vm: AppViewModel) {
             StatTile(stats.moodChange?.let { String.format(Locale.US, "%+.1f", it) } ?: "–", stringResource(R.string.mood_lift), Modifier.weight(1f))
         }
         Text(stringResource(R.string.mood_lift_help), style = MaterialTheme.typography.bodyMedium, color = Palette.muted)
+        Label(stringResource(R.string.each_item))
+        ItemList(vm, vm.items, teacherViewing = false, collapsed = 6) { open = it }
         if (vm.practice.isNotEmpty()) {
             Label(stringResource(R.string.last_two_weeks))
             SectionCard {

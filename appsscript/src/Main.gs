@@ -107,6 +107,8 @@ function routes_() {
     ['POST', '/me', updateMe_, LOCK_],
     ['POST', '/me/group_code', joinGroup_, LOCK_],
     ['GET', '/me/practice', myPractice_],
+    ['GET', '/me/asanas', myItems_],
+    ['GET', '/me/asanas/{item}', myItem_],
     ['POST', '/me/shared', shareNote_, LOCK_],
     ['GET', '/home', home_],
     ['GET', '/curricula', curricula_],
@@ -124,6 +126,9 @@ function routes_() {
     ['GET', '/teacher/students', students_],
     ['POST', '/teacher/students/{user_id}/status', setStatus_, LOCK_],
     ['POST', '/teacher/students/{user_id}/password', resetPassword_],
+    ['GET', '/teacher/students/{user_id}/asanas', studentItems_],
+    ['GET', '/teacher/students/{user_id}/asanas/{item}', studentItem_],
+    ['POST', '/teacher/students/{user_id}/feedback', itemFeedback_, LOCK_],
     ['GET', '/teacher/insights', insights_],
     ['GET', '/teacher/shared', sharedNotes_],
   ];

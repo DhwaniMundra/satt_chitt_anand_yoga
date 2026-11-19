@@ -161,6 +161,15 @@
     <string name="review_open">How each item went</string>
     <string name="review_counts">%1$d joined · %2$d said how it went</string>
     <string name="review_empty">No one has said how it went yet.</string>
+    <string name="each_item">How each item has gone</string>
+    <string name="no_items">After class, say how each item went; it shows here.</string>
+    <string name="trend_line">At first: %1$s · lately: %2$s</string>
+    <string name="teacher_wrote">%1$s wrote</string>
+    <string name="you_wrote">You wrote</string>
+    <string name="feedback_for">Your feedback for %1$s on this</string>
+    <string name="feedback_sent">Sent</string>
+    <string name="since">since %1$s</string>
+    <string name="each_time">Each time</string>
     <!-- Gemma on the phone -->
     <string name="ask_thinking_phone">Thinking on your phone…</string>
     <string name="gemma_title">Gemma on your phone</string>
@@ -222,5 +231,17 @@
     <plurals name="dose_strokes">
         <item quantity="one">%d stroke</item>
         <item quantity="other">%d strokes</item>
+    </plurals>
+    <plurals name="students_waiting">
+        <item quantity="one">%d student waiting for your approval</item>
+        <item quantity="other">%d students waiting for your approval</item>
+    </plurals>
+    <plurals name="times_in_class">
+        <item quantity="one">%d time in class</item>
+        <item quantity="other">%d times in class</item>
+    </plurals>
+    <plurals name="pain_times">
+        <item quantity="one">Strain or pain: %d time</item>
+        <item quantity="other">Strain or pain: %d times</item>
     </plurals>
 </resources>

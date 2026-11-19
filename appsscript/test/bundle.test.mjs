@@ -5,8 +5,8 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import test from 'node:test';
 import { bundle, CODE_PATH, MANIFEST_PATH } from '../scripts/build.mjs';
-import { loadBackend, ROOT } from './fakes.mjs';
-import { freshBackend, setting, signup } from './helpers.mjs';
+import { ROOT } from './fakes.mjs';
+import { freshBackend, setting, signup, testBackend, WEDNESDAY_6AM } from './helpers.mjs';
 
 test('dist/ is the build of src/ and studio.json', () => {
   const { code, manifest } = bundle();
@@ -15,7 +15,7 @@ test('dist/ is the build of src/ and studio.json', () => {
 });
 
 test('the studio and curriculum constants are their content files, in a fresh build too', () => {
-  const b = loadBackend({ code: bundle().code });
+  const b = testBackend({ code: bundle().code });
   const content = (file) => JSON.parse(readFileSync(join(ROOT, '..', 'content', file), 'utf8'));
   assert.deepEqual(JSON.parse(b.evaluate('JSON.stringify(STUDIO)')), content('studio.json'));
   assert.deepEqual(JSON.parse(b.evaluate('JSON.stringify(CURRICULUM)')), content('curriculum.json'));
@@ -32,12 +32,12 @@ test('the bundle asks for this spreadsheet only', () => {
 });
 
 test('setup builds the tabs, makes the codes once, and can run again', () => {
-  const b = loadBackend();
+  const b = testBackend();
   const message = b.context.setup();
   const names = b.ss.getSheets().map((s) => s.getName());
   assert.equal(names[0], 'Dashboard');
   for (const tab of ['users', 'class_sessions', 'checkins', 'feedback', 'shared_notes', 'tokens', 'settings', 'classes', 'practice',
-    'library', 'curricula', 'curriculum_items']) {
+    'asana_feedback', 'library', 'curricula', 'curriculum_items']) {
     assert.ok(names.includes(tab), tab);
   }
   assert.ok(!names.includes('Sheet1'), 'the empty first tab is removed');
@@ -57,13 +57,13 @@ test('setup builds the tabs, makes the codes once, and can run again', () => {
 });
 
 test('a GET answers the health check in the envelope', () => {
-  const b = loadBackend();
+  const b = testBackend();
   const out = b.context.doGet({ parameter: {} });
   assert.deepEqual(JSON.parse(out.getContent()), { status: 200, body: { ok: true, assistant: 'off', model: null } });
 });
 
 test('sign up, log in and the Today screen', () => {
-  const b = freshBackend();
+  const b = freshBackend({ now: WEDNESDAY_6AM });
   const teacher = signup(b, '9000000001', { role: 'teacher', code: 'teach123' });
   assert.equal(teacher.user.phone, '+919000000001');
   const groupCode = b.call('GET', '/teacher/home', { token: teacher.token }).body.settings.group_code;
@@ -77,5 +77,9 @@ test('sign up, log in and the Today screen', () => {
   assert.equal(home.body.studio.name, 'सत् चित् आनंद योग');
   assert.match(home.body.sessions[0].starts_at, /^\d{4}-\d\d-\d\dT02:30:00Z$/); // 8:00 in India
   assert.equal(b.ss.getSheetByName('class_sessions').rows().length, 8);
+  b.state.offsetMs = 3 * 3600000; // 9:00, the day's class over: the other six days' classes until midnight
+  assert.equal(b.call('GET', '/home', { token: login.body.token }).body.sessions.length, 6);
+  b.state.offsetMs = 18 * 3600000 + 1000; // just past midnight: the next seven days again
+  assert.equal(b.call('GET', '/home', { token: login.body.token }).body.sessions.length, 7);
   assert.equal(b.call('GET', '/home', { token: 'nope' }).status, 401);
 });
