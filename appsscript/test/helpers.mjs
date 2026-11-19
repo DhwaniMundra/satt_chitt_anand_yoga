@@ -6,9 +6,21 @@ import { loadBackend } from './fakes.mjs';
 export const MIN = 60000;
 export const DAY = 86400000;
 
+/** Wednesday 18 November 2026, 6:00 in India: before the day's class, with the next seven days' classes all ahead. */
+export const WEDNESDAY_6AM = Date.parse('2026-11-18T00:30:00Z');
+
+/** The moment the tests run at, so none reads the real clock: WEDNESDAY_6AM, or SCA_TEST_NOW (an ISO time) to check
+ * the suite at another moment of the day or week. A test about a particular moment pins it with freshBackend({ now }). */
+export const NOW = process.env.SCA_TEST_NOW ? Date.parse(process.env.SCA_TEST_NOW) : WEDNESDAY_6AM;
+
+/** A backend with its clock frozen at [now]; a test moves it on with state.offsetMs. */
+export function testBackend({ code, now = NOW } = {}) {
+  return loadBackend({ code, now });
+}
+
 /** A backend after setup(), with the teacher code known. */
-export function freshBackend({ teacherCode = 'TEACH123' } = {}) {
-  const b = loadBackend();
+export function freshBackend({ teacherCode = 'TEACH123', now } = {}) {
+  const b = testBackend({ now });
   b.context.setup();
   if (teacherCode !== null) setSetting(b, 'teacher_code', teacherCode);
   return b;

@@ -294,6 +294,16 @@ On the studio laptop, Node is in `tools/node/bin` (`export PATH=$PWD/tools/node/
 The fake Sheet behaves like Sheets where it matters: a fixed grid, and text that looks like a number, a boolean, a
 date or a formula is read as one unless it starts with an apostrophe.
 
+No test reads the real clock: each runs at a fixed moment (`NOW` in [`test/helpers.mjs`](test/helpers.mjs),
+Wednesday 6:00 in India), and a test about a particular moment pins its own. To check that the suite holds at any
+moment, run it at others, for example just after a class, around midnight in India, and from Sunday into Monday:
+
+```bash
+for t in 2026-11-19T03:28:00Z 2026-11-18T18:31:00Z 2026-11-22T18:31:00Z; do
+  SCA_TEST_NOW=$t node --test 'appsscript/test/*.test.mjs' | grep '^# fail'
+done
+```
+
 - [`bundle.test.mjs`](test/bundle.test.mjs): `dist/` is the build of `src/` and the content files; the one scope;
   `setup()`; the main path.
 - [`api.test.mjs`](test/api.test.mjs): every route's rules: one teacher and the teacher code in any case, the group

@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import test from 'node:test';
 import { ROOT } from './fakes.mjs';
-import { classStarted, freshBackend, MIN, signup, teacherAndCode } from './helpers.mjs';
+import { classStarted, freshBackend, MIN, signup, teacherAndCode, WEDNESDAY_6AM } from './helpers.mjs';
 
 const CONTENT = JSON.parse(readFileSync(join(ROOT, '..', 'content', 'curriculum.json'), 'utf8'));
 const TEACHER = JSON.parse(readFileSync(join(ROOT, '..', 'content', 'studio.json'), 'utf8')).teacher.short; // per language
@@ -56,13 +56,13 @@ test('the curricula in the student\'s language, items in order', () => {
 });
 
 test('a class follows its own curriculum, else the last one used for its kind, else Beginner', () => {
-  const b = freshBackend();
+  const b = freshBackend({ now: WEDNESDAY_6AM }); // the week ahead holds two Hatha classes
   const { t, code } = teacherAndCode(b);
   const s = signup(b, '9000000002', { code });
   const week = b.call('GET', '/teacher/home', { token: t.token }).body.sessions;
   assert.ok(week.every((x) => x.curriculum === 'beginner'));
   const hatha = week.filter((x) => x.class.key === 'hatha');
-  assert.equal(hatha.length, 2); // Monday and Friday
+  assert.equal(hatha.length, 2); // Friday, then Monday
   const set = (id, curriculum, token = t.token) => b.call('PUT', '/teacher/sessions/' + id + '/curriculum', { token, body: { curriculum } });
   assert.deepEqual(set(hatha[0].id, 'intermediate').body, { ok: true, curriculum: 'intermediate' });
   const after = b.call('GET', '/home', { token: s.token }).body.sessions;

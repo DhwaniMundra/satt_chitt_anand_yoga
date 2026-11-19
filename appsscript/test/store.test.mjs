@@ -1,8 +1,7 @@
 // What is particular to Apps Script: the envelope, the Sheet as storage, the lock, the cache, and setup().
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { loadBackend } from './fakes.mjs';
-import { addRow, freshBackend, setSetting, setting, signup, teacherAndCode } from './helpers.mjs';
+import { addRow, freshBackend, setSetting, setting, signup, teacherAndCode, testBackend } from './helpers.mjs';
 
 const post = (b, contents) => JSON.parse(b.context.doPost({ postData: { contents } }).getContent());
 
@@ -134,7 +133,7 @@ test('a tab without a needed column is reported, not guessed at', () => {
   const b = freshBackend();
   b.ss.getSheetByName('users').data[0][2] = 'mobile';
   assert.deepEqual(b.call('POST', '/auth/login', { body: { phone: '9000000001', password: 'secret1' } }), { status: 500, body: { detail: 'not_set_up' } });
-  const raw = loadBackend();
+  const raw = testBackend();
   assert.deepEqual(raw.call('POST', '/auth/login', { body: { phone: '9000000001', password: 'secret1' } }), { status: 500, body: { detail: 'not_set_up' } });
   raw.context.setup();
   b.ss.getSheetByName('users').data[0][2] = 'phone';
@@ -277,7 +276,7 @@ test('setup: the data tabs warn before a hand edit, and the classes tab lists th
 });
 
 test('setup keeps a tab that is not empty, and fills an empty settings row', () => {
-  const b = loadBackend();
+  const b = testBackend();
   b.ss.getSheetByName('Sheet1').getRange(1, 1).setValue('mine');
   b.context.setup();
   assert.ok(b.ss.getSheetByName('Sheet1'));
