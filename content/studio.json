@@ -6,7 +6,7 @@
   "duration_min": 55,
   "teacher": {
     "name": "Ramit M Tippannavar",
-    "short": "Ramit ji",
+    "short": {"en": "Ramit ji", "hi": "रमित जी", "mr": "रमित जी"},
     "title": {"en": "Founder & Lead Teacher", "hi": "संस्थापक एवं मुख्य शिक्षक", "mr": "संस्थापक व मुख्य शिक्षक"},
     "bio": {
       "en": "More than 12 years of training in the Kaivalyadhama lineage, with certifications in classical Hatha and therapeutic Pranayama. His teaching joins precise alignment with breath.",
