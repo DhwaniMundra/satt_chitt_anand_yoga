@@ -186,6 +186,37 @@ data class ItemFeedback(val item: String, val reaction: Int?, val pain: Boolean,
         .put("note", note.trim().ifEmpty { null } ?: JSONObject.NULL)
 }
 
+/** The first reactions against the latest, as averages on the 1 to 4 scale. */
+data class Trend(val early: Double, val recent: Double) {
+    companion object {
+        fun from(o: JSONObject, key: String) = if (o.isNull(key)) null else o.getJSONObject(key).let { Trend(it.getDouble("early_average"), it.getDouble("recent_average")) }
+    }
+}
+
+private fun JSONObject.date(key: String): LocalDate? = str(key)?.let(LocalDate::parse)
+
+/** One item of a student's practice list (GET /me/asanas): how often, the trend, strain or pain, the teacher's word. */
+data class ItemSummary(val item: String, val inClass: Int, val trend: Trend?, val painTimes: Int, val teacherSaid: LocalDate?) {
+    companion object {
+        fun from(o: JSONObject) = ItemSummary(o.getString("item"), o.getInt("in_class"), Trend.from(o, "reaction_trend"), o.getInt("pain_times"), o.date("teacher_said"))
+    }
+}
+
+/** One item's history for one student (GET /me/asanas/{item}): each time, newest first, and the teacher's feedback. */
+data class ItemHistory(val item: String, val inClass: Int, val first: LocalDate?, val trend: Trend?, val painTimes: Int,
+    val entries: List<ItemEntry>, val feedback: List<Pair<LocalDate, String>>) {
+    companion object {
+        fun from(o: JSONObject) = ItemHistory(
+            o.getString("item"), o.getInt("in_class"), o.date("first"), Trend.from(o, "reaction_trend"),
+            o.getJSONObject("strain_or_pain").getInt("times"),
+            o.getJSONArray("entries").map { ItemEntry(LocalDate.parse(it.getString("date")), if (it.isNull("reaction")) null else it.getInt("reaction"), it.getInt("pain") == 1, it.str("note")) },
+            o.getJSONArray("feedback").map { LocalDate.parse(it.getString("date")) to it.getString("text") },
+        )
+    }
+}
+
+data class ItemEntry(val date: LocalDate, val reaction: Int?, val pain: Boolean, val note: String?)
+
 /** How a class went, item by item, for the teacher (GET /teacher/sessions/{id}/practice). */
 data class ClassReview(val curriculum: String?, val joined: Int, val answered: Int, val items: List<ItemReview>) {
     companion object {
