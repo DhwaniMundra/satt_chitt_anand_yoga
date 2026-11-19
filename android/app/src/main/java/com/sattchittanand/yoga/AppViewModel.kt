@@ -230,7 +230,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         kept.add(line)
         asking = true
         viewModelScope.launch {
-            val answer = companion.answer(account, kept, line.text, prefs.lang, history)
+            val answer = companion.answer(account, kept, line.text, prefs.lang, history, home?.batch?.name)
             kept.add(answer)
             chat.add(answer)
             notes = kept.notes() // a tool, or the "Remember that…" rule, may have saved one

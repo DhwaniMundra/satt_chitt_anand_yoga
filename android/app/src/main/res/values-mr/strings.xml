@@ -128,10 +128,12 @@
     <string name="ask_disclaimer">याला तुमचे वर्ग आणि तुम्हाला कसे वाटले ते माहीत आहे, आणि तुम्ही लक्षात ठेवायला सांगितलेलेही. स्टुडिओच्या नोंदींतून सामान्य माहिती, वैद्यकीय सल्ला नाही.</string>
     <string name="sugg_1">या आठवड्यात माझा सराव कसा झाला?</string>
     <string name="sugg_2">पाठदुखीसाठी योग?</string>
-    <string name="sugg_3">उद्या कोणता वर्ग मला योग्य आहे?</string>
+    <string name="sugg_3">माझा पुढचा वर्ग कधी आहे?</string>
     <string name="sugg_4">सत्·चित्·आनन्द म्हणजे काय?</string>
+    <string name="sugg_asana">माझे %1$s कसे चालले आहे?</string>
     <string name="chat_clear">साफ करा</string>
     <string name="tool_practice">तुमचा सराव पाहिला</string>
+    <string name="tool_progress">ते आसन पाहिले</string>
     <string name="tool_schedule">वेळापत्रक पाहिले</string>
     <string name="tool_notes">स्टुडिओच्या नोंदी वाचल्या</string>
     <string name="tool_saved">एक नोंद सेव्ह केली</string>
