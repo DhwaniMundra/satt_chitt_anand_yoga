@@ -62,7 +62,6 @@
     <string name="batch_note">आढाव्यासाठी नोंद (ऐच्छिक)</string>
     <string name="take_back">परत घ्या</string>
     <string name="intake_title">तुमच्याबद्दल</string>
-    <string name="intake_help">तुमच्या उत्तरांमुळे %1$s तुम्हाला योग्य बॅचमध्ये ठेवू शकतील.</string>
     <string name="tell_about_you">%1$s यांना तुमच्याबद्दल सांगा</string>
     <string name="about_me">माझ्याबद्दल, %1$s यांच्यासाठी</string>
     <string name="age">वय</string>
@@ -84,7 +83,7 @@
     <string name="pain_note_hint">काय दुखते, आणि केव्हा (ऐच्छिक)</string>
     <string name="assessment_title">काही आसने करून पाहा</string>
     <string name="assessment_help">प्रत्येक आसन हळूहळू, भिंतीजवळ किंवा खुर्चीजवळ करा. वेदना झाल्यास थांबा, आणि जे जमत नाही ते सोडा.</string>
-    <string name="intake_consent">ही उत्तरे %1$s यांच्याकडे जातात, तुम्हाला बॅचमध्ये ठेवण्यासाठी.</string>
+    <string name="intake_consent">ही उत्तरे %1$s यांच्याकडे जातात, तुम्हाला योग्य बॅचमध्ये ठेवण्यासाठी.</string>
     <string name="send_to">%1$s यांना पाठवा</string>
     <string name="intake_thanks">धन्यवाद. %1$s लवकरच तुम्हाला बॅचमध्ये ठेवतील.</string>
     <string name="intake_line">%1$d वर्षे · %2$d सेमी · %3$d किलो · %4$s</string>
