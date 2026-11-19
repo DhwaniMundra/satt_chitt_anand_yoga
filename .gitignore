@@ -3,15 +3,14 @@ do_not_push/
 .local/
 instructions.md
 
-# Toolchain, model and runtime data: large or personal, recreated by scripts/setup_tools.sh and the server.
+# Toolchain, model and runtime data: large or personal. tools/ and models/ are set up as docs/DEVELOPMENT.md describes;
+# data/ holds the dev backend's data files.
 tools/
 models/
 data/
 
-# Python
-backend/.venv/
+# Python (the tour scripts)
 __pycache__/
-.pytest_cache/
 .ruff_cache/
 
 # Android / Gradle
