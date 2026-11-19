@@ -11,9 +11,6 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.time.Instant
 import java.time.LocalDate
-import java.time.format.DateTimeFormatter
-import java.time.format.DateTimeParseException
-import java.util.Locale
 
 /** What the app keeps on the phone: the login token, the chosen language and, in a debug build, the server address. */
 class Prefs(context: Context) {
@@ -139,6 +136,8 @@ data class ClassSession(
     val checkedIn: Boolean,
     val ownLink: Boolean,
     val joined: Int,
+    /** The key of the curriculum the class follows. */
+    val curriculum: String?,
 ) {
     val endsAt: Instant get() = startsAt.plusSeconds(minutes * 60L)
 
@@ -146,9 +145,65 @@ data class ClassSession(
         fun from(o: JSONObject) = ClassSession(
             o.getInt("id"), Instant.parse(o.getString("starts_at")), o.getInt("duration_min"), ClassInfo.from(o.getJSONObject("class")),
             o.str("meet_link"), o.getBoolean("has_link"), o.optBoolean("checked_in"), o.optBoolean("own_link"), o.optInt("joined"),
+            o.optString("curriculum").ifEmpty { null },
         )
     }
 }
+
+/** An asana, pranayama or meditation of the studio's library. */
+data class LibraryItem(val key: String, val sanskrit: String, val name: String, val english: String) {
+    /** Its name as the student reads it: "Vajrasana · Thunderbolt pose" in English, "वज्रासन" in Hindi and Marathi. */
+    fun title(lang: String) = if (lang == "en") "$name · $english" else sanskrit
+}
+
+/** One item of a curriculum: so many breaths, seconds, minutes, rounds or strokes, and how to do it. */
+data class PlanItem(val item: String, val dose: Int, val unit: String, val cue: String)
+
+data class Curriculum(val key: String, val name: String, val about: String, val items: List<PlanItem>)
+
+/** The studio's library and curricula, in the chosen language (GET /curricula). */
+data class Curricula(val library: Map<String, LibraryItem>, val curricula: List<Curriculum>) {
+    fun find(key: String?) = curricula.firstOrNull { it.key == key }
+
+    companion object {
+        fun from(o: JSONObject) = Curricula(
+            o.getJSONArray("library").map {
+                LibraryItem(it.getString("key"), it.getString("sanskrit"), it.getString("name"), it.getString("english"))
+            }.associateBy { it.key },
+            o.getJSONArray("curricula").map { c ->
+                Curriculum(c.getString("key"), c.getString("name"), c.getString("about"),
+                    c.getJSONArray("items").map { PlanItem(it.getString("item"), it.getInt("dose"), it.getString("unit"), it.getString("cue")) })
+            },
+        )
+    }
+}
+
+/** What a student says after class about one item: reaction 1 (not yet) to 4 (at ease), strain or pain, a note. */
+data class ItemFeedback(val item: String, val reaction: Int?, val pain: Boolean, val note: String) {
+    val said get() = reaction != null || pain || note.isNotBlank()
+
+    fun json(): JSONObject = JSONObject().put("item", item).put("reaction", reaction ?: JSONObject.NULL).put("pain", if (pain) 1 else 0)
+        .put("note", note.trim().ifEmpty { null } ?: JSONObject.NULL)
+}
+
+/** How a class went, item by item, for the teacher (GET /teacher/sessions/{id}/practice). */
+data class ClassReview(val curriculum: String?, val joined: Int, val answered: Int, val items: List<ItemReview>) {
+    companion object {
+        fun from(o: JSONObject) = ClassReview(
+            o.str("curriculum"), o.getInt("joined"), o.getInt("answered"),
+            o.getJSONArray("items").map { i ->
+                ItemReview(
+                    i.getString("item"), (0 until 4).map { i.getJSONArray("reactions").getInt(it) },
+                    i.getJSONArray("pain").map { it.getString("name") to it.str("note") },
+                    i.getJSONArray("notes").map { it.getString("name") to it.getString("text") },
+                )
+            },
+        )
+    }
+}
+
+/** One item of a class review: how many said each reaction (not yet … at ease), who felt strain or pain, the notes. */
+data class ItemReview(val item: String, val reactions: List<Int>, val pain: List<Pair<String, String?>>, val notes: List<Pair<String, String>>)
 
 data class Studio(val tagline: String, val teacherName: String, val teacherTitle: String, val teacherBio: String, val weekly: List<Pair<String, ClassInfo>>) {
     companion object {
@@ -161,7 +216,7 @@ data class Studio(val tagline: String, val teacherName: String, val teacherTitle
 }
 
 /** The studio's own words, in one language, from content/studio.json as the app bundles it. [name] holds the three
- *  parts of the studio's name: (Devanagari, Latin, meaning). */
+ *  parts of the studio's name: (Devanagari, Latin, meaning); [teacher] is how the app names the teacher. */
 data class StudioWords(
     val blessing: String,
     val blessingMeaning: String,
@@ -169,6 +224,7 @@ data class StudioWords(
     val name: List<Triple<String, String, String>>,
     val week: String,
     val classes: String,
+    val teacherHeading: String,
     val teacher: String,
 ) {
     companion object {
@@ -179,7 +235,7 @@ data class StudioWords(
             return StudioWords(
                 w.getJSONObject("blessing").getString("sa"), w.pick("blessing"), name.pick("map"),
                 name.getJSONArray("parts").map { Triple(it.getString("sa"), it.getString("name"), it.pick("meaning")) },
-                w.pick("week"), w.pick("classes"), w.pick("teacher"),
+                w.pick("week"), w.pick("classes"), w.pick("teacher"), studio.getJSONObject("teacher").pick("short"),
             )
         }
     }
@@ -201,22 +257,10 @@ data class Stats(val classesJoined: Int, val streakDays: Int, val moodChange: Do
 }
 
 /** A class the student joined, from GET /me/practice: its date in India, its name, and the moods (1 to 5). */
-data class JoinedClass(val date: LocalDate?, val name: String, val moodBefore: Int, val moodAfter: Int?) {
+data class JoinedClass(val date: LocalDate, val name: String, val moodBefore: Int, val moodAfter: Int?) {
     companion object {
-        fun from(o: JSONObject, today: LocalDate) =
-            JoinedClass(pastDate(o.getString("date"), today), o.getString("class"), o.getInt("mood_before"), if (o.isNull("mood_after")) null else o.getInt("mood_after"))
-
-        private val DAY = DateTimeFormatter.ofPattern("EEE dd MMM uuuu", Locale.ENGLISH)
-
-        /** The server's "Mon 09 Nov", a day of the last 90 days, as a date: the weekday tells this year from last. */
-        fun pastDate(text: String, today: LocalDate): LocalDate? =
-            listOf(today.year, today.year - 1).firstNotNullOfOrNull { year ->
-                try {
-                    LocalDate.parse("$text $year", DAY).takeIf { !it.isAfter(today) }
-                } catch (_: DateTimeParseException) {
-                    null
-                }
-            }
+        fun from(o: JSONObject) =
+            JoinedClass(LocalDate.parse(o.getString("date")), o.getString("class"), o.getInt("mood_before"), if (o.isNull("mood_after")) null else o.getInt("mood_after"))
     }
 }
 
@@ -241,7 +285,7 @@ data class Student(val user: User, val joined: Int) {
     }
 }
 
-data class SessionInsight(val startsAt: Instant, val className: String, val joined: Int, val moodBefore: Double?, val moodAfter: Double?)
+data class SessionInsight(val id: Int, val startsAt: Instant, val className: String, val joined: Int, val moodBefore: Double?, val moodAfter: Double?)
 data class Feedback(val name: String, val text: String)
 
 data class Insights(
@@ -255,7 +299,7 @@ data class Insights(
         fun from(o: JSONObject) = Insights(
             o.getJSONObject("students").getInt("approved"), o.dbl("mood_change"), o.getInt("mood_pairs"),
             o.getJSONArray("sessions").map {
-                SessionInsight(Instant.parse(it.getString("starts_at")), it.getString("class"), it.getInt("joined"), it.dbl("mood_before"), it.dbl("mood_after"))
+                SessionInsight(it.getInt("id"), Instant.parse(it.getString("starts_at")), it.getString("class"), it.getInt("joined"), it.dbl("mood_before"), it.dbl("mood_after"))
             },
             o.getJSONArray("feedback").map { Feedback(it.getString("name"), it.getString("text")) },
         )

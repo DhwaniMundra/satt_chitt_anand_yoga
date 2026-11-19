@@ -92,7 +92,7 @@ fun WelcomeScreen(vm: AppViewModel, onLanguage: (String) -> Unit) {
     ) {
         Spacer(Modifier.height(if (role == null) 48.dp else 8.dp))
         BrandHeader(large = role == null)
-        Text(stringResource(R.string.welcome_sub), style = MaterialTheme.typography.bodyLarge, color = Palette.muted, textAlign = TextAlign.Center)
+        Text(stringResource(R.string.welcome_sub, LocalTeacher.current), style = MaterialTheme.typography.bodyLarge, color = Palette.muted, textAlign = TextAlign.Center)
         vm.studio?.takeIf { role == null }?.let { studio -> // from the server: the first sign that the app can reach it
             Text(studio.tagline, style = MaterialTheme.typography.labelLarge, color = Palette.saffron, textAlign = TextAlign.Center)
             Text("${studio.teacherName} · ${studio.teacherTitle}", style = MaterialTheme.typography.bodyMedium, color = Palette.muted, textAlign = TextAlign.Center)
@@ -157,7 +157,7 @@ fun WelcomeScreen(vm: AppViewModel, onLanguage: (String) -> Unit) {
             OutlinedTextField(
                 code, { code = it.uppercase() },
                 label = { Text(stringResource(if (teacher) R.string.teacher_code else R.string.group_code)) },
-                supportingText = if (teacher) null else ({ Text(stringResource(R.string.group_code_help)) }),
+                supportingText = if (teacher) null else ({ Text(stringResource(R.string.group_code_help, LocalTeacher.current)) }),
                 singleLine = true, modifier = Modifier.fillMaxWidth(),
             )
         }

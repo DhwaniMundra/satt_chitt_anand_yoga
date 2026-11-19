@@ -28,7 +28,7 @@ test('the practice summary does the sums for one student', () => {
   assert.deepEqual(Object.keys(week), ['period_days', 'classes_joined', 'mood_scale', 'average_mood_before', 'average_mood_after', 'by_class', 'classes']);
   assert.equal(week.mood_scale, '1 very low to 5 great');
   assert.deepEqual(week.classes.map((c) => [c.class, c.mood_before, c.mood_after]), [['Hatha Yoga', 3, 5], ['Pranayama', 2, null], ['Hatha Yoga', 3, 4]]);
-  assert.match(week.classes[0].date, /^(Mon|Tue|Wed|Thu|Fri|Sat|Sun) \d\d (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)$/);
+  assert.match(week.classes[0].date, /^\d{4}-\d\d-\d\d$/); // the India date, ISO
 });
 
 test('the practice route is the summary for the signed-in student only', () => {

@@ -29,6 +29,11 @@ function istParts_(ms) {
   return { day: d.getUTCDate(), month: d.getUTCMonth(), weekday: (d.getUTCDay() + 6) % 7, hour: d.getUTCHours(), minute: d.getUTCMinutes() };
 }
 
+/** The India date of a moment as ISO 8601: "2026-11-16". */
+function istDate_(ms) {
+  return new Date(ms + IST_OFFSET_MS_).toISOString().slice(0, 10);
+}
+
 /** strftime("%-I:%M %p") in India time: "8:00 AM". */
 function istClock_(ms) {
   const p = istParts_(ms);
@@ -226,9 +231,7 @@ function practiceSummary_(ctx, userId, days, lang) {
   const byClass = {};
   rows.forEach((r) => {
     const name = classInfo_(r.session.class_key, lang).name;
-    const p = istParts_(r.session.starts_at);
-    const date = WEEKDAY_NAMES_[p.weekday] + ' ' + (p.day < 10 ? '0' : '') + p.day + ' ' + MONTH_NAMES_[p.month];
-    classes.push({ date: date, class: name, mood_before: r.before, mood_after: r.after });
+    classes.push({ date: istDate_(r.session.starts_at), class: name, mood_before: r.before, mood_after: r.after });
     const entry = byClass[name] || (byClass[name] = { times: 0, before: [], after: [] });
     entry.times += 1;
     entry.before.push(r.before);

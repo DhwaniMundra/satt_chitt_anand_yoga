@@ -1,6 +1,6 @@
 """Two phones, one server: a teacher on emulator-5554 and students on emulator-5556. Checks the loop across
-devices, saves a screenshot at each step (.local/visualization/tours/<version>/) and records both screens into one
-side-by-side video (.local/visualization/two_phones_<version>.mp4); the pass/fail list goes to
+devices, saves a screenshot at each step (.local/visualization/viz_<major>/screens/<version>/) and records both screens
+into one side-by-side video (.local/visualization/viz_<major>/two_phones_<version>.mp4); the pass/fail list goes to
 docs/evals/two_phones_<version>.md.
 
 Needs: both emulators running (scripts/run_emulator.sh, then SCA_AVD=sca_phone_2 SCA_PORT=5556 ...), the debug APK
@@ -19,9 +19,9 @@ from pathlib import Path
 from PIL import Image
 
 import phone as p
+import viz
 
 ROOT = Path(__file__).resolve().parents[1]
-LOCAL = ROOT / ".local" / "visualization"  # gitignored
 APK = ROOT / "android" / "app" / "build" / "outputs" / "apk" / "debug" / "app-debug.apk"
 TEACHER, STUDENT = "emulator-5554", "emulator-5556"
 SERVER = "http://10.0.2.2:8000"  # the dev backend, as the emulators see it
@@ -40,7 +40,7 @@ def main(version: str, teacher_code: str) -> None:
 
 
 def run(version: str, teacher_code: str) -> None:
-    out = LOCAL / "tours" / version
+    out = viz.screens(version)
     out.mkdir(parents=True, exist_ok=True)
     results: list[tuple[str, bool]] = []
 
@@ -112,7 +112,7 @@ def run(version: str, teacher_code: str) -> None:
     on(TEACHER)
     check("teacher phone shows the server address before sign-in", SERVER)
     shot("01_teacher_welcome_server")
-    sign_up("Ramit (test)", TEACHER_PHONE, teacher_code, teacher=True)
+    sign_up("Teacher (test)", TEACHER_PHONE, teacher_code, teacher=True)
     check("teacher signed up", "Your classes")
     p.add_class("pranayama", -47)  # under way, 8 minutes left: both check-ins are open
     token = p.call("POST", "/auth/login", body={"phone": TEACHER_PHONE, "password": PASSWORD})["token"]
@@ -181,7 +181,7 @@ def run(version: str, teacher_code: str) -> None:
     shot("09_student_approved")
 
     stop_recording()
-    side_by_side(out, LOCAL / f"two_phones_{version.removesuffix('-two-phones')}.mp4")
+    side_by_side(out, viz.folder(version) / f"two_phones_{version.removesuffix('-two-phones')}.mp4")
 
     passed = sum(ok for _, ok in results)
     report = ROOT / "docs" / "evals" / f"two_phones_{version.removesuffix('-two-phones')}.md"
@@ -191,7 +191,7 @@ def run(version: str, teacher_code: str) -> None:
         f"- **Phones:** {TEACHER} (teacher), {STUDENT} (students), Android 16 emulators\n"
         f"- **Passed:** {passed}/{len(results)}\n\n"
         + "".join(f"- {'✅' if ok else '❌'} {what}\n" for what, ok in results)
-        + f"\nTest people only. Screenshots and the recording are kept locally in .local/visualization/tours/{version}/.\n",
+        + f"\nTest people only. Screenshots and the recording are kept locally in .local/visualization/{viz.folder(version).name}/.\n",
         encoding="utf-8",
     )
     print(f"{passed}/{len(results)} passed; {report}")

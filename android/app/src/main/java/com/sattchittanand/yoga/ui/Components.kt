@@ -22,6 +22,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -81,6 +82,17 @@ fun Pill(text: String, background: Color = Palette.mossLight, color: Color = Pal
         Text(text, Modifier.padding(horizontal = 12.dp, vertical = 4.dp), style = MaterialTheme.typography.labelMedium, color = color)
     }
 }
+
+@Composable
+fun StatTile(value: String, label: String, modifier: Modifier = Modifier) {
+    SectionCard(modifier, tint = Palette.mossLight) {
+        Text(value, style = MaterialTheme.typography.headlineSmall, color = Palette.moss)
+        Text(label, style = MaterialTheme.typography.labelMedium, color = Palette.muted)
+    }
+}
+
+/** How the app names the teacher, in the chosen language: from content/studio.json, never written into the strings. */
+val LocalTeacher = staticCompositionLocalOf { "" }
 
 val MOODS = listOf("😣", "😕", "😐", "🙂", "😄")
 
@@ -213,4 +225,5 @@ fun errorText(code: String): String = stringResource(
         "checkin_closed" -> R.string.err_checkin_closed
         else -> R.string.err_generic
     },
+    LocalTeacher.current, // for the messages that name the teacher
 )
