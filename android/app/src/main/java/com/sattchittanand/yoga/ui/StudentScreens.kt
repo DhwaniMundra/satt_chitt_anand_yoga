@@ -78,23 +78,24 @@ fun TodayScreen(vm: AppViewModel) {
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Label(stringResource(R.string.brand_latin), Palette.saffron)
             Text(stringResource(R.string.greeting, home.user.name.substringBefore(' ')), style = MaterialTheme.typography.headlineSmall)
+            home.batch?.let { Text(stringResource(R.string.your_batch, it.name), style = MaterialTheme.typography.titleMedium, color = Palette.moss) }
 
             if (after != null && home.afterSaid == null) {
                 SectionCard(tint = Palette.saffronLight) {
                     Text(stringResource(R.string.how_did_it_go), style = MaterialTheme.typography.titleMedium)
-                    Text(after.info.name, style = MaterialTheme.typography.bodyMedium, color = Palette.muted)
+                    Text(after.batch.name, style = MaterialTheme.typography.bodyMedium, color = Palette.muted)
                     Button(onClick = { afterClass = true }) { Text(stringResource(R.string.tell_teacher, LocalTeacher.current)) }
                 }
             } else if (after != null) { // said already: it can be changed until 12 hours after class
                 val closes = after.startsAt.plusSeconds(after.minutes * 60L + 12 * 3600L)
                 SectionCard(tint = Palette.mossLight) {
                     Text(stringResource(R.string.told_teacher, LocalTeacher.current), style = MaterialTheme.typography.titleMedium)
-                    Text(after.info.name + " · " + stringResource(R.string.change_until, timeLabel(closes)), style = MaterialTheme.typography.bodyMedium,
+                    Text(after.batch.name + " · " + stringResource(R.string.change_until, timeLabel(closes)), style = MaterialTheme.typography.bodyMedium,
                         color = Palette.muted)
                     TextButton(onClick = { afterClass = true }) { Text(stringResource(R.string.change)) }
                 }
             }
-            if (!home.user.isApproved) PendingCard(vm)
+            if (!home.user.isApproved) PendingCard()
 
             home.sessions.firstOrNull()?.let { NextClassCard(vm, it, now) }
 
@@ -109,8 +110,6 @@ fun TodayScreen(vm: AppViewModel) {
 
             if (home.sessions.size > 1) {
                 Text(words.week, style = MaterialTheme.typography.titleLarge)
-                Text(stringResource(R.string.week_time), style = MaterialTheme.typography.bodyMedium, color = Palette.muted)
-                Text(words.classes, style = MaterialTheme.typography.bodyMedium, color = Palette.muted)
                 SectionCard {
                     home.sessions.drop(1).forEachIndexed { i, s ->
                         if (i > 0) HorizontalDivider(color = Palette.line)
@@ -120,8 +119,8 @@ fun TodayScreen(vm: AppViewModel) {
                                 Text(timeLabel(s.startsAt), style = MaterialTheme.typography.bodyMedium, color = Palette.muted)
                             }
                             Column(Modifier.weight(1f)) {
-                                Text(s.info.name, style = MaterialTheme.typography.bodyLarge)
-                                Text(s.info.level, style = MaterialTheme.typography.bodyMedium, color = Palette.muted)
+                                Text(vm.curricula?.find(s.curriculum)?.name ?: s.batch.name, style = MaterialTheme.typography.bodyLarge)
+                                Text(stringResource(R.string.minutes, s.minutes), style = MaterialTheme.typography.bodyMedium, color = Palette.muted)
                             }
                         }
                     }
@@ -146,12 +145,12 @@ private fun NextClassCard(vm: AppViewModel, s: ClassSession, now: Instant) {
             Spacer(Modifier.weight(1f))
             if (live) Pill(stringResource(R.string.live_now), Palette.saffron, Color.White)
         }
-        Text(s.info.name, style = MaterialTheme.typography.headlineSmall, color = Color.White)
+        Text(s.batch.name, style = MaterialTheme.typography.headlineSmall, color = Color.White)
         Text(
             "${dayLabel(s.startsAt)} · ${timeLabel(s.startsAt)} · ${stringResource(R.string.minutes, s.minutes)}",
             style = MaterialTheme.typography.bodyLarge, color = Palette.mossLight,
         )
-        Text(s.info.about, style = MaterialTheme.typography.bodyMedium, color = Palette.mossLight)
+        Text(s.batch.about, style = MaterialTheme.typography.bodyMedium, color = Palette.mossLight)
         if (!live && now < s.startsAt) {
             Text(stringResource(R.string.starts_in, untilLabel(now, s.startsAt)), style = MaterialTheme.typography.titleMedium, color = Color.White)
         }
@@ -187,16 +186,10 @@ private fun NextClassCard(vm: AppViewModel, s: ClassSession, now: Instant) {
 }
 
 @Composable
-private fun PendingCard(vm: AppViewModel) {
-    var code by rememberSaveable { mutableStateOf("") }
+private fun PendingCard() {
     SectionCard(tint = Palette.saffronLight) {
-        Text(stringResource(R.string.pending_title), style = MaterialTheme.typography.titleMedium)
+        Text(stringResource(R.string.pending_title, LocalTeacher.current), style = MaterialTheme.typography.titleMedium)
         Text(stringResource(R.string.pending_body, LocalTeacher.current), style = MaterialTheme.typography.bodyMedium)
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedTextField(code, { code = it.uppercase() }, singleLine = true, label = { Text(stringResource(R.string.group_code_label)) }, modifier = Modifier.weight(1f))
-            Button(onClick = { vm.enterGroupCode(code) }, enabled = code.isNotBlank() && !vm.busy) { Text(stringResource(R.string.enter_code)) }
-        }
-        vm.error?.takeIf { it == "bad_group_code" }?.let { Text(errorText(it), color = MaterialTheme.colorScheme.error) }
     }
 }
 

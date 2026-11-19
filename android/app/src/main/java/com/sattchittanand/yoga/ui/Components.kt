@@ -128,11 +128,11 @@ fun FitText(text: String, modifier: Modifier = Modifier, style: TextStyle = Loca
         autoSize = TextAutoSize.StepBased(minFontSize = 8.sp, maxFontSize = if (style.fontSize.isSpecified) style.fontSize else 14.sp))
 }
 
-/** Options side by side, equal widths, at most one selected: the reactions after class, the curricula. One row; two to
- *  a row with a large font. */
+/** Options side by side, equal widths, at most one selected: the reactions after class, the curricula, the batches.
+ *  [perRow] to a row (all in one by default); two to a row with a large font. */
 @Composable
-fun Choices(labels: List<String>, selected: Int?, enabled: Boolean = true, onPick: (Int) -> Unit) {
-    val perRow = if (largeFont()) 2 else labels.size
+fun Choices(labels: List<String>, selected: Int?, enabled: Boolean = true, perRow: Int = labels.size, onPick: (Int) -> Unit) {
+    val perRow = if (largeFont()) minOf(2, perRow) else perRow
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         labels.indices.chunked(perRow).forEach { row ->
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {

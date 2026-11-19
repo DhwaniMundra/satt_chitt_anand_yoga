@@ -29,6 +29,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -45,13 +48,14 @@ import androidx.compose.ui.unit.sp
 import com.sattchittanand.yoga.AppViewModel
 import com.sattchittanand.yoga.ClassSession
 import com.sattchittanand.yoga.R
+import com.sattchittanand.yoga.User
 import com.sattchittanand.yoga.Student
 import java.util.Locale
 import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
-/** The teacher's day: the week's classes, each with its curriculum and its Meet link to share; the group settings; the
- *  language and signing out. */
+/** The teacher's day: the next day's classes, one per batch, each with its curriculum and its Meet link to share; each
+ *  batch's everyday link and the group settings; the language and signing out. */
 @Composable
 fun TeacherTodayScreen(vm: AppViewModel, onLanguage: (String) -> Unit, openStudents: () -> Unit) {
     val home = vm.teacherHome ?: return Waiting(vm, vm::refresh)
@@ -68,7 +72,7 @@ fun TeacherTodayScreen(vm: AppViewModel, onLanguage: (String) -> Unit, openStude
                 }
             }
             home.sessions.forEach { s ->
-                SessionCard(vm, s, expanded == s.id, home.settings.defaultMeetLink) { expanded = if (expanded == s.id) -1 else s.id }
+                SessionCard(vm, s, expanded == s.id, home.batch(s.batch.key)?.meetLink) { expanded = if (expanded == s.id) -1 else s.id }
             }
             GroupCard(vm)
             Label(stringResource(R.string.language))
@@ -80,20 +84,20 @@ fun TeacherTodayScreen(vm: AppViewModel, onLanguage: (String) -> Unit, openStude
 }
 
 @Composable
-private fun SessionCard(vm: AppViewModel, s: ClassSession, open: Boolean, standingLink: String?, toggle: () -> Unit) {
+private fun SessionCard(vm: AppViewModel, s: ClassSession, open: Boolean, batchLink: String?, toggle: () -> Unit) {
     val context = LocalContext.current
     var link by rememberSaveable(s.id) { mutableStateOf(if (s.ownLink) s.meetLink ?: "" else "") }
     SectionCard(Modifier.clickable(onClick = toggle), tint = if (open) Palette.paper else Palette.cream) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text("${dayLabel(s.startsAt)} · ${timeLabel(s.startsAt)}", style = MaterialTheme.typography.labelLarge, color = Palette.muted)
-                Text(s.info.name, style = MaterialTheme.typography.titleLarge)
+                Text(s.batch.name, style = MaterialTheme.typography.titleLarge)
             }
             if (s.joined > 0) Pill(pluralStringResource(R.plurals.joined_count, s.joined, s.joined))
         }
         val status = when {
             s.ownLink -> s.meetLink!!
-            standingLink != null -> stringResource(R.string.uses_standing_link)
+            batchLink != null -> stringResource(R.string.uses_standing_link)
             else -> stringResource(R.string.no_link_yet)
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -132,7 +136,7 @@ private fun Plan(vm: AppViewModel, s: ClassSession) {
     val curricula = vm.curricula ?: return
     Label(stringResource(R.string.curriculum))
     val keys = curricula.curricula.map { it.key }
-    Choices(curricula.curricula.map { it.name }, keys.indexOf(s.curriculum).takeIf { it >= 0 }, enabled = !vm.busy) { i ->
+    Choices(curricula.curricula.map { it.name }, keys.indexOf(s.curriculum).takeIf { it >= 0 }, enabled = !vm.busy, perRow = 2) { i ->
         if (s.curriculum != keys[i]) vm.setCurriculum(s.id, keys[i])
     }
     curricula.find(s.curriculum)?.let { plan ->
@@ -144,23 +148,28 @@ private fun Plan(vm: AppViewModel, s: ClassSession) {
 
 @Composable
 private fun GroupCard(vm: AppViewModel) {
-    val settings = vm.teacherHome?.settings ?: return
+    val home = vm.teacherHome ?: return
+    val settings = home.settings
     val context = LocalContext.current
-    var standing by rememberSaveable { mutableStateOf(settings.defaultMeetLink ?: "") }
+    val links = remember { mutableStateMapOf<String, String>().apply { home.batches.forEach { put(it.info.key, it.meetLink ?: "") } } }
     var group by rememberSaveable { mutableStateOf(settings.groupLink ?: "") }
     val saved = stringResource(R.string.saved)
     Label(stringResource(R.string.settings_title))
     SectionCard {
-        OutlinedTextField(
-            standing, { standing = it }, label = { Text(stringResource(R.string.standing_link)) },
-            supportingText = { Text(stringResource(R.string.standing_link_help)) }, singleLine = true, modifier = Modifier.fillMaxWidth(),
-        )
+        Text(stringResource(R.string.standing_link), style = MaterialTheme.typography.titleSmall)
+        Text(stringResource(R.string.standing_link_help), style = MaterialTheme.typography.bodyMedium, color = Palette.muted)
+        home.batches.forEach { b ->
+            OutlinedTextField(
+                links[b.info.key].orEmpty(), { links[b.info.key] = it }, label = { Text(b.info.name + (b.info.time?.let { " · $it" } ?: "")) },
+                placeholder = { Text("meet.google.com/abc-defg-hij") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+            )
+        }
         OutlinedTextField(
             group, { group = it }, label = { Text(stringResource(R.string.group_link)) },
             placeholder = { Text("chat.whatsapp.com/…") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
         )
         vm.error?.takeIf { it == "bad_group_link" || it == "bad_meet_link" }?.let { Text(errorText(it), color = MaterialTheme.colorScheme.error) }
-        Button(onClick = { vm.saveSettings(group, standing, saved) }, enabled = !vm.busy) { Text(stringResource(R.string.save)) }
+        Button(onClick = { vm.saveSettings(group, links.toMap(), saved) }, enabled = !vm.busy) { Text(stringResource(R.string.save)) }
         HorizontalDivider(color = Palette.line)
         Label(stringResource(R.string.group_code_label))
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -212,11 +221,17 @@ fun StudentsScreen(vm: AppViewModel) {
             if (vm.busy || vm.error != null) Waiting(vm, { vm.loadStudents() }, Modifier.fillMaxWidth()) else Text(stringResource(R.string.no_students), color = Palette.muted)
         }
         vm.students.forEach { (student, joined) ->
+            var placing by rememberSaveable(student.id) { mutableStateOf(false) }
+            val batch = vm.teacherHome?.batch(student.batch)
             SectionCard(tint = if (student.status == "pending") Palette.saffronLight else Palette.paper) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text(student.name, style = MaterialTheme.typography.titleMedium)
                         Text("${student.phone} · ${pluralStringResource(R.plurals.joined_count, joined, joined)}", style = MaterialTheme.typography.bodyMedium, color = Palette.muted)
+                        if (batch != null && student.batchSince != null) {
+                            Text(stringResource(R.string.batch_since, batch.info.name, dayLabel(student.batchSince)), style = MaterialTheme.typography.bodyMedium,
+                                color = Palette.moss)
+                        }
                     }
                     Pill(
                         stringResource(
@@ -228,8 +243,17 @@ fun StudentsScreen(vm: AppViewModel) {
                         ),
                     )
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    if (student.status != "approved") Button(onClick = { vm.setStudentStatus(student.id, "approved") }) { Text(stringResource(R.string.approve)) }
+                if (student.batch == null) {
+                    Label(stringResource(R.string.place_in_batch))
+                    BatchPicker(vm, student, preselect = "beginner", action = R.string.approve_into)
+                } else if (placing) {
+                    BatchPicker(vm, student, preselect = student.batch, action = R.string.move_to) { placing = false }
+                }
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (student.status == "approved" && !placing) OutlinedButton(onClick = { placing = true }) { Text(stringResource(R.string.move_batch)) }
+                    if (student.status == "rejected" && student.batch != null) {
+                        Button(onClick = { vm.setStudentStatus(student.id, "approved") }) { Text(stringResource(R.string.take_back)) }
+                    }
                     if (student.status != "rejected") OutlinedButton(onClick = { vm.setStudentStatus(student.id, "rejected") }) { Text(stringResource(R.string.remove)) }
                     TextButton(onClick = { vm.resetPassword(student.id) { shownPassword = student.name to it } }) { Text(stringResource(R.string.new_password)) }
                 }
@@ -245,6 +269,21 @@ fun StudentsScreen(vm: AppViewModel) {
             confirmButton = { TextButton(onClick = { shownPassword = null }) { Text("OK") } },
             text = { Text(stringResource(R.string.new_password_is, name, password), style = MaterialTheme.typography.titleMedium) },
         )
+    }
+}
+
+/** Choosing a student's batch, with a note for the review history: the batches two to a row, the note, and [action]
+ *  ("Approve into …", "Move to …"), named with the batch chosen. */
+@Composable
+private fun BatchPicker(vm: AppViewModel, student: User, preselect: String?, action: Int, done: () -> Unit = {}) {
+    val batches = vm.teacherHome?.batches ?: return
+    var chosen by rememberSaveable(student.id) { mutableStateOf(preselect) }
+    var note by rememberSaveable(student.id) { mutableStateOf("") }
+    Choices(batches.map { it.info.name }, batches.indexOfFirst { it.info.key == chosen }.takeIf { it >= 0 }, perRow = 2) { chosen = batches[it].info.key }
+    OutlinedTextField(note, { note = it }, placeholder = { Text(stringResource(R.string.batch_note)) }, singleLine = true, modifier = Modifier.fillMaxWidth())
+    val name = batches.firstOrNull { it.info.key == chosen }?.info?.name
+    Button(onClick = { chosen?.let { vm.placeStudent(student.id, it, note); done() } }, enabled = name != null && !vm.busy, modifier = Modifier.fillMaxWidth()) {
+        Text(stringResource(action, name.orEmpty()))
     }
 }
 
