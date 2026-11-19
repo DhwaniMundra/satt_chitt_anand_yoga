@@ -51,6 +51,16 @@ the next.
 "pranayama" by the item; the word is only in the tool's general description ("one asana, pranayama or meditation"). The
 facts in that answer are right; the Marathi is not. A Marathi reader checks the Marathi answers, and the Hindi ones too.
 
+**Known limit: the tour's Surya Namaskar answer.** In the tour (`scripts/capture_tour.py`), Asha's Surya Namaskar reads at
+ease, at ease, steady, then today with effort, which she marked as strain or pain with a note about her wrists in the
+plank; the teacher has answered with a tip. Asked by the suggestion chip, "How is my Surya Namaskar going?", Gemma gave
+the same answer three times in fresh chats, word for word: decoding is deterministic, so asking again does not change
+it. The answer leaves out the teacher's tip, calls the strain she marked "a note about your wrists aching", and gives
+the last two times as "moving between effort and steady" rather than steady, then with effort. Asked "How is my Surya
+Namaskar going, and what did Ramit ji say?", it gives the tip word for word but still calls the strain a note, gives
+the last two times as "between effort and steady", and puts the aching "after round three", where her note has the
+ache in the plank and the rest after round three. The prompt was not tuned for this; v1 stays as it is.
+
 The five held-out questions below were written after the last change and asked once, to see the companion on
 questions it was not tuned on. All five are right on reading. One is thin: asked about Bhujangasana by its Hindi name
 in Latin letters, it gives the teacher's words but not how the pose has felt, and misspells "कोहनी".

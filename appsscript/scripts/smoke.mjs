@@ -5,9 +5,9 @@
 // Every request either touches no tab or only reads: the health check, the studio in three languages, requests
 // refused before any write (a bad envelope, an unknown path, a wrong method, signed-out calls, sign-ups that fail
 // validation, a wrong group code), one sign-up with a wrong teacher code, and logins with a wrong password for numbers
-// that cannot be real mobiles (+91 1…). Side effects, all in CacheService and none in the Sheet: each failed login
-// counts toward that made-up number's lockout, and the one wrong teacher code counts toward the teacher code's
-// (5 in 15 minutes); run it at most once per quarter hour before the teacher has signed up.
+// that cannot be real mobiles (+91 1…). Side effects, all in CacheService and none in the Sheet: each failed login and
+// the wrong group code count toward that made-up number's lockout, and the one wrong teacher code counts toward the
+// teacher code's (5 in 15 minutes); run it at most once per quarter hour before the teacher has signed up.
 import assert from 'node:assert/strict';
 
 const URL_ = process.env.SCA_WEBAPP_URL;
@@ -36,11 +36,14 @@ let made = 0;
 const madeUpPhone = () => '+91 10000 ' + String(Date.now() % 100000 + made++).padStart(5, '0').slice(-5);
 
 const CHECKS = [
-  ['GET (no envelope)', get, (r) => assert.deepEqual(r, { status: 200, body: { ok: true, assistant: 'off', model: null } })],
+  ['GET (no envelope)', get, (r) => assert.deepEqual(r, { status: 200, body: { ok: true } })],
   ['/health', () => call('GET', '/health'), (r) => assert.equal(r.body.ok, true)],
   ['/studio en', () => call('GET', '/studio'), (r) => assert.equal(r.body.name, 'Satt Chitt Anand Yoga')],
   ['/studio hi', () => call('GET', '/studio', { query: { lang: 'hi' } }), (r) => assert.equal(r.body.name, 'सत्·चित्·आनन्द योग')],
-  ['/studio mr', () => call('GET', '/studio?lang=mr'), (r) => assert.equal(r.body.weekly[0].class.name, 'हठयोग')],
+  ['/studio mr', () => call('GET', '/studio?lang=mr'), (r) => {
+    assert.deepEqual([r.body.batches.length, r.body.batches[0].key, r.body.batches[0].name], [4, 'beginner', 'नवशिके']);
+    assert.equal(r.body.tagline, 'सत्य · चैतन्य · आनन्द');
+  }],
   ['/studio bad lang', () => call('GET', '/studio', { query: { lang: 'fr' } }), (r) => assert.equal(r.status, 422)],
   ['bad envelope', () => post('not json'), (r) => assert.deepEqual([r.status, r.body.detail], [400, 'bad_envelope'])],
   ['unknown path', () => call('GET', '/chat'), (r) => assert.deepEqual(r, { status: 404, body: { detail: 'Not Found' } })],

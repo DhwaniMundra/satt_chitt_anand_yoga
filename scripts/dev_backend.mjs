@@ -9,14 +9,16 @@
 // a second or more, to see the app's loading states.
 //
 // For the tour scripts, never the app: POST /dev/class {"batch": "intermediate", "minutes_from_now": -47} adds a
-// 55-minute class of that batch at that time (here, one under way), so the check-ins are open whatever the time of day.
+// 55-minute class of that batch at that time (here, one under way), so the check-ins are open whatever the time of day;
+// POST /dev/joined {"phone": "9800000002", "starts_at": "2026-11-19T02:30:00Z", "mood": 2} has that student join their
+// batch's class that began then, as if they had checked in before it, so they can say how it went.
 import { randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { FakeSheet, loadBackend } from '../appsscript/test/fakes.mjs';
-import { classStarted, setSetting, setting } from '../appsscript/test/helpers.mjs';
+import { addRow, classStarted, DAY, MIN, setSetting, setting } from '../appsscript/test/helpers.mjs';
 
 const isDate = (v) => Object.prototype.toString.call(v) === '[object Date]';
 const DELAY_MS = Number(process.env.SCA_DELAY_MS || 0);
@@ -45,6 +47,21 @@ export function open(file, teacherCode) {
   return b;
 }
 
+/** The before-class check-in of the student with this number to their batch's class that began at `start` (ms). */
+function joined(b, phone, start, mood) {
+  const rows = (tab) => b.ss.getSheetByName(tab).rows();
+  const [head, ...users] = rows('users');
+  const user = users.find((u) => String(u[head.indexOf('phone')]) === '+91' + phone);
+  const batch = user[head.indexOf('batch')];
+  const session = rows('class_sessions').slice(1).find((r) => r[1] === batch && isDate(r[2]) && r[2].getTime() === start);
+  const [bhead, ...batches] = rows('batches');
+  const name = batches.find((r) => r[bhead.indexOf('key')] === batch)[bhead.indexOf('name')];
+  const ist = 330 * MIN;
+  addRow(b, 'checkins', { user_id: user[0], session_id: session[0], phase: 'before', mood, created_at: start - 3 * MIN, class: name,
+    class_date: Math.floor((start + ist) / DAY) * DAY - ist });
+  return session[0];
+}
+
 function serve(b, host, port) {
   const replies = new Map(); // one-time /echo keys -> the envelope to answer with
   const send = (res, status, text) => res.writeHead(status, { 'Content-Type': 'application/json' }).end(text);
@@ -67,12 +84,16 @@ function serve(b, host, port) {
         const { batch, minutes_from_now: minutes } = JSON.parse(text);
         reply = JSON.stringify({ id: classStarted(b, -minutes, batch) });
         b.context.onEdit({});
+      } else if (url.pathname === '/dev/joined') {
+        const { phone, starts_at: startsAt, mood } = JSON.parse(text);
+        reply = JSON.stringify({ session_id: joined(b, phone, Date.parse(startsAt), mood) });
+        b.context.onEdit({});
       } else {
         reply = b.context.doPost({ postData: { contents: text, type: 'application/json' } }).getContent();
         logCall(text, reply);
       }
       if (b.ss.writes !== writes) b.save();
-      if (url.pathname === '/dev/class') return send(res, 200, reply);
+      if (url.pathname.startsWith('/dev/')) return send(res, 200, reply);
       const key = randomUUID();
       replies.set(key, reply);
       setTimeout(() => replies.delete(key), 60000).unref();
