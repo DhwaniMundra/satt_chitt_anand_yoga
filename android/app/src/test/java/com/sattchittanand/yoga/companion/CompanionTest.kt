@@ -89,7 +89,8 @@ class CompanionTest {
     @Test fun aMessageAboutClassesGetsTheScheduleWithUnambiguousDays() {
         val t = tools()
         val system = companion.system("Asha", "When is my next class?", "en", t)
-        assertTrue(system, "Today is Thursday 19 November. This student's coming classes, in their batch. Answer from them:\n" +
+        assertTrue(system, "Today is Thursday 19 November. Their next class is today, Thursday 19 November, at 8:00 AM India time. " +
+            "This student's coming classes, in their batch. Answer from them:\n" +
             "- today, Thursday 19 November: Intermediate at 8:00 AM India time\n" +
             "- tomorrow, Friday 20 November: Intermediate at 8:00 AM India time\n" +
             "- Saturday 21 November: Intermediate at 8:00 AM India time\n" +
