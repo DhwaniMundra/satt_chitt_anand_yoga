@@ -240,13 +240,14 @@ test('setup: the Dashboard formulas point at the right columns', () => {
   const b = freshBackend();
   const dashboard = b.ss.getSheetByName('Dashboard');
   const formulas = dashboard.data.flatMap((line, r) => (line || []).map((v, c) => [r + 1, c + 1, v])).filter(([, , v]) => v && v.formula);
-  assert.equal(formulas.length, 11);
-  assert.equal(Object.keys(dashboard.notes).length, 11, 'each block title explains its block');
+  assert.equal(formulas.length, 12);
+  assert.equal(Object.keys(dashboard.notes).length, 12, 'each block title explains its block');
   const text = formulas.map(([, , v]) => v.formula).join('\n');
   assert.match(text, /QUERY\(users!A1:J, "select E, count\(A\) where D = 'student' group by E/);
   assert.match(text, /QUERY\(users!A1:J, "select I, count\(A\) where D = 'student' and E = 'approved' group by I/);
   assert.match(text, /VLOOKUP\(batch_changes!B2:B, \{users!A2:A, users!B2:B\}, 2, FALSE\)/);
   assert.match(text, /users!E2:E, users!I2:I, users!G2:G/);
+  assert.match(text, /\{"knee", COUNTIF\(intake!G2:G, "\*knee\*"\); "back", COUNTIF/, 'pain areas as counts, no names');
   assert.match(text, /QUERY\(checkins!A1:G, "select G, F, count\(A\) where C = 'before' group by G, F order by G desc/);
   assert.match(text, /select F, avg\(D\) where A is not null group by F pivot C/);
   assert.match(text, /VLOOKUP\(feedback!B2:B, \{users!A2:A, users!B2:B\}, 2, FALSE\)/);

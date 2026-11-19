@@ -19,6 +19,12 @@ const TABLES_ = {
   feedback: [['id', 'int'], ['user_id', 'int'], ['screen', 'text'], ['text', 'text'], ['created_at', 'time']],
   shared_notes: [['id', 'int'], ['user_id', 'int'], ['text', 'text'], ['created_at', 'time']],
   settings: [['key', 'text'], ['value', 'text?']],
+  // A student's answers about themselves, for the teacher to place them in a batch: health data, hidden, and on the
+  // Dashboard only as counts. `pain` like "knee, back".
+  intake: [['user_id', 'int'], ['age', 'int'], ['height_cm', 'int'], ['weight_kg', 'int'], ['food', 'text'], ['meals', 'text?'],
+    ['pain', 'text?'], ['pain_note', 'text?'], ['updated_at', 'time']],
+  // The intake's self-assessment: how each assessment asana went, 1 (not yet) to 4 (at ease), pain 1 for strain or pain.
+  intake_ratings: [['user_id', 'int'], ['item', 'text'], ['reaction', 'int'], ['pain', 'int']],
   // Each placement of a student in a batch, and each move between batches: the review history.
   batch_changes: [['id', 'int'], ['student_id', 'int'], ['from', 'text?'], ['to', 'text'], ['note', 'text?'], ['created_at', 'time']],
   // The batches: seeded by setup() from content/studio.json while the tab is empty, then the owner's to edit. `days`

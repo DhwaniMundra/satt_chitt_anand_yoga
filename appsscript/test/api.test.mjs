@@ -346,7 +346,7 @@ test('the teacher sees students, pending first, then the newest', () => {
   const list = b.call('GET', '/teacher/students', { token: t.token }).body.students;
   assert.deepEqual(list.map((x) => x.id), [p.user.id, c.user.id, a.user.id]);
   assert.deepEqual(list.map((x) => x.joined), [0, 0, 1]);
-  assert.deepEqual(Object.keys(list[0]), ['id', 'name', 'phone', 'role', 'status', 'lang', 'batch', 'batch_since', 'joined', 'created_at']);
+  assert.deepEqual(Object.keys(list[0]), ['id', 'name', 'phone', 'role', 'status', 'lang', 'batch', 'batch_since', 'joined', 'created_at', 'intake']);
   assert.match(list[0].created_at, /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/);
   assert.equal(b.call('GET', '/teacher/home', { token: t.token }).body.pending_students, 1);
   assert.deepEqual(b.call('POST', '/teacher/students/' + t.user.id + '/status', { token: t.token, body: { status: 'approved' } }),

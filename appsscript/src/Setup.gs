@@ -2,11 +2,11 @@
 // Run setup() once from the script editor (it asks for permission the first time). Running it again is safe: it adds
 // what is missing and leaves the data, the codes, the batches, the curriculum and an existing Dashboard alone.
 
-const DATA_TABS_ = ['users', 'class_sessions', 'checkins', 'practice', 'solo_sessions', 'asana_feedback', 'batch_changes', 'feedback',
-  'shared_notes', 'tokens', 'settings'];
+const DATA_TABS_ = ['users', 'class_sessions', 'checkins', 'practice', 'solo_sessions', 'asana_feedback', 'batch_changes', 'intake',
+  'intake_ratings', 'feedback', 'shared_notes', 'tokens', 'settings'];
 const CURRICULUM_TABS_ = ['library', 'curricula', 'curriculum_items'];
 const OWNER_TABS_ = ['batches'].concat(CURRICULUM_TABS_); // the owner's to edit: no warning on hand edits
-const HIDDEN_TABS_ = ['tokens', 'settings']; // login-token hashes and the codes: nothing to browse
+const HIDDEN_TABS_ = ['intake', 'intake_ratings', 'tokens', 'settings']; // health answers, login-token hashes, the codes
 const SETTING_NOTES_ = [
   ['teacher_code', 'The one-time code the teacher signs up with. It stops working once the teacher has an account.'],
   ['group_code', 'Students sign up with this code, from the class\'s WhatsApp invite; the teacher then places them in a batch. The teacher can change it in the app.'],
@@ -173,6 +173,7 @@ function dashboardBlocks_(ss) {
   const n = columnLetters_(ss, 'shared_notes');
   const p = columnLetters_(ss, 'practice');
   const m = columnLetters_(ss, 'batch_changes');
+  const k = columnLetters_(ss, 'intake');
   const users = 'users!A1:' + u._last;
   const checkins = 'checkins!A1:' + c._last;
   const col = (tab, letter) => tab + '!' + letter + '2:' + letter;
@@ -190,6 +191,9 @@ function dashboardBlocks_(ss) {
         col('batch_changes', m.to), col('batch_changes', m.note)].join(', ') + "}, \"select Col1, Col2, Col3, Col4, Col5 where Col1 is not " +
         "null order by Col1 desc limit 8 label Col1 'when', Col2 'student', Col3 'from', Col4 'to', Col5 'note'\", 0), \"No batch changes yet\")",
       { 'K6:K13': 'yyyy-mm-dd' }],
+    ['Q5', 'Pain areas', 'How many students named each in their intake. Counts only: the answers themselves stay in the hidden tabs.',
+      '=IFERROR(QUERY({' + PAIN_AREAS_.map((a) => '"' + a + '", COUNTIF(' + col('intake', k.pain) + ', "*' + a + '*")').join('; ') +
+        "}, \"select Col1, Col2 label Col1 'pain area', Col2 'students'\", 0), \"No intake yet\")", {}],
     ['D5', 'Mood per class', 'Average mood after and before class, all classes so far. 1 very low to 5 great.',
       '=IFERROR(QUERY(' + checkins + ', "select ' + c.class + ', avg(' + c.mood + ') where ' + c.user_id + ' is not null group by ' +
         c.class + ' pivot ' + c.phase + '", 1), "No check-ins yet")', { 'E6:F13': '0.0' }],
