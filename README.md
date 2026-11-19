@@ -3,6 +3,8 @@
 A practice tracker for an online yoga studio: students say how each asana went, in class and on their own, and the
 teacher reads it to guide them.
 
+**[Watch the 2:43 film of how it works](https://github.com/DhwaniMundra/satt_chitt_anand_yoga/releases/download/v1.0/release_v1_720p.mp4)**
+
 <!-- Dhwani: your own sentences go here. -->
 
 ## The studio
@@ -22,14 +24,15 @@ student's practice.
 </p>
 
 **For a student**
-- **Joining.** Sign up with the group code from the WhatsApp invite, then tell the teacher about yourself: age, height,
-  weight, food habits, any pain, and how six poses feel today. The teacher places you in a batch.
-- **Today.** Your batch's next class, its sequence, and the Meet link. After class, one tap per item: not yet, with
-  effort, steady or at ease, "felt strain or pain", and a note if you like.
-- **Practice.** How each asana has gone, in class and on your own, and what the teacher wrote about it. Practise on
-  your own with a stopwatch per item.
-- **Ask.** Gemma 4, running on the phone, answers from your own practice and the studio's notes, in English, Hindi or
-  Marathi: "How is my Setu Bandhasana going?", "When is my next class?".
+- **Joining** takes the group code from the WhatsApp invite. The student signs up, then answers a few questions for
+  the teacher: age, height, weight, food habits, any pain, and how six poses feel. The teacher places them in a batch.
+- **Today** shows the batch's next class in the student's own time zone, with its sequence and the Meet link. After
+  class, the student gives each item one tap (not yet, with effort, steady or at ease), can flag strain or pain, and can
+  add a note.
+- **Practice** shows how each asana has gone, in class and alone, and what the teacher wrote about it. Solo practice
+  has a stopwatch for each item.
+- **Ask** is Gemma 4, running on the phone. It answers from the student's own practice and the studio's notes, in
+  English, Hindi or Marathi: "How is my Setu Bandhasana going?", "When is my next class?"
 
 <p>
   <img src="docs/media/v1/students.png" width="24%" alt="Students: a new student's answers and the batch they point to">
@@ -39,10 +42,11 @@ student's practice.
 </p>
 
 **For the teacher**
-- **Today.** One card per batch: the class's sequence and its link, shared to WhatsApp in one tap.
-- **Students.** A new student's answers and the batch they point to; approve into it, or move a student later with a
-  note. Each student's asanas, and feedback on any of them.
-- **Insights.** Mood before and after each class, and how each class went item by item, strain or pain first.
+- **Today** shows one card per batch, with the class's sequence and its Meet link, shared to WhatsApp in one tap.
+- **Students** shows a new student's answers and the batch they point to. The teacher approves them into a batch, or
+  moves a student later with a note, and can write feedback on any of a student's asanas.
+- **Insights** shows mood before and after each class, and how each class went item by item, with strain or pain
+  first.
 
 ## How it works
 
