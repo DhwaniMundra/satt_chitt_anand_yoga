@@ -100,7 +100,7 @@ test('a pending student sees no classes; placed in a batch, only that batch\'s, 
   const r = b.call('PUT', '/teacher/sessions/' + mine.id, { token: t.token, body: { meet_link: 'meet.google.com/abc-defg-hij' } });
   assert.equal(r.status, 200);
   assert.ok(r.body.text.includes('Intermediate') && r.body.text.includes('https://meet.google.com/abc-defg-hij'), r.body.text);
-  assert.ok(r.body.url.startsWith('https://wa.me/?text='));
+  assert.deepEqual(Object.keys(r.body), ['text']);
   assert.deepEqual(b.call('POST', '/sessions/' + mine.id + '/checkin', { token: s.token, body: { phase: 'before', mood: 3 } }),
     { status: 403, body: { detail: 'pending' } });
   const approve = (token = t.token) => b.call('POST', '/teacher/students/' + s.user.id + '/status', { token, body: { status: 'approved' } });
@@ -113,6 +113,33 @@ test('a pending student sees no classes; placed in a batch, only that batch\'s, 
   assert.equal(home.sessions.find((x) => x.id === mine.id).meet_link, 'https://meet.google.com/abc-defg-hij');
   assert.deepEqual(b.call('POST', '/sessions/' + other.id + '/checkin', { token: s.token, body: { phase: 'before', mood: 3 } }),
     { status: 403, body: { detail: 'other_batch' } });
+});
+
+test('a student moved after joining a class can still say how it went, and joins only the new batch', () => {
+  const b = freshBackend();
+  const { t, code } = teacherAndCode(b);
+  const s = signup(b, '9000000031', { code, batch: 'beginner' });
+  const joined = classStarted(b, 50, 'beginner'); // under way, 5 minutes left: both check-ins open
+  const checkin = (id, phase) => b.call('POST', '/sessions/' + id + '/checkin', { token: s.token, body: { phase, mood: 4 } });
+  assert.equal(checkin(joined, 'before').status, 200);
+  const move = b.call('PUT', '/teacher/students/' + s.user.id + '/batch', { token: t.token, body: { batch: 'intermediate', note: 'Ready' } });
+  assert.equal(move.status, 200);
+  assert.equal(checkin(joined, 'after').status, 200, 'the mood after the class joined before the move');
+  const practice = b.call('POST', '/sessions/' + joined + '/practice', { token: s.token, body: { entries: [{ item: 'tadasana', reaction: 3 }] } });
+  assert.deepEqual(practice, { status: 200, body: { ok: true, saved: 1 } });
+  assert.deepEqual(checkin(classStarted(b, 5, 'beginner'), 'before'), { status: 403, body: { detail: 'other_batch' } });
+});
+
+test('a removed student gets nothing class-related, not even the class they joined', () => {
+  const b = freshBackend();
+  const { t, code } = teacherAndCode(b);
+  const s = signup(b, '9000000032', { code, batch: 'beginner' });
+  const joined = classStarted(b, 50, 'beginner');
+  assert.equal(b.call('POST', '/sessions/' + joined + '/checkin', { token: s.token, body: { phase: 'before', mood: 3 } }).status, 200);
+  assert.equal(b.call('GET', '/home', { token: s.token }).body.after_checkin.id, joined);
+  assert.equal(b.call('POST', '/teacher/students/' + s.user.id + '/status', { token: t.token, body: { status: 'rejected' } }).status, 200);
+  const home = b.call('GET', '/home', { token: s.token }).body;
+  assert.deepEqual([home.user.status, home.batch, home.sessions, home.after_checkin, home.group_link], ['rejected', null, [], null, null]);
 });
 
 test('bad links are refused', () => {
@@ -197,10 +224,9 @@ test('check-ins feed the stats and the insights', () => {
   assert.equal(stats.mood_pairs, 1);
   const insights = b.call('GET', '/teacher/insights', { token: t.token }).body;
   assert.equal(insights.mood_change, 3);
-  assert.deepEqual(insights.students, { approved: 1, pending: 0 });
-  assert.deepEqual(insights.questions, { count: 0, gemma_latency_s: null });
+  assert.deepEqual(insights.students, { approved: 1 });
   const row = insights.sessions.find((x) => x.id === id);
-  assert.deepEqual([row.class, row.joined, row.mood_before, row.mood_after, row.answered_after], ['Beginner', 1, 2, 5, 1]);
+  assert.deepEqual([row.class, row.joined, row.mood_before, row.mood_after], ['Beginner', 1, 2, 5]);
   const mr = b.call('GET', '/teacher/insights', { token: t.token, query: { lang: 'mr' } }).body;
   assert.equal(mr.sessions.find((x) => x.id === id).class, 'नवशिके', 'the batch names in the language asked');
 });
@@ -346,8 +372,7 @@ test('the teacher sees students, pending first, then the newest', () => {
   const list = b.call('GET', '/teacher/students', { token: t.token }).body.students;
   assert.deepEqual(list.map((x) => x.id), [p.user.id, c.user.id, a.user.id]);
   assert.deepEqual(list.map((x) => x.joined), [0, 0, 1]);
-  assert.deepEqual(Object.keys(list[0]), ['id', 'name', 'phone', 'role', 'status', 'lang', 'batch', 'batch_since', 'joined', 'created_at', 'intake']);
-  assert.match(list[0].created_at, /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/);
+  assert.deepEqual(Object.keys(list[0]), ['id', 'name', 'phone', 'role', 'status', 'lang', 'batch', 'batch_since', 'joined', 'intake']);
   assert.equal(b.call('GET', '/teacher/home', { token: t.token }).body.pending_students, 1);
   assert.deepEqual(b.call('POST', '/teacher/students/' + t.user.id + '/status', { token: t.token, body: { status: 'approved' } }),
     { status: 404, body: { detail: 'no_student' } });
@@ -389,7 +414,7 @@ test('the invite carries the group code', () => {
   const invite = b.call('GET', '/teacher/invite', { token: t.token, query: { lang: 'hi' } }).body;
   assert.ok(invite.text.includes('*' + code + '*'));
   assert.ok(invite.text.startsWith('🙏 ऐप में सत्·चित्·आनन्द योग से जुड़ें।'));
-  assert.equal(invite.group_link, null);
+  assert.deepEqual(Object.keys(invite), ['text']);
 });
 
 test('a new group code works and the old one does not', () => {

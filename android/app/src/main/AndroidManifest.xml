@@ -3,8 +3,9 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
 
-    <!-- usesCleartextTraffic: true in debug builds only, for the dev backend on the laptop over plain HTTP; release
-         builds speak HTTPS to the live web app.
+    <!-- usesCleartextTraffic: true only for a build whose server address is plain HTTP, the dev backend on the laptop
+         (debug builds, and a release built to try the shrunk app on the emulator); the release for phones speaks HTTPS
+         to the live web app.
          allowBackup false: the login token, the chat and the health notes must not travel in device backups. -->
     <application
         android:allowBackup="false"

@@ -1,9 +1,13 @@
 package com.sattchittanand.yoga.ui
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
@@ -13,11 +17,14 @@ import androidx.compose.material.icons.filled.Insights
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.SelfImprovement
 import androidx.compose.material.icons.filled.WbSunny
+import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -26,6 +33,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -34,6 +43,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
 import com.sattchittanand.yoga.AppViewModel
 import com.sattchittanand.yoga.R
 
@@ -57,7 +67,9 @@ fun App(vm: AppViewModel, onLanguage: (String) -> Unit) {
     CompositionLocalProvider(LocalTeacher provides vm.words().teacher) {
         when {
             vm.starting -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { BrandHeader(large = true) }
+            user == null && vm.signedIn -> Unreachable(vm) // never the sign-up form for someone signed in
             user == null -> WelcomeScreen(vm, onLanguage)
+            user.status == "rejected" -> Closed(vm)
             else -> Main(vm, user.isTeacher, onLanguage)
         }
     }
@@ -67,6 +79,7 @@ fun App(vm: AppViewModel, onLanguage: (String) -> Unit) {
 private fun Main(vm: AppViewModel, teacher: Boolean, onLanguage: (String) -> Unit) {
     val tabs = if (teacher) TEACHER_TABS else STUDENT_TABS
     var tab by rememberSaveable(teacher) { mutableStateOf(tabs.first().key) }
+    var again by rememberSaveable { mutableIntStateOf(0) } // a tab tapped again goes back to its first screen
     val snackbar = remember { SnackbarHostState() }
     val error = vm.error?.let { errorText(it) }
 
@@ -80,7 +93,7 @@ private fun Main(vm: AppViewModel, teacher: Boolean, onLanguage: (String) -> Uni
                 tabs.forEach { t ->
                     NavigationBarItem(
                         selected = tab == t.key,
-                        onClick = { tab = t.key; vm.error = null },
+                        onClick = { if (tab == t.key) again++ else tab = t.key; vm.error = null },
                         icon = { Icon(t.icon, null) },
                         label = { FitText(stringResource(t.label)) },
                         colors = NavigationBarItemDefaults.colors(indicatorColor = Palette.mossLight, selectedIconColor = Palette.moss),
@@ -92,16 +105,44 @@ private fun Main(vm: AppViewModel, teacher: Boolean, onLanguage: (String) -> Uni
         // The screen ends above the keyboard while it is open (edge to edge, adjustResize alone does not do it), so
         // the Ask box and the other text fields stay in sight as the student types.
         Box(Modifier.padding(padding).consumeWindowInsets(padding).imePadding()) {
-            when (tab) {
-                "today" -> if (teacher) TeacherTodayScreen(vm, onLanguage) { tab = "students" } else TodayScreen(vm)
-                "practice" -> PracticeScreen(vm)
-                "ask" -> AskScreen(vm)
-                "me" -> MeScreen(vm, onLanguage)
-                "students" -> StudentsScreen(vm)
-                "insights" -> InsightsScreen(vm)
+            key(tab, again) {
+                when (tab) {
+                    "today" -> if (teacher) TeacherTodayScreen(vm, onLanguage) { tab = "students" } else TodayScreen(vm)
+                    "practice" -> PracticeScreen(vm)
+                    "ask" -> AskScreen(vm)
+                    "me" -> MeScreen(vm, onLanguage)
+                    "students" -> StudentsScreen(vm)
+                    "insights" -> InsightsScreen(vm)
+                }
             }
             // A call to the server takes a second or more; Today shows it in its pull-to-refresh spinner.
             if (vm.busy && tab != "today") LinearProgressIndicator(Modifier.fillMaxWidth().align(Alignment.TopCenter), color = Palette.moss)
         }
     }
 }
+
+/** Signed in, but the studio could not be reached at start: try again, here or on coming back to the app. */
+@Composable
+private fun Unreachable(vm: AppViewModel) {
+    Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
+        BrandHeader(large = true)
+        Spacer(Modifier.height(24.dp))
+        Text(stringResource(R.string.unreachable), style = MaterialTheme.typography.titleLarge)
+        Text(stringResource(R.string.unreachable_help), style = MaterialTheme.typography.bodyMedium, color = Palette.muted)
+        Spacer(Modifier.height(16.dp))
+        Button(onClick = vm::refresh, enabled = !vm.busy) { Text(stringResource(R.string.try_again)) }
+    }
+}
+
+/** A student the teacher removed: one plain line, and Log out. */
+@Composable
+private fun Closed(vm: AppViewModel) {
+    Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
+        BrandHeader(large = true)
+        Spacer(Modifier.height(24.dp))
+        Text(stringResource(R.string.closed_account, LocalTeacher.current), style = MaterialTheme.typography.titleMedium)
+        Spacer(Modifier.height(16.dp))
+        OutlinedButton(onClick = vm::logout) { Text(stringResource(R.string.logout)) }
+    }
+}
+

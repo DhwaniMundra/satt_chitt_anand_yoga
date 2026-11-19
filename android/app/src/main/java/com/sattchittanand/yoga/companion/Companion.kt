@@ -48,9 +48,15 @@ Rules:
    get_my_notes.
 4. You are not a doctor: never diagnose, never promise a cure, never tell anyone to start, change or stop a medicine.
    For pain, illness, pregnancy or medicine, give only gentle general guidance and say to ask their doctor and to tell
-   {teacher} before class.
-5. Keep replies short and warm: at most 90 words.
-6. Reply only in {language}."""
+   {teacher} before class. If something hurts in practice, say to stop and to tell {teacher}.
+5. You cannot reach {teacher} or anyone else, or do anything outside this chat. For whatever is {teacher}'s to
+   decide, say the student can ask {teacher}.
+6. Keep replies short and warm: at most 90 words.
+7. Reply only in {language}.{script}"""
+
+/** For Hindi and Marathi: the whole reply in Devanagari, with no English beside it. */
+private const val DEVANAGARI_ONLY = " Write every word in Devanagari, the names of asanas, batches and the teacher too. Add no " +
+    "English words, and no English in brackets after a word."
 
 // ---------- what the tools read ----------
 
@@ -123,18 +129,23 @@ private val DATE = DateTimeFormatter.ofPattern("EEEE d MMMM", Locale.ENGLISH)
 private val TIME = DateTimeFormatter.ofPattern("h:mm a", Locale.ENGLISH)
 
 private val REACTIONS = listOf("not yet", "with effort", "steady", "at ease")
+private val MOODS = listOf("very low", "low", "okay", "good", "great")
 
-/** An average of the four reactions (1 to 4) in words: "2.0, with effort", "3.7, between steady and at ease". */
-fun reactionWords(average: Number): String {
-    val a = average.toDouble()
-    val low = REACTIONS[(a.toInt() - 1).coerceIn(0, 3)]
-    val words = if (a % 1 < 0.05 || a >= 4) low else "between $low and ${REACTIONS[a.toInt().coerceIn(0, 3)]}"
-    return String.format(Locale.ENGLISH, "%.1f, %s", a, words)
+/** A reaction (1 to 4), or an average of them, in words alone: "with effort", "between steady and at ease". */
+fun reactionWords(average: Number) = inWords(average.toDouble(), REACTIONS)
+
+/** A mood (1 to 5), or an average of them, in words alone: "okay", "between low and okay". */
+fun moodWords(average: Number) = inWords(average.toDouble(), MOODS)
+
+/** A value on a scale of `words` (1 for the first) in words, so Gemma has no number on a scale to quote or misread. */
+private fun inWords(a: Double, words: List<String>): String {
+    val low = words[(a.toInt() - 1).coerceIn(0, words.lastIndex)]
+    return if (a % 1 < 0.05 || a >= words.size) low else "between $low and ${words[a.toInt().coerceIn(0, words.lastIndex)]}"
 }
 
-/** An item's progress as Gemma reads it ([Tools.asanaProgress]): the server's sums, each date with its weekday and
- *  each average reaction in words, so the model has nothing to work out. */
-fun progressSummary(item: ItemName, p: Map<String, Any?>): Map<String, Any?> {
+/** An item's progress as Gemma reads it ([Tools.asanaProgress]): the server's sums, the item named as fits [lang], each
+ *  date with its weekday and each average reaction in words, so the model has nothing to work out. */
+fun progressSummary(item: ItemName, p: Map<String, Any?>, lang: String): Map<String, Any?> {
     fun day(value: Any?) = (value as? String)?.let { DATE.format(LocalDate.parse(it)) }
 
     @Suppress("UNCHECKED_CAST")
@@ -144,7 +155,7 @@ fun progressSummary(item: ItemName, p: Map<String, Any?>): Map<String, Any?> {
     @Suppress("UNCHECKED_CAST")
     val notes = (p["your_notes"] as? List<Map<String, Any?>>).orEmpty()
     return linkedMapOf(
-        "asana" to item.full,
+        "asana" to if (lang == "en") item.full else item.sanskrit, // in Hindi and Marathi, no English name to copy
         "times_in_class" to p["in_class"],
         "times_on_own" to p["solo"],
         "first" to day(p["first"]),
@@ -160,31 +171,43 @@ fun progressSummary(item: ItemName, p: Map<String, Any?>): Map<String, Any?> {
     )
 }
 
-/** The next classes, each with an unambiguous day ("tomorrow, Friday 20 November"), so Gemma need not work out dates. */
-fun schedule(classes: List<UpcomingClass>, now: Instant, limit: Int = 5): Map<String, Any?> {
-    val today = now.atZone(IST).toLocalDate()
+/** The next classes, each with an unambiguous day on the student's own calendar ([zone], the phone's) and its time in
+ *  India, and the student's own time too when they are elsewhere: "tomorrow, Friday 20 November", "8:00 AM India time".
+ *  Gemma need not work out dates or time zones. */
+fun schedule(classes: List<UpcomingClass>, now: Instant, zone: ZoneId, limit: Int = 5): Map<String, Any?> {
+    val today = now.atZone(zone).toLocalDate()
+    val listed = classes.take(limit).map { c ->
+        val start = c.startsAt.atZone(zone)
+        val date = DATE.format(start)
+        val day = when (ChronoUnit.DAYS.between(today, start.toLocalDate())) {
+            0L -> "today, $date"
+            1L -> "tomorrow, $date"
+            else -> date
+        }
+        val india = TIME.format(c.startsAt.atZone(IST)) + " India time"
+        val time = if (zone.rules.getOffset(c.startsAt) == IST.rules.getOffset(c.startsAt)) india else "${TIME.format(start)} your time ($india)"
+        linkedMapOf("day" to day, "time" to time, "class" to c.name, "about" to c.about)
+    }
     return linkedMapOf(
         "today_is" to DATE.format(today),
-        "classes" to classes.take(limit).map { c ->
-            val start = c.startsAt.atZone(IST)
-            val date = DATE.format(start)
-            val day = when (ChronoUnit.DAYS.between(today, start.toLocalDate())) {
-                0L -> "today, $date"
-                1L -> "tomorrow, $date"
-                else -> date
-            }
-            linkedMapOf("day" to day, "time" to TIME.format(start) + " India time", "class" to c.name, "about" to c.about)
-        },
+        "next_class" to listed.firstOrNull()?.let { "${it["day"]}, at ${it["time"]}" }, // said, not left to pick from the list
+        "classes" to listed,
     )
 }
 
 private const val UNREACHABLE = "The studio server could not be reached just now, so this is not available."
 
 /**
- * The companion's five tools, bound to the student on this phone, each in its own [ToolSet] so Gemma sees them in
+ * The companion's six tools, bound to the student on this phone, each in its own [ToolSet] so Gemma sees them in
  * this order. Each records its name in [used].
  */
-class Tools(private val data: StudentData, private val notes: StudioNotes, private val lang: String, private val now: () -> Instant = Instant::now) {
+class Tools(
+    private val data: StudentData,
+    private val notes: StudioNotes,
+    private val lang: String,
+    private val zone: ZoneId = ZoneId.systemDefault(), // the student's own calendar, for "today" and "tomorrow"
+    private val now: () -> Instant = Instant::now,
+) {
     val used = mutableListOf<String>()
 
     fun getMyPractice(days: Int): Map<String, Any?> {
@@ -196,20 +219,24 @@ class Tools(private val data: StudentData, private val notes: StudioNotes, priva
         }
     }
 
-    /** The summary with the ISO date of each class and each session on one's own written out ("Monday 16 November"),
-     *  each item's average reaction in words, and the moods named as the classes' (practice on one's own asks none), so
-     *  Gemma need not work out weekdays or read a scale. */
-    private fun readable(summary: Map<String, Any?>): Map<String, Any?> = summary.entries.associate { (k, v) ->
-        (if (k == "average_mood_before" || k == "average_mood_after") k.replace("mood", "class_mood") else k) to v
-    } + listOf("classes", "solo").mapNotNull { key ->
-        @Suppress("UNCHECKED_CAST")
-        (summary[key] as? List<Map<String, Any?>>)?.let { days -> key to days.map { it + ("date" to DATE.format(LocalDate.parse(it["date"] as String))) } }
-    } + listOfNotNull(
-        @Suppress("UNCHECKED_CAST")
-        (summary["top_items"] as? List<Map<String, Any?>>)?.let { items ->
-            "top_items" to items.map { it + ("average_reaction" to (it["average_reaction"] as? Number)?.let(::reactionWords)) }
-        },
-    )
+    /** The summary as Gemma reads it: every date written out ("Monday 16 November"), every mood and average reaction in
+     *  words, and the moods named as the classes' (practice on one's own asks none), so it has no weekday to work out
+     *  and no scale to read. The items practised in class and on one's own stay apart, as the server gives them. */
+    @Suppress("UNCHECKED_CAST")
+    private fun readable(summary: Map<String, Any?>): Map<String, Any?> {
+        fun list(key: String) = summary[key] as? List<Map<String, Any?>>
+        fun moods(m: Map<String, Any?>) = m.mapValues { (k, v) -> if ("mood" in k && v is Number) moodWords(v) else v }
+        fun day(m: Map<String, Any?>) = m + ("date" to DATE.format(LocalDate.parse(m["date"] as String)))
+        fun reactions(m: Map<String, Any?>) = m + ("average_reaction" to (m["average_reaction"] as? Number)?.let(::reactionWords))
+        return moods(summary).mapKeys { (k, _) -> if (k.startsWith("average_mood")) k.replace("mood", "class_mood") else k } +
+            listOfNotNull(
+                (summary["by_class"] as? Map<String, Map<String, Any?>>)?.let { "by_class" to it.mapValues { (_, c) -> moods(c) } },
+                list("classes")?.let { "classes" to it.map { c -> moods(day(c)) } },
+                list("solo")?.let { "solo" to it.map(::day) },
+                list("items_in_class")?.let { "items_in_class" to it.map(::reactions) },
+                list("items_on_own")?.let { "items_on_own" to it.map(::reactions) },
+            )
+    }
 
     /** How this student's practice of one item has gone: the server's sums for it, its dates written out, its average
      *  reactions in words; or what the studio's list has closest when [asana] names nothing in it. */
@@ -219,7 +246,7 @@ class Tools(private val data: StudentData, private val notes: StudioNotes, priva
             val library = data.library()
             val key = resolveItem(asana, library)
                 ?: return mapOf("error" to "Nothing called \"$asana\" is in the studio's list. The closest: ${closestItems(asana, library).joinToString(", ")}.")
-            progressSummary(library.first { it.key == key }, data.itemProgress(key))
+            progressSummary(library.first { it.key == key }, data.itemProgress(key), lang)
         } catch (e: Exception) {
             mapOf("error" to UNREACHABLE)
         }
@@ -242,7 +269,7 @@ class Tools(private val data: StudentData, private val notes: StudioNotes, priva
     fun getUpcomingClasses(): Map<String, Any?> {
         used += "get_upcoming_classes"
         return try {
-            schedule(data.upcoming(lang), now())
+            schedule(data.upcoming(lang), now(), zone)
         } catch (e: Exception) {
             mapOf("error" to UNREACHABLE)
         }
@@ -315,8 +342,11 @@ class PracticeCompanion(val notes: StudioNotes, private val studioName: String, 
     /** The system message for [message]; [batch] is the name of the student's batch, once the teacher has placed them. */
     fun system(firstName: String, message: String, lang: String, tools: Tools, batch: String? = null): String {
         val base = SYSTEM.replace("{studio}", studioName).replace("{name}", firstName).replace("{teacher}", teacher)
-            .replace("{language}", LANGUAGE_NAMES.getValue(lang))
-        val placed = batch?.let { "\n\n$firstName practises in the $it batch; their classes are that batch's, and a move to another batch is $teacher's to decide." }.orEmpty()
+            .replace("{language}", LANGUAGE_NAMES.getValue(lang)).replace("{script}", if (lang == "en") "" else DEVANAGARI_ONLY)
+        val placed = batch?.let {
+            "\n\n$firstName practises in the $it batch, and only its classes are theirs. If they ask about another batch's class, " +
+                "say they are in the $it batch, give their next class, and say a move is $teacher's to decide: they can ask $teacher."
+        }.orEmpty()
         val progress = preloadedProgress(message, tools)
         val schedule = preloadedSchedule(message, tools)
         return base + placed + progress + schedule + preloadedNotes(message, lang, tools.used, schedule = schedule.isNotEmpty())
@@ -343,7 +373,8 @@ class PracticeCompanion(val notes: StudioNotes, private val studioName: String, 
         @Suppress("UNCHECKED_CAST")
         val classes = schedule["classes"] as? List<Map<String, Any?>> ?: return "".also { tools.used.removeAt(tools.used.lastIndex) }
         val lines = classes.joinToString("\n") { c -> "- ${c["day"]}: ${c["class"]} at ${c["time"]}" }
-        return "\n\nToday is ${schedule["today_is"]}. This student's coming classes, in their batch. Answer from them:\n$lines"
+        val next = schedule["next_class"]?.let { "Their next class is $it. " }.orEmpty()
+        return "\n\nToday is ${schedule["today_is"]}. ${next}This student's coming classes, in their batch. Answer from them:\n$lines"
     }
 
     /** The notes section on the topic [message] names, as text for the system message (or ""), so a health question
@@ -357,6 +388,10 @@ class PracticeCompanion(val notes: StudioNotes, private val studioName: String, 
         return "\n\nThe studio's notes on what the student asks about. Answer from them:\n### ${section.title}\n${notes.text(section, lang)}"
     }
 }
+
+/** A Hindi or Marathi reply without the English glosses Gemma adds in brackets ("नितंब (hips)"), which the prompt's rule
+ *  alone does not stop: it translates the teacher's English feedback and keeps the word it started from. */
+fun withoutGlosses(reply: String): String = reply.replace(Regex("[ \\t]*\\([A-Za-z][A-Za-z ,'/-]*\\)"), "")
 
 /**
  * The note to save when [message] starts with the words the app teaches ("Remember that…") and Gemma did not call

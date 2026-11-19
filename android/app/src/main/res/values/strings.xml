@@ -31,7 +31,7 @@
     <string name="err_network">Cannot reach the studio server. Check your internet and try again.</string>
     <string name="err_short_password">The password needs at least 6 letters.</string>
     <string name="err_generic">Something went wrong. Please try again.</string>
-    <string name="err_pending">Ask opens once %1$s approves you. Have the group code? Enter it on the Today screen.</string>
+    <string name="err_pending">This opens once %1$s places you in a batch.</string>
     <string name="err_busy">The studio server is busy. Please try again in a minute.</string>
     <string name="err_too_many_attempts">Too many tries. Please wait 15 minutes and try again.</string>
     <string name="err_teacher_exists">This studio already has its teacher. Sign up as a student.</string>
@@ -67,7 +67,6 @@
     <string name="batch_note">A note for the review (optional)</string>
     <string name="take_back">Take back</string>
     <string name="intake_title">About you</string>
-    <string name="intake_help">Your answers help %1$s place you in a batch that suits you.</string>
     <string name="tell_about_you">Tell %1$s about yourself</string>
     <string name="about_me">About me, for %1$s</string>
     <string name="age">Age</string>
@@ -89,7 +88,7 @@
     <string name="pain_note_hint">What hurts, and when (optional)</string>
     <string name="assessment_title">Try a few poses</string>
     <string name="assessment_help">Try each gently, near a wall or a chair. Stop at any pain, and skip any you cannot do.</string>
-    <string name="intake_consent">These answers go to %1$s, to place you in a batch.</string>
+    <string name="intake_consent">These answers go to %1$s, to place you in a batch that suits you.</string>
     <string name="send_to">Send to %1$s</string>
     <string name="intake_thanks">Thank you. %1$s will place you soon.</string>
     <string name="intake_line">%1$d yrs · %2$d cm · %3$d kg · %4$s</string>
@@ -114,7 +113,7 @@
     <string name="pain_flag">Felt strain or pain</string>
     <string name="add_note">Add a note</string>
     <string name="done">Done</string>
-    <string name="todays_sequence">Today\'s sequence</string>
+    <string name="sequence">Sequence</string>
     <string name="show_all">Show all %1$d</string>
     <string name="show_less">Show less</string>
     <string name="mood_1">Very low</string>
@@ -154,7 +153,7 @@
     <string name="mood_lift">Mood lift</string>
     <string name="mood_lift_help">How much better you feel after class, on average (−4 to +4).</string>
     <string name="memory_title">My health notes</string>
-    <string name="privacy">%1$s sees your name and number, your answers about yourself (age, height, weight, food, pain), and your practice: check-ins, moods, how each item went in class and on your own, your notes on them, and your feedback. Your Gemma chat and health notes stay on this phone unless you share one.</string>
+    <string name="privacy">%1$s sees your name and number, your answers about yourself (age, height, weight, food, pain, and how the poses felt), and your practice: check-ins, moods, how each item went in class and on your own, your notes on them, and your feedback. The studio\'s Dashboard shows those answers only as counts. Your Gemma chat and health notes stay on this phone unless you share one.</string>
     <string name="memory_empty">No notes yet. Write one below, such as an old injury %1$s should know about.</string>
     <string name="note_hint">For example: my left knee hurts in Vajrasana</string>
     <string name="forget_note">Forget</string>
@@ -267,6 +266,12 @@
     <string name="gemma_download_failed">The download stopped. Check the internet and try again.</string>
     <string name="gemma_start_failed">Gemma could not start on this phone.</string>
     <string name="try_again">Try again</string>
+    <string name="ok">OK</string>
+    <string name="new_password_ask">New password for %1$s?</string>
+    <string name="new_password_why">It signs %1$s out on every phone. Give them the new password.</string>
+    <string name="closed_account">%1$s has closed this account.</string>
+    <string name="unreachable">Couldn\'t reach the studio</string>
+    <string name="unreachable_help">Check the internet, then try again. You stay signed in.</string>
     <string name="gemma_download_title">Gemma for Satt Chitt Anand</string>
     <string name="gemma_download_note">The practice companion, for your phone (one time)</string>
     <string name="share_note">Share with %1$s</string>

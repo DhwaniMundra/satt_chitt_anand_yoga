@@ -62,7 +62,7 @@ test('setup builds the tabs, makes the codes once, and can run again', () => {
 test('a GET answers the health check in the envelope', () => {
   const b = testBackend();
   const out = b.context.doGet({ parameter: {} });
-  assert.deepEqual(JSON.parse(out.getContent()), { status: 200, body: { ok: true, assistant: 'off', model: null } });
+  assert.deepEqual(JSON.parse(out.getContent()), { status: 200, body: { ok: true } });
 });
 
 test('sign up, log in and the Today screen', () => {

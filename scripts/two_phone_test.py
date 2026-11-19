@@ -1,5 +1,6 @@
 """Two phones, one server: a teacher on emulator-5554 and students on emulator-5556. Checks the loop across
-devices, saves a screenshot at each step (.local/visualization/viz_<major>/screens/<version>/) and records both screens
+devices (sign-up with the group code, the student's answers about themselves, approval into the batch they point to,
+a class, a wrong code, a second approval), saves a screenshot at each step (.local/visualization/viz_<major>/screens/<version>/) and records both screens
 into one side-by-side video (.local/visualization/viz_<major>/two_phones_<version>.mp4); the pass/fail list goes to
 docs/evals/two_phones_<version>.md.
 
@@ -108,77 +109,129 @@ def run(version: str, teacher_code: str) -> None:
 
     record("part1")
 
-    # 1. Teacher signs up and sets the class link; the app already shows the server address it will use.
+    # 1. Teacher signs up and shares the class link; the app already shows the server address it will use.
     on(TEACHER)
     check("teacher phone shows the server address before sign-in", SERVER)
     shot("01_teacher_welcome_server")
     sign_up("Teacher (test)", TEACHER_PHONE, teacher_code, teacher=True)
     check("teacher signed up", "Your classes")
-    p.add_class("pranayama", -47)  # under way, 8 minutes left: both check-ins are open
+    p.add_class("intermediate", -47)  # under way, 8 minutes left: both check-ins are open
     token = p.call("POST", "/auth/login", body={"phone": TEACHER_PHONE, "password": PASSWORD})["token"]
     group_code = p.call("GET", "/teacher/home", token)["settings"]["group_code"]
     come_back()
-    p.type_into("Google Meet link", "meet.google.com/pil-otte-sta")
+    p.type_into("Google Meet link", "meet.google.com/pil-otte-sta")  # the class under way comes first
     p.hide_keyboard()
     p.tap("Save and share on WhatsApp")
     time.sleep(2)
     check("WhatsApp message carries the link", "meet.google.com/pil-otte-sta")
+    check("and names the batch", "Intermediate")
     shot("02_teacher_share")
     p.back()
 
-    # 2. Student A signs up with the group code on the other phone and sees the link at once.
+    # 2. Student A signs up with the group code and tells the teacher about herself, then waits to be placed.
     on(STUDENT)
     sign_up("Asha (test)", "9800000102", group_code)
-    check("student with group code sees the class", "Pranayama")
-    shot("03_student_today")
+    check("the intake opens after sign-up, saying first who sees it", f"These answers go to {p.TEACHER_NAME}")
+    shot("03_student_intake")
+    p.type_into("Age", "34")
+    p.type_into("Height (cm)", "160")
+    p.type_into("Weight (kg)", "58")
+    p.hide_keyboard()
+    p.tap("Vegetarian", exact=True)
+    for pose in ("Tadasana", "Vrikshasana", "Trikonasana", "Vajrasana"):  # steady in most: Intermediate
+        p.tap_under(pose, "Steady")
+    for _ in range(12):
+        try:
+            p.find(f"Send to {p.TEACHER_NAME}", timeout=1, exact=True)
+            break
+        except TimeoutError:
+            p.scroll_down()
+    shot("04_student_intake_sent")
+    p.tap(f"Send to {p.TEACHER_NAME}", exact=True)
+    check("the answers are sent", f"{p.TEACHER_NAME} will place you soon")
+    check("then she waits to be placed", "Waiting for")
+
+    # 3. The teacher sees her answers and approves her into the batch they point to.
+    on(TEACHER)
+    p.tap("Students", exact=True)
+    time.sleep(2)
+    check("teacher sees the answers and the batch they point to", "Suggested: Intermediate")
+    shot("05_teacher_students")
+    p.tap("Approve into Intermediate", exact=True)
+    time.sleep(2)
+
+    # 4. Student A, placed, joins the class and says how it went.
+    on(STUDENT)
+    come_back()
+    check("the placed student sees her batch", "Your batch: Intermediate")
+    shot("06_student_today")
     p.tap("Join class")
     check("before-class question appears in the check-in window", "How do you feel right now?")
     p.tap("Okay")
     time.sleep(3)
     come_back()  # from Meet in the browser, without restarting the app
+    p.tap(f"Tell {p.TEACHER_NAME}")
     check("after-class question appears on returning to the app", "Class done! How do you feel now?")
-    shot("04_student_after_class")
     p.tap("Great")
-    time.sleep(2)
+    p.tap_under("Sectional", "Steady")
+    for _ in range(12):
+        try:
+            p.find("Done", timeout=1, exact=True)
+            break
+        except TimeoutError:
+            p.scroll_down()
+    p.tap("Done", exact=True)
+    check("the answers are kept", f"You told {p.TEACHER_NAME} how it went")
+    shot("07_student_after_class")
     p.tap("Ask", exact=True)
     check("a 2 GB phone says chat needs more memory", "Cloud model support coming soon")
-    shot("05_student_ask")
+    shot("08_student_ask")
 
-    # 3. Teacher sees the check-in from the other phone.
+    # 5. Teacher sees the check-in from the other phone.
     on(TEACHER)
     p.tap("Insights", exact=True)
     time.sleep(2)
     check("teacher sees the student's before and after", "1 joined")
-    shot("06_teacher_insights")
+    shot("09_teacher_insights")
 
     stop_recording()
     record("part2")
 
-    # 4. Student B signs up without the code: pending, no link, until the teacher approves.
+    # 6. Student B: a wrong code is refused; with the code, she waits until the teacher places her.
     on(STUDENT)
     p.tap("Me", exact=True)
-    p.scroll_down()
+    for _ in range(8):
+        try:
+            p.find("Log out", timeout=1)
+            break
+        except TimeoutError:
+            p.scroll_down()
     p.tap("Log out")
     time.sleep(1.5)
-    p.tap("I'm a student")
-    p.type_into("Your name", "Meera (test)")
-    p.type_into("WhatsApp number", "09800000103")  # typed with a leading 0
-    p.type_into("Password", PASSWORD)
+    sign_up("Meera (test)", "09800000103", "WRONG1")  # the number typed with a leading 0
+    check("a wrong group code is refused", f"Ask {p.TEACHER_NAME} for the group code")
+    shot("10_student_wrong_code")
+    p.tap("WRONG1", exact=True)  # the code box, still filled: emptied, then the right code
+    p.adb("shell", "input", "keyevent", "KEYCODE_MOVE_END")
+    for _ in range(len("WRONG1")):
+        p.adb("shell", "input", "keyevent", "KEYCODE_DEL")
+    p.type_text(group_code)
     p.hide_keyboard()
     p.tap("Create account", exact=True, last=True)
     time.sleep(3)
-    check("student without code waits for approval", "Waiting for approval")
-    shot("07_student_pending")
+    check("with the code, she is asked about herself", f"These answers go to {p.TEACHER_NAME}")
+    p.tap("Back", exact=True)  # the intake's back arrow: she can answer later, from Me
+    check("and waits to be placed", "Waiting for")
     on(TEACHER)
     p.tap("Students", exact=True)
     time.sleep(2)
-    shot("08_teacher_students")
-    p.tap("Approve", exact=True)
+    shot("11_teacher_students")
+    p.tap("Approve into Beginner", exact=True)  # no answers yet: Beginner is preselected
     time.sleep(2)
     on(STUDENT)
     come_back()
-    check_gone("approved student is no longer waiting, after returning to the app", "Waiting for approval")
-    shot("09_student_approved")
+    check_gone("the placed student leaves the waiting card, after returning to the app", "Waiting for")
+    shot("12_student_placed")
 
     stop_recording()
     side_by_side(out, viz.folder(version) / f"two_phones_{version.removesuffix('-two-phones')}.mp4")

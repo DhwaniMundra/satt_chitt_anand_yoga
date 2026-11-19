@@ -25,8 +25,8 @@ test('the practice summary does the sums for one student', () => {
   assert.deepEqual(week.by_class['Beginner'], { times: 2, average_mood_before: 3, average_mood_after: 4.5 });
   assert.equal(week.by_class.Intermediate.average_mood_after, null);
   assert.deepEqual(Object.keys(week.by_class), ['Beginner', 'Intermediate']); // in the order first met, oldest first
-  assert.deepEqual(Object.keys(week), ['period_days', 'classes_joined', 'mood_scale', 'average_mood_before', 'average_mood_after', 'by_class', 'classes', 'solo', 'top_items']);
-  assert.equal(week.mood_scale, '1 very low to 5 great');
+  assert.deepEqual(Object.keys(week), ['period_days', 'classes_joined', 'average_mood_before', 'average_mood_after', 'by_class', 'classes', 'solo',
+    'items_in_class', 'items_on_own']);
   assert.deepEqual(week.classes.map((c) => [c.class, c.mood_before, c.mood_after]), [['Beginner', 3, 5], ['Intermediate', 2, null], ['Beginner', 3, 4]]);
   assert.match(week.classes[0].date, /^\d{4}-\d\d-\d\d$/); // the India date, ISO
   assert.deepEqual(week.classes.map((c) => c.curriculum), ['beginner', 'intermediate', 'beginner'], 'each class with its curriculum, for repeating it alone');
@@ -61,7 +61,8 @@ test('the practice is for members and the teacher', () => {
   assert.deepEqual(b.call('GET', '/me/practice', { token: pending.token, query: { days: 'bad' } }).body, { detail: 'pending' }); // who, before what
   const teacher = b.call('GET', '/me/practice', { token: t.token }).body;
   assert.deepEqual(new Set(Object.keys(teacher)),
-    new Set(['period_days', 'classes_joined', 'mood_scale', 'average_mood_before', 'average_mood_after', 'by_class', 'classes', 'solo', 'top_items']));
+    new Set(['period_days', 'classes_joined', 'average_mood_before', 'average_mood_after', 'by_class', 'classes', 'solo', 'items_in_class',
+      'items_on_own']));
   assert.equal(teacher.average_mood_before, null);
   assert.deepEqual(teacher.by_class, {});
 });

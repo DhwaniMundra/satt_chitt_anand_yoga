@@ -4,7 +4,8 @@
 #   scripts/demo.sh         one phone, sca_phone_big (6 GB): Gemma runs on it once downloaded in Ask
 #   scripts/demo.sh two     two 2 GB phones, sca_phone and sca_phone_2: the teacher on one, a student on the other
 #   scripts/demo.sh stop    stops the backend and the emulators
-# Logins (password demo123): teacher 9800000001, students 9800000002 to 9800000006; 9800000007 waits for approval.
+# Logins (password demo123): teacher 9800000001, students 9800000002 to 9800000006 and 9800000008; 9800000007 waits to
+# be placed in a batch.
 # DEMO_HEADLESS=1 runs the emulators without windows.
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -37,4 +38,4 @@ for phone in "${phones[@]}"; do
     adb -s "$serial" install -r "$APK" > /dev/null
     adb -s "$serial" shell am start -n com.sattchittanand.yoga/.MainActivity > /dev/null
 done
-echo "Logins (password demo123): teacher 9800000001; students 9800000002-9800000006; 9800000007 is waiting for approval."
+echo "Logins (password demo123): teacher 9800000001; students 9800000002-9800000006 and 9800000008; 9800000007 waits to be placed."

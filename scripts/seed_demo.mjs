@@ -13,7 +13,8 @@ import { open } from './dev_backend.mjs';
 
 const PASSWORD = 'demo123';
 const SPAN = 20; // days of classes before today, since the students were placed
-const STUDENTS = ['Asha Kulkarni', 'Meera Iyer', 'Rohan Desai', 'Kavita Joshi', 'Sunil Patil', 'Neha Rao']; // the last waits
+// Numbers 9800000002 on, in this order; Neha (9800000007) waits to be placed.
+const STUDENTS = ['Asha Kulkarni', 'Meera Iyer', 'Rohan Desai', 'Kavita Joshi', 'Sunil Patil', 'Neha Rao', 'Priya Menon'];
 // Each student's intake, by index in STUDENTS: [age, cm, kg, food, meals, pain areas, pain note, self-assessment as
 // tadasana, vrikshasana, trikonasana, vajrasana, bhujangasana, paschimottanasana, each a reaction (1 not yet to 4 at
 // ease, a trailing ! for strain or pain)]. Neha, still waiting, names a knee: her answers point to Pain management.
@@ -24,6 +25,7 @@ const INTAKES = [
   [61, 155, 70, 'vegetarian', 'Thepla and tea; dal, rice and kadhi', 'knee, back', 'Knee pain on stairs; lower back stiff in the mornings', '3 1 2 1! 2 1!'],
   [44, 172, 70, 'eggetarian', 'Oats; rotis, dal and a salad', null, null, '4 4 4 3 4 3'],
   [35, 162, 64, 'vegan', 'Poha; rice, dal and greens', 'knee', 'Right knee clicks when I squat', '4 3 3 2! 3 2'],
+  [32, 160, 55, 'vegetarian', 'Fruit and nuts; rice, rajma and salad', null, null, '4 3 4 3 4 3'],
 ];
 const ASSESSMENT = ['tadasana', 'vrikshasana', 'trikonasana', 'vajrasana', 'bhujangasana', 'paschimottanasana'];
 // The teacher's placements and moves: (student by index, days ago, to, note). Asha moved up after a review.
@@ -33,6 +35,7 @@ const PLACEMENTS = [
   [2, 20, 'beginner', null],
   [3, 20, 'pain_management', 'Knee pain on stairs and when kneeling; start with supported poses.'],
   [4, 20, 'advanced', 'A long-time student; inversions with the teacher.'],
+  [6, 20, 'intermediate', 'Practised in college; steady in the standing poses.'],
   [0, 5, 'intermediate', 'Reviewed: Vajrasana and Bhujangasana steady now, no knee pain; ready for longer holds.'],
 ];
 const FEEDBACK = [
@@ -78,8 +81,10 @@ const SOLO = [
   [0, 11, 15, [['vajrasana', 45, 2, 1, 'Knee again after 45 seconds'], ['tadasana', 60, 3], ['bhujangasana', 20, 2]]],
   [0, 9, 20, [['vajrasana', 60, 2], ['tadasana', 60, 3], ['bhujangasana', 25, 3]]],
   [0, 6, 18, [['vajrasana', 80, 3], ['bhujangasana', 30, 3], ['trikonasana', 30, 2]]],
-  [0, 4, 25, [['vajrasana', 100, 3, 0, 'Cushion, no pain'], ['bhujangasana', 30, 3], ['trikonasana', 30, 3], ['vrikshasana', 40, 2]]],
-  [0, 2, 22, [['vajrasana', 120, 4, 0, 'Two minutes, no pain'], ['bhujangasana', 40, 4], ['trikonasana', 40, 3], ['vrikshasana', 45, 3]]],
+  [0, 4, 25, [['vajrasana', 100, 3, 0, 'Cushion, no pain'], ['bhujangasana', 30, 3], ['trikonasana', 30, 3], ['vrikshasana', 40, 2],
+    ['trataka', 180, 2, 0, 'Candle at arm\'s length; eyes watered']]], // trataka only ever on her own
+  [0, 2, 22, [['vajrasana', 120, 4, 0, 'Two minutes, no pain'], ['bhujangasana', 40, 4], ['trikonasana', 40, 3], ['vrikshasana', 45, 3],
+    ['trataka', 240, 3]]],
   [1, 8, 30, [['trikonasana', 40, 3], ['nadi_shodhana', 300, 4], ['dhyana', 600, 3]]],
   [1, 3, 25, [['trikonasana', 45, 3], ['nadi_shodhana', 300, 4], ['dhyana', 600, 4]]],
   [3, 5, 12, [['pavanamuktasana', 60, 3, 0, 'Left knee fine with hands under the thigh'], ['makarasana', 120, 4]]],
@@ -108,7 +113,7 @@ function main(file) {
   const signup = (name, phone, role, code, lang) =>
     ok(b.call('POST', '/auth/signup', { body: { name, phone, password: PASSWORD, role, code, lang } }));
 
-  const teacher = signup('Ramit (demo)', '9800000001', 'teacher', 'DEMO1994', 'en');
+  const teacher = signup('Teacher (demo)', '9800000001', 'teacher', 'DEMO1994', 'en');
   const groupCode = ok(b.call('GET', '/teacher/home', { token: teacher.token })).settings.group_code;
   const studio = JSON.parse(b.evaluate('JSON.stringify(STUDIO)'));
   ['abc-defg-hij', 'bcd-efgh-ijk', 'cde-fghi-jkl', 'def-ghij-klm'].forEach((code, i) => {
@@ -142,7 +147,8 @@ function main(file) {
 
   // The last SPAN days of each batch's classes, each with its batch's curriculum; most students joining most of their
   // batch's classes and saying after class how most items went, each item along its own shape. Asha and Kavita join
-  // every class.
+  // every class. Then today's Intermediate class at 8:00: all three of its students joined, and two have said how it
+  // went; Asha says it in the tour (scripts/capture_tour.py), so run that after the class and within 12 hours of it.
   const plans = {};
   CURRICULUM.curricula.forEach((c) => {
     plans[c.key] = c.items.map((i) => i.item);
@@ -164,21 +170,27 @@ function main(file) {
     if (!shapes[key]) shapes[key] = (s === asha && ASHA_SHAPES[item]) || (s === kavita && KAVITA_SHAPES[item]) || pick(SHAPES);
     return shapes[key];
   };
-  for (let ago = SPAN; ago >= 1; ago--) studio.batches.forEach((batch) => {
+  for (let ago = SPAN; ago >= 0; ago--) studio.batches.forEach((batch) => {
     const day = today - ago;
-    if (batch.days.indexOf(days[(day + 3) % 7]) < 0) return; // 1 Jan 1970 was a Thursday
+    const now = ago === 0; // today: the Intermediate class only, every day
+    if (now ? batch.key !== 'intermediate' : batch.days.indexOf(days[(day + 3) % 7]) < 0) return; // 1 Jan 1970 was a Thursday
     const [hour, minute] = batch.time.split(':').map(Number);
     const start = day * DAY - IST_MS + (hour * 60 + minute) * MIN;
     const name = batch.name.en;
     const curriculum = batch.curriculum;
     const week = (day - ((day + 3) % 7)) * DAY - IST_MS;
-    addRow(b, 'class_sessions', { id, batch: batch.key, starts_at: start, duration_min: batch.duration_min, curriculum, updated_at: start });
+    // Today's class is in the Sheet already (setup() makes the week's classes); the days before are added here.
+    const made = b.ss.getSheetByName('class_sessions').rows().slice(1)
+      .find((r) => r[1] === batch.key && r[2] instanceof Date && r[2].getTime() === start);
+    const sid = made ? made[0] : id++;
+    if (!made) addRow(b, 'class_sessions', { id: sid, batch: batch.key, starts_at: start, duration_min: batch.duration_min, curriculum, updated_at: start });
     students.filter((s) => batchOn(s, ago) === batch.key).forEach((s) => {
-      if (s !== asha && s !== kavita && rng() < 0.3) return;
+      if (!now && s !== asha && s !== kavita && rng() < 0.3) return;
       const before = pick([2, 3, 3, 3, 4]);
-      const row = { user_id: s.user.id, session_id: id, class: name, class_date: day * DAY - IST_MS };
+      const row = { user_id: s.user.id, session_id: sid, class: name, class_date: day * DAY - IST_MS };
       addRow(b, 'checkins', { ...row, phase: 'before', mood: before, created_at: start - 3 * MIN });
-      if (s !== asha && s !== kavita && rng() >= 0.8) return;
+      if (now && s === asha) return; // she says how it went in the tour
+      if (!now && s !== asha && s !== kavita && rng() >= 0.8) return;
       addRow(b, 'checkins', { ...row, phase: 'after', mood: Math.min(5, before + pick([0, 1, 1, 2])), created_at: start + 60 * MIN });
       plans[curriculum].forEach((item) => {
         const note = s === asha ? ASHA_NOTES[item + ':' + ago] : undefined;
@@ -188,11 +200,10 @@ function main(file) {
         const dipping = latest < first && ago <= 4;
         const pain = s === asha ? (item === 'vajrasana' && ago >= 9) || (item === 'setu_bandhasana' && ago === 3)
           : s === kavita ? ['pavanamuktasana', 'setu_bandhasana'].includes(item) && ago >= 8 : (dipping && rng() < 0.4) || rng() < 0.01;
-        addRow(b, 'practice', { id: entry++, user_id: s.user.id, session_id: id, item, reaction: Math.min(4, Math.max(1, reaction)),
+        addRow(b, 'practice', { id: entry++, user_id: s.user.id, session_id: sid, item, reaction: Math.min(4, Math.max(1, reaction)),
           pain: pain ? 1 : 0, note, created_at: start + 60 * MIN, item_name: names[item], week: new Date(week) });
       });
     });
-    id++;
   });
   SOLO.forEach(([who, ago, minutes, items], i) => {
     const day = today - ago;

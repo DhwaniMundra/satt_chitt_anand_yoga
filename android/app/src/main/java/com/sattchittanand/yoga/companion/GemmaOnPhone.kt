@@ -115,10 +115,10 @@ class GemmaOnPhone private constructor(private val context: Context) {
     /** Starts the download from the first address (or [from]); on Wi-Fi only unless [mobileData]. */
     fun download(mobileData: Boolean = false, from: Int = 0) {
         prefs.getLong("download", -1L).takeIf { it >= 0 }?.let { downloads.remove(it) }
+        prefs.edit().remove("download").apply()
         file.delete()
         val urls = GemmaFile.urls
         if (from >= urls.size) {
-            prefs.edit().remove("download").apply()
             _state.value = GemmaState.Failed(Problem.DOWNLOAD)
             return
         }
@@ -151,12 +151,13 @@ class GemmaOnPhone private constructor(private val context: Context) {
     /** Goes on with the download over mobile data (DownloadManager cannot change a request: it starts again). */
     fun useMobileData() = download(mobileData = true, from = prefs.getInt("from", 0))
 
+    /** Follows the download under way, and the next one after a failed or wrong file, until there is none. */
     private fun watch() {
         if (watching?.isActive == true) return
         watching = scope.launch {
             while (true) {
                 val id = prefs.getLong("download", -1L)
-                if (id < 0) return@launch
+                if (id < 0) return@launch // done, cancelled, or no address left
                 val row = downloads.query(DownloadManager.Query().setFilterById(id))
                 val status = row.use { c ->
                     if (!c.moveToFirst()) null else Triple(
@@ -176,13 +177,13 @@ class GemmaOnPhone private constructor(private val context: Context) {
                 when (code) {
                     DownloadManager.STATUS_SUCCESSFUL -> {
                         prefs.edit().remove("download").apply()
-                        verify(next = prefs.getInt("from", 0) + 1)
-                        return@launch
+                        verify(next = prefs.getInt("from", 0) + 1) // a wrong file starts the next address, watched below
+                        continue
                     }
                     DownloadManager.STATUS_FAILED -> {
                         Log.w(TAG, "download $id failed: reason $reason")
                         download(prefs.getBoolean("mobile", false), prefs.getInt("from", 0) + 1) // the next address, if any
-                        return@launch
+                        continue
                     }
                     DownloadManager.STATUS_PAUSED -> _state.value = GemmaState.Downloading(bytes.first, total,
                         if (reason == DownloadManager.PAUSED_QUEUED_FOR_WIFI) Waiting.WIFI else Waiting.NETWORK)

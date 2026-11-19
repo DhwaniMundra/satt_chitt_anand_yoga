@@ -205,7 +205,7 @@ Keywords: elderly, older, senior, chair yoga, balance, falls, बुजुर्
 ## Food and water around practice
 Keywords: food, eat, eating, diet, water, drink, breakfast, खाना, खाएँ, खाएं, खाने, खाऊँ, भोजन, पानी, नाश्ता, जेवण, खावे, खावं, खायचे, खाऊ, पाणी
 
-- Practise on an empty stomach (see "Getting ready"). After an 8 AM class, a light breakfast is fine.
+- Practise on an empty stomach (see "Getting ready"). After a morning class, a light breakfast is fine.
 - Sip water before and after class; avoid large gulps during it.
 - Balanced home-cooked food with vegetables, dal, whole grains and fruit supports regular practice. For special
   diets or medical conditions, ask a doctor or dietitian.
@@ -238,8 +238,8 @@ Keywords: sat chit ananda, satt chitt anand, meaning, name, सत्·चित
 ## Using the app
 Keywords: app, link, meet, whatsapp, check in, mood, password, login, ऐप, लिंक, ॲप
 
-- Today's class card shows the Google Meet link. Tap "Join class" a few minutes before 8 AM.
+- Today's class card shows the Google Meet link. Tap "Join class" a few minutes before your batch's class time.
 - Before joining, the app asks how you feel (one tap), and after class it asks again. This helps Ramit ji see how
   the classes help, and you see your own progress.
-- New students sign up with the group code shared in the WhatsApp group, or wait for the teacher to approve them.
+- Everyone signs up with the group code shared in the WhatsApp group, then waits for the teacher to place them in a batch.
 - Forgot your password? Ask the teacher in the WhatsApp group.

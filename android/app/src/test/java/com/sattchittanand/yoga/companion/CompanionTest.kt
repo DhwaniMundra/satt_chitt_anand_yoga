@@ -6,6 +6,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.Instant
+import java.time.ZoneId
 
 /** The companion's conversation without the model: what Gemma is handed up front, its tools and the "Remember that…"
  *  rule. */
@@ -43,7 +44,10 @@ class CompanionTest {
             return linkedMapOf("period_days" to days, "classes_joined" to 3, "average_mood_before" to 3.0, "average_mood_after" to 4.0,
                 "classes" to listOf(linkedMapOf("date" to "2026-11-16", "class" to "Intermediate", "mood_before" to 3, "mood_after" to 4)),
                 "solo" to listOf(linkedMapOf("date" to "2026-11-17", "minutes" to 20, "items" to listOf("Vajrasana"))),
-                "top_items" to listOf(linkedMapOf("asana" to "Vajrasana", "times" to 4, "average_reaction" to 2.5, "pain_times" to 1)))
+                "by_class" to linkedMapOf("Intermediate" to linkedMapOf("times" to 1, "average_mood_before" to 3.0, "average_mood_after" to 4.0)),
+                "items_in_class" to listOf(linkedMapOf("asana" to "Setu Bandhasana", "times" to 2, "average_reaction" to 2.0, "pain_times" to 1),
+                    linkedMapOf("asana" to "Vajrasana", "times" to 1, "average_reaction" to 3.0, "pain_times" to 0)),
+                "items_on_own" to listOf(linkedMapOf("asana" to "Vajrasana", "times" to 4, "average_reaction" to 2.5, "pain_times" to 1)))
         }
         override fun upcoming(lang: String): List<UpcomingClass> = if (reachable) classes else error("no network")
         override fun saveNote(text: String) { saved += text }
@@ -61,7 +65,7 @@ class CompanionTest {
         UpcomingClass(Instant.parse("2026-11-25T02:30:00Z"), "Intermediate", "For a steady practice."),
     )
 
-    private fun tools(server: StudentData = Server(week), lang: String = "en") = Tools(server, NOTES, lang) { now }
+    private fun tools(server: StudentData = Server(week), lang: String = "en") = Tools(server, NOTES, lang, ZoneId.of("Asia/Kolkata")) { now }
 
     @Test fun matchingNotesAreHandedOverUpFront() {
         val used = mutableListOf<String>()
@@ -85,8 +89,9 @@ class CompanionTest {
 
     @Test fun aMessageAboutClassesGetsTheScheduleWithUnambiguousDays() {
         val t = tools()
-        val system = companion.system("Asha", "Which class suits me tomorrow?", "en", t)
-        assertTrue(system, "Today is Thursday 19 November. This student's coming classes, in their batch. Answer from them:\n" +
+        val system = companion.system("Asha", "When is my next class?", "en", t)
+        assertTrue(system, "Today is Thursday 19 November. Their next class is today, Thursday 19 November, at 8:00 AM India time. " +
+            "This student's coming classes, in their batch. Answer from them:\n" +
             "- today, Thursday 19 November: Intermediate at 8:00 AM India time\n" +
             "- tomorrow, Friday 20 November: Intermediate at 8:00 AM India time\n" +
             "- Saturday 21 November: Intermediate at 8:00 AM India time\n" +
@@ -95,14 +100,15 @@ class CompanionTest {
         assertFalse("### About the studio and classes" in system)
         assertEquals(listOf("get_upcoming_classes"), t.used)
         assertTrue(system.startsWith("You are the practice companion in the Lotus Yoga app, talking with one student, Asha."))
-        assertTrue(system.contains("tell\n   Teacher One before class") && system.contains("6. Reply only in English."))
+        assertTrue(system.contains("tell\n   Teacher One before class") && system.contains("7. Reply only in English."))
     }
 
     @Test fun otherMessagesGetNoSchedule() {
         val t = tools()
         val system = companion.system("Asha", "How was my practice this week?", "hi", t)
         assertFalse("Today is" in system)
-        assertTrue(system.endsWith("6. Reply only in Hindi (हिन्दी, Devanagari script)."))
+        assertTrue(system.endsWith("7. Reply only in Hindi (हिन्दी, Devanagari script). Write every word in Devanagari, the names of asanas, " +
+            "batches and the teacher too. Add no English words, and no English in brackets after a word."))
         assertEquals(emptyList<String>(), t.used)
     }
 
@@ -120,10 +126,15 @@ class CompanionTest {
         val t = tools(server, "mr")
         val week = t.getMyPractice(7)
         assertEquals(3, week["classes_joined"])
-        assertEquals(listOf(3.0, 4.0, null), listOf(week["average_class_mood_before"], week["average_class_mood_after"], week["average_mood_after"]))
-        assertEquals(listOf("Monday 16 November"), (week["classes"] as List<*>).map { (it as Map<*, *>)["date"] }) // the weekday written out
+        // Moods and reactions in words alone, the moods named as the classes'.
+        assertEquals(listOf("okay", "good", null), listOf(week["average_class_mood_before"], week["average_class_mood_after"], week["average_mood_after"]))
+        assertEquals(mapOf("times" to 1, "average_mood_before" to "okay", "average_mood_after" to "good"), (week["by_class"] as Map<*, *>)["Intermediate"])
+        assertEquals(mapOf("date" to "Monday 16 November", "class" to "Intermediate", "mood_before" to "okay", "mood_after" to "good"),
+            (week["classes"] as List<*>).single()) // the weekday written out
         assertEquals(listOf("Tuesday 17 November"), (week["solo"] as List<*>).map { (it as Map<*, *>)["date"] })
-        assertEquals(listOf("2.5, between with effort and steady"), (week["top_items"] as List<*>).map { (it as Map<*, *>)["average_reaction"] })
+        assertEquals(listOf("between with effort and steady"), (week["items_on_own"] as List<*>).map { (it as Map<*, *>)["average_reaction"] })
+        assertEquals(listOf("with effort", "steady"), (week["items_in_class"] as List<*>).map { (it as Map<*, *>)["average_reaction"] })
+        assertFalse("no number on a scale to quote", Regex("\\d\\.\\d").containsMatchIn(week.toString()))
         assertEquals(7 to "mr", server.practiceAsked)
         t.getMyPractice(400)
         assertEquals(90 to "mr", server.practiceAsked) // at most 90 days
@@ -175,8 +186,9 @@ class CompanionTest {
         assertEquals("Vajrasana (वज्रासन, Thunderbolt pose)", p["asana"])
         assertEquals(listOf(9, 5), listOf(p["times_in_class"], p["times_on_own"]))
         assertEquals("Friday 30 October", p["first"])
-        assertEquals(mapOf("first 3 times" to "2.0, with effort", "last 3 times" to "3.7, between steady and at ease"), p["how_it_felt"])
-        assertEquals(listOf("1.0, not yet", "2.5, between with effort and steady", "4.0, at ease"), listOf(1, 2.5, 4.0).map(::reactionWords))
+        assertEquals(mapOf("first 3 times" to "with effort", "last 3 times" to "between steady and at ease"), p["how_it_felt"])
+        assertEquals(listOf("not yet", "between with effort and steady", "at ease"), listOf(1, 2.5, 4.0).map(::reactionWords))
+        assertEquals(listOf("very low", "between low and okay", "great"), listOf(1, 2.4, 5).map(::moodWords))
         assertEquals(mapOf("date" to "Monday 16 November", "text" to "Much steadier this week."), p["teacher_said"])
         assertEquals(mapOf("times" to 6, "last" to "Tuesday 10 November"), p["strain_or_pain"])
         assertEquals(listOf("asana_progress"), t.used)
@@ -189,7 +201,8 @@ class CompanionTest {
         for ((message, lang) in listOf("How has my Vajrasana been?" to "en", "मेरा वज्रासन कैसा चल रहा है?" to "hi", "माझे वज्रासन कसे चालले आहे?" to "mr")) {
             val t = tools(lang = lang)
             val system = companion.system("Asha", message, lang, t)
-            assertTrue(message, "How Vajrasana (वज्रासन, Thunderbolt pose) has gone for this student (asana_progress)" in system)
+            val name = if (lang == "en") "Vajrasana (वज्रासन, Thunderbolt pose)" else "वज्रासन" // Hindi and Marathi: no English to copy
+            assertTrue(message, "How $name has gone for this student (asana_progress)" in system)
             assertTrue("- teacher_said: {date=Monday 16 November, text=Much steadier this week.}" in system)
             assertEquals(listOf("asana_progress"), t.used)
         }
@@ -202,7 +215,48 @@ class CompanionTest {
     }
 
     @Test fun theSystemMessageNamesTheStudentsBatch() {
-        assertTrue("Asha practises in the Intermediate batch" in companion.system("Asha", "Hello", "en", tools(), "Intermediate"))
+        val placed = companion.system("Asha", "Hello", "en", tools(), "Intermediate")
+        assertTrue("Asha practises in the Intermediate batch" in placed)
+        assertTrue("say a move is Teacher One's to decide: they can ask Teacher One." in placed)
         assertFalse("batch;" in companion.system("Neha", "Hello", "en", tools()))
     }
+
+    /** A class-only item never reaches Gemma as practice on one's own: the two lists stay apart, as the server sends them. */
+    @Test fun itemsPractisedInClassAreNeverGivenAsPractiseAlone() {
+        val week = tools().getMyPractice(7)
+        val alone = (week["items_on_own"] as List<*>).map { (it as Map<*, *>)["asana"] } +
+            (week["solo"] as List<*>).flatMap { (it as Map<*, *>)["items"] as List<*> }
+        assertFalse("Setu Bandhasana" in alone)
+        assertTrue("Setu Bandhasana" in (week["items_in_class"] as List<*>).map { (it as Map<*, *>)["asana"] })
+        assertFalse("one list for both", "top_items" in week)
+    }
+
+    @Test fun hindiAndMarathiRepliesAreAllDevanagari() {
+        for (lang in listOf("hi", "mr")) assertTrue(lang, "Add no English words" in companion.system("Asha", "Hello", lang, tools(lang = lang)))
+        assertFalse("Add no English words" in companion.system("Asha", "Hello", "en", tools()))
+        val en = companion.system("Asha", "Hello", "en", tools())
+        assertTrue("If something hurts in practice, say to stop and to tell Teacher One." in en)
+        assertTrue("You cannot reach Teacher One or anyone else" in en)
+    }
+
+    @Test fun englishGlossesLeaveHindiAndMarathiReplies() {
+        assertEquals("या आठवड्यात नितंब अर्ध्या पातळीवर खाली करा.", withoutGlosses("या आठवड्यात नितंब (hips) अर्ध्या पातळीवर खाली करा."))
+        assertEquals("सेतुबन्धासन कसे चालले आहे", withoutGlosses("सेतुबन्धासन (Bridge pose) कसे चालले आहे"))
+        assertEquals("८:०० वाजता (भारतीय वेळ)", withoutGlosses("८:०० वाजता (भारतीय वेळ)")) // Devanagari in brackets stays
+    }
+
+    /** A student in New York: a Monday 7:00 class in India is on their Sunday evening, "today", at their own time too. */
+    @Test fun theScheduleIsOnTheStudentsOwnCalendar() {
+        val newYork = ZoneId.of("America/New_York")
+        val monday7India = Instant.parse("2026-11-23T01:30:00Z")
+        val sundayEvening = Instant.parse("2026-11-23T01:00:00Z") // 8:00 PM on Sunday in New York, 6:30 AM on Monday in India
+        val abroad = Tools(Server(listOf(UpcomingClass(monday7India, "Beginner", "Gentle"))), NOTES, "en", newYork) { sundayEvening }
+        val schedule = abroad.getUpcomingClasses()
+        assertEquals("Sunday 22 November", schedule["today_is"])
+        assertEquals("today, Sunday 22 November, at 8:30 PM your time (7:00 AM India time)", schedule["next_class"])
+        assertEquals(0L, com.sattchittanand.yoga.ui.daysFromToday(monday7India, sundayEvening, newYork))
+        assertEquals(1L, com.sattchittanand.yoga.ui.daysFromToday(monday7India, Instant.parse("2026-11-22T02:00:00Z"), newYork)) // Saturday evening
+        assertEquals(0L, com.sattchittanand.yoga.ui.daysFromToday(monday7India, sundayEvening, ZoneId.of("Asia/Kolkata")))
+    }
 }
+
