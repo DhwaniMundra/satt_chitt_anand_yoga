@@ -229,9 +229,10 @@ function practiceSummary_(ctx, userId, days, lang) {
     .sort((a, b) => a.session.starts_at - b.session.starts_at);
   const classes = [];
   const byClass = {};
+  const plan = sessionCurricula_(ctx);
   rows.forEach((r) => {
     const name = classInfo_(r.session.class_key, lang).name;
-    classes.push({ date: istDate_(r.session.starts_at), class: name, mood_before: r.before, mood_after: r.after });
+    classes.push({ date: istDate_(r.session.starts_at), class: name, curriculum: plan[r.session.id], mood_before: r.before, mood_after: r.after });
     const entry = byClass[name] || (byClass[name] = { times: 0, before: [], after: [] });
     entry.times += 1;
     entry.before.push(r.before);
@@ -242,6 +243,16 @@ function practiceSummary_(ctx, userId, days, lang) {
     const e = byClass[name];
     summary[name] = { times: e.times, average_mood_before: average1_(e.before), average_mood_after: average1_(e.after) };
   });
+  const library = curriculum_(ctx).library;
+  const itemsBySolo = {};
+  ctx.db.t('practice').rows.forEach((p) => {
+    if (p.user_id === userId && p.solo_id !== null) (itemsBySolo[p.solo_id] || (itemsBySolo[p.solo_id] = [])).push(p);
+  });
+  const solo = ctx.db.t('solo_sessions').rows
+    .filter((s) => s.user_id === userId && s.started_at >= from && s.started_at <= ctx.now)
+    .sort((a, b) => a.started_at - b.started_at)
+    .map((s) => ({ date: istDate_(s.started_at), minutes: Math.round((s.ended_at - s.started_at) / 60000),
+      items: (itemsBySolo[s.id] || []).sort((a, b) => a.id - b.id).map((p) => itemTitle_(library[p.item], p.item, lang)) }));
   return {
     period_days: days,
     classes_joined: classes.length,
@@ -250,7 +261,14 @@ function practiceSummary_(ctx, userId, days, lang) {
     average_mood_after: average1_(rows.filter((r) => r.after !== null).map((r) => r.after)),
     by_class: summary,
     classes: classes,
+    solo: solo,
   };
+}
+
+/** An item's name for people: transliterated in English, Devanagari in Hindi and Marathi. */
+function itemTitle_(entry, key, lang) {
+  if (!entry) return key;
+  return lang === 'en' ? entry.name : entry.sanskrit;
 }
 
 /** The WhatsApp message for one session, its wa.me link, and the group to post it in. */

@@ -110,11 +110,11 @@ class Tools(private val data: StudentData, private val notes: StudioNotes, priva
         }
     }
 
-    /** The summary with each class's ISO date written out ("Monday 16 November"), so Gemma need not work out weekdays. */
-    private fun withWeekdays(summary: Map<String, Any?>): Map<String, Any?> {
+    /** The summary with the ISO date of each class and each session on one's own written out ("Monday 16 November"), so
+     *  Gemma need not work out weekdays. */
+    private fun withWeekdays(summary: Map<String, Any?>): Map<String, Any?> = summary + listOf("classes", "solo").mapNotNull { key ->
         @Suppress("UNCHECKED_CAST")
-        val classes = summary["classes"] as? List<Map<String, Any?>> ?: return summary
-        return summary + ("classes" to classes.map { c -> c + ("date" to DATE.format(LocalDate.parse(c["date"] as String))) })
+        (summary[key] as? List<Map<String, Any?>>)?.let { days -> key to days.map { it + ("date" to DATE.format(LocalDate.parse(it["date"] as String))) } }
     }
 
     fun getUpcomingClasses(): Map<String, Any?> {

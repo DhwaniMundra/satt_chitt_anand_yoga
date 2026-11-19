@@ -9,6 +9,7 @@ import org.json.JSONObject
 import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
+import java.text.Normalizer
 import java.time.Instant
 import java.time.LocalDate
 
@@ -151,9 +152,22 @@ data class ClassSession(
 }
 
 /** An asana, pranayama or meditation of the studio's library. */
-data class LibraryItem(val key: String, val sanskrit: String, val name: String, val english: String) {
+data class LibraryItem(val key: String, val type: String, val sanskrit: String, val name: String, val english: String, val aliases: List<String>) {
     /** Its name as the student reads it: "Vajrasana · Thunderbolt pose" in English, "वज्रासन" in Hindi and Marathi. */
     fun title(lang: String) = if (lang == "en") "$name · $english" else sanskrit
+
+    /** Its name alone, for a sentence: "Vajrasana", or "वज्रासन". */
+    fun short(lang: String) = if (lang == "en") name else sanskrit
+
+    /** Whether a search finds it: one of its names or aliases with a word starting as typed, accents and case aside. */
+    fun matches(query: String): Boolean {
+        val q = fold(query)
+        if (q.isEmpty()) return false
+        val atWordStart = Regex("(?<![\\p{L}\\p{M}])" + Regex.escape(q))
+        return (listOf(sanskrit, name, english) + aliases).any { atWordStart.containsMatchIn(fold(it)) }
+    }
+
+    private fun fold(text: String) = Normalizer.normalize(text.trim().lowercase(), Normalizer.Form.NFD).replace(Regex("\\p{Mn}+"), "")
 }
 
 /** One item of a curriculum: so many breaths, seconds, minutes, rounds or strokes, and how to do it. */
@@ -168,7 +182,8 @@ data class Curricula(val library: Map<String, LibraryItem>, val curricula: List<
     companion object {
         fun from(o: JSONObject) = Curricula(
             o.getJSONArray("library").map {
-                LibraryItem(it.getString("key"), it.getString("sanskrit"), it.getString("name"), it.getString("english"))
+                LibraryItem(it.getString("key"), it.getString("type"), it.getString("sanskrit"), it.getString("name"), it.getString("english"),
+                    it.getJSONArray("aliases").let { a -> List(a.length()) { i -> a.getString(i) } })
             }.associateBy { it.key },
             o.getJSONArray("curricula").map { c ->
                 Curriculum(c.getString("key"), c.getString("name"), c.getString("about"),
@@ -179,11 +194,11 @@ data class Curricula(val library: Map<String, LibraryItem>, val curricula: List<
 }
 
 /** What a student says after class about one item: reaction 1 (not yet) to 4 (at ease), strain or pain, a note. */
-data class ItemFeedback(val item: String, val reaction: Int?, val pain: Boolean, val note: String) {
-    val said get() = reaction != null || pain || note.isNotBlank()
+data class ItemFeedback(val item: String, val reaction: Int?, val pain: Boolean, val note: String, val heldSeconds: Int = 0) {
+    val said get() = reaction != null || pain || note.isNotBlank() || heldSeconds > 0
 
     fun json(): JSONObject = JSONObject().put("item", item).put("reaction", reaction ?: JSONObject.NULL).put("pain", if (pain) 1 else 0)
-        .put("note", note.trim().ifEmpty { null } ?: JSONObject.NULL)
+        .put("note", note.trim().ifEmpty { null } ?: JSONObject.NULL).apply { if (heldSeconds > 0) put("hold_s", heldSeconds) }
 }
 
 /** The first reactions against the latest, as averages on the 1 to 4 scale. */
@@ -195,27 +210,64 @@ data class Trend(val early: Double, val recent: Double) {
 
 private fun JSONObject.date(key: String): LocalDate? = str(key)?.let(LocalDate::parse)
 
-/** One item of a student's practice list (GET /me/asanas): how often, the trend, strain or pain, the teacher's word. */
-data class ItemSummary(val item: String, val inClass: Int, val trend: Trend?, val painTimes: Int, val teacherSaid: LocalDate?) {
+private fun JSONObject.intOrNull(key: String): Int? = if (isNull(key)) null else getInt(key)
+
+/** One item of a student's practice list (GET /me/asanas): how often in class and solo, the trend, strain or pain, the
+ *  teacher's word. */
+data class ItemSummary(val item: String, val inClass: Int, val solo: Int, val trend: Trend?, val painTimes: Int, val teacherSaid: LocalDate?) {
     companion object {
-        fun from(o: JSONObject) = ItemSummary(o.getString("item"), o.getInt("in_class"), Trend.from(o, "reaction_trend"), o.getInt("pain_times"), o.date("teacher_said"))
+        fun from(o: JSONObject) =
+            ItemSummary(o.getString("item"), o.getInt("in_class"), o.getInt("solo"), Trend.from(o, "reaction_trend"), o.getInt("pain_times"), o.date("teacher_said"))
     }
 }
 
-/** One item's history for one student (GET /me/asanas/{item}): each time, newest first, and the teacher's feedback. */
-data class ItemHistory(val item: String, val inClass: Int, val first: LocalDate?, val trend: Trend?, val painTimes: Int,
-    val entries: List<ItemEntry>, val feedback: List<Pair<LocalDate, String>>) {
+/** One item's history for one student (GET /me/asanas/{item}): each time, newest first, the holds timed solo, and the
+ *  teacher's feedback. */
+data class ItemHistory(val item: String, val inClass: Int, val solo: Int, val first: LocalDate?, val trend: Trend?, val holds: Holds?,
+    val painTimes: Int, val entries: List<ItemEntry>, val feedback: List<Pair<LocalDate, String>>) {
     companion object {
         fun from(o: JSONObject) = ItemHistory(
-            o.getString("item"), o.getInt("in_class"), o.date("first"), Trend.from(o, "reaction_trend"),
+            o.getString("item"), o.getInt("in_class"), o.getInt("solo"), o.date("first"), Trend.from(o, "reaction_trend"),
+            if (o.isNull("holds")) null else o.getJSONObject("holds").let { Holds(it.getInt("recent_seconds"), it.getInt("longest_seconds")) },
             o.getJSONObject("strain_or_pain").getInt("times"),
-            o.getJSONArray("entries").map { ItemEntry(LocalDate.parse(it.getString("date")), if (it.isNull("reaction")) null else it.getInt("reaction"), it.getInt("pain") == 1, it.str("note")) },
+            o.getJSONArray("entries").map {
+                ItemEntry(LocalDate.parse(it.getString("date")), it.getString("kind") == "solo", it.intOrNull("hold_s"), it.intOrNull("reaction"), it.getInt("pain") == 1, it.str("note"))
+            },
             o.getJSONArray("feedback").map { LocalDate.parse(it.getString("date")) to it.getString("text") },
         )
     }
 }
 
-data class ItemEntry(val date: LocalDate, val reaction: Int?, val pain: Boolean, val note: String?)
+/** Practice on one's own, kept in memory until Finish: what was said about each item, the one in front of the student
+ *  ([at]), each item's stopwatch time ([heldMs]), and since when the stopwatch has been running. Times are
+ *  SystemClock.elapsedRealtime() milliseconds. [curriculum] is the sequence repeated, for its doses and cues. */
+data class SoloRun(val startedAt: Long, val curriculum: String?, val said: List<ItemFeedback>, val heldMs: List<Long>, val at: Int = 0,
+    val runningSince: Long? = null) {
+    val current get() = said[at]
+
+    fun held(now: Long) = heldMs[at] + (runningSince?.let { now - it } ?: 0)
+
+    fun toggled(now: Long) = if (runningSince == null) copy(runningSince = now) else stopped(now)
+
+    fun stopped(now: Long) = if (runningSince == null) this else copy(heldMs = heldMs.toMutableList().also { it[at] = held(now) }, runningSince = null)
+
+    fun changed(f: ItemFeedback) = copy(said = said.toMutableList().also { it[at] = f })
+
+    fun moved(to: Int, now: Long) = stopped(now).copy(at = to)
+
+    /** What to send at Finish: each item with its stopwatch time, those with something timed or said. */
+    fun entries() = said.mapIndexed { i, f -> f.copy(heldSeconds = (heldMs[i] / 1000).toInt()) }.filter { it.said }
+
+    companion object {
+        fun start(items: List<String>, curriculum: String?, now: Long) =
+            SoloRun(now, curriculum, items.map { ItemFeedback(it, null, false, "") }, items.map { 0L })
+    }
+}
+
+/** The stopwatch's holds, in seconds: the latest and the longest. */
+data class Holds(val recent: Int, val longest: Int)
+
+data class ItemEntry(val date: LocalDate, val solo: Boolean, val heldSeconds: Int?, val reaction: Int?, val pain: Boolean, val note: String?)
 
 /** How a class went, item by item, for the teacher (GET /teacher/sessions/{id}/practice). */
 data class ClassReview(val curriculum: String?, val joined: Int, val answered: Int, val items: List<ItemReview>) {
@@ -288,10 +340,17 @@ data class Stats(val classesJoined: Int, val streakDays: Int, val moodChange: Do
 }
 
 /** A class the student joined, from GET /me/practice: its date in India, its name, and the moods (1 to 5). */
-data class JoinedClass(val date: LocalDate, val name: String, val moodBefore: Int, val moodAfter: Int?) {
+data class JoinedClass(val date: LocalDate, val name: String, val curriculum: String?, val moodBefore: Int, val moodAfter: Int?) {
     companion object {
         fun from(o: JSONObject) =
-            JoinedClass(LocalDate.parse(o.getString("date")), o.getString("class"), o.getInt("mood_before"), if (o.isNull("mood_after")) null else o.getInt("mood_after"))
+            JoinedClass(LocalDate.parse(o.getString("date")), o.getString("class"), o.str("curriculum"), o.getInt("mood_before"), o.intOrNull("mood_after"))
+    }
+}
+
+/** A session of practice on one's own (GET /me/practice): its day, how long, and its items' names. */
+data class SoloSession(val date: LocalDate, val minutes: Int, val items: List<String>) {
+    companion object {
+        fun from(o: JSONObject) = SoloSession(LocalDate.parse(o.getString("date")), o.getInt("minutes"), o.getJSONArray("items").let { a -> List(a.length()) { a.getString(it) } })
     }
 }
 

@@ -107,6 +107,7 @@ function routes_() {
     ['POST', '/me', updateMe_, LOCK_],
     ['POST', '/me/group_code', joinGroup_, LOCK_],
     ['GET', '/me/practice', myPractice_],
+    ['POST', '/me/solo', soloPractice_, LOCK_],
     ['GET', '/me/asanas', myItems_],
     ['GET', '/me/asanas/{item}', myItem_],
     ['POST', '/me/shared', shareNote_, LOCK_],

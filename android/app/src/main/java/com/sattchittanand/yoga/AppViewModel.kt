@@ -1,6 +1,7 @@
 package com.sattchittanand.yoga
 
 import android.app.Application
+import android.os.SystemClock
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -31,6 +32,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var stats by mutableStateOf<Stats?>(null); private set
     /** The classes the student joined in the last two weeks, newest first. */
     var practice by mutableStateOf<List<JoinedClass>>(emptyList()); private set
+    var soloSessions by mutableStateOf<List<SoloSession>>(emptyList()); private set
+    /** Practice on one's own in progress; the screen changes it as the student goes, and [finishSolo] sends it. */
+    var solo by mutableStateOf<SoloRun?>(null)
     var teacherHome by mutableStateOf<TeacherHome?>(null); private set
     var students by mutableStateOf<List<Student>>(emptyList()); private set
     var insights by mutableStateOf<Insights?>(null); private set
@@ -125,7 +129,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private fun signOutLocally() {
         prefs.token = null
         user = null; home = null; stats = null; teacherHome = null; insights = null; review = null
-        practice = emptyList(); students = emptyList(); notes = emptyList(); sharedNotes = emptyList(); items = emptyList(); itemHistory = null
+        practice = emptyList(); soloSessions = emptyList(); solo = null; students = emptyList(); notes = emptyList(); sharedNotes = emptyList()
+        items = emptyList(); itemHistory = null
         chat.clear()
         store = null // the chat and notes stay on the phone, under this account, for its next sign-in
         loadStudio()
@@ -176,8 +181,30 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         then()
     }
 
-    fun loadPractice() = launchCall {
-        practice = api.get("/me/practice?days=14&lang=${prefs.lang}").getJSONArray("classes").map(JoinedClass::from).reversed()
+    fun loadPractice() = launchCall { readPractice() }
+
+    /** The last two weeks: the classes joined and the practice on one's own, newest first. */
+    private suspend fun readPractice() {
+        val summary = api.get("/me/practice?days=14&lang=${prefs.lang}")
+        practice = summary.getJSONArray("classes").map(JoinedClass::from).reversed()
+        soloSessions = summary.getJSONArray("solo").map(SoloSession::from).reversed()
+    }
+
+    /** Sends the practice on one's own, if anything was timed or said, and closes it; on an error it stays open to send
+     *  again. */
+    fun finishSolo(saved: String) = launchCall {
+        val now = SystemClock.elapsedRealtime()
+        val run = solo?.stopped(now) ?: return@launchCall
+        solo = run
+        val entries = run.entries()
+        if (entries.isNotEmpty()) {
+            val minutes = ((now - run.startedAt + 59_999) / 60000).toInt().coerceIn(1, 240) // whole minutes, rounded up
+            api.post("/me/solo", JSONObject().put("minutes", minutes).put("entries", JSONArray(entries.map { it.json() })))
+            notice = saved
+        }
+        solo = null
+        readPractice()
+        readItems(null)
     }
 
     /** After class: the mood, if picked, and how each item went, if anything was said. */
@@ -298,7 +325,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Where a student's practice per item is read: the student's own, or [studentId]'s for the teacher. */
     private fun itemsPath(studentId: Int?) = if (studentId == null) "/me/asanas" else "/teacher/students/$studentId/asanas"
 
-    fun loadItems(studentId: Int? = null) = launchCall {
+    fun loadItems(studentId: Int? = null) = launchCall { readItems(studentId) }
+
+    private suspend fun readItems(studentId: Int?) {
         items = api.get(itemsPath(studentId)).getJSONArray("items").map(ItemSummary::from)
     }
 
