@@ -2,8 +2,6 @@
   "name": {"en": "Satt Chitt Anand Yoga", "hi": "सत्·चित्·आनन्द योग", "mr": "सत्·चित्·आनन्द योग"},
   "tagline": {"en": "Truth · Consciousness · Bliss", "hi": "सत्य · चेतना · आनंद", "mr": "सत्य · चैतन्य · आनंद"},
   "since": 1994,
-  "class_start_ist": "08:00",
-  "duration_min": 55,
   "teacher": {
     "name": "Ramit M Tippannavar",
     "short": {"en": "Ramit ji", "hi": "रमित जी", "mr": "रमित जी"},
@@ -14,79 +12,16 @@
       "mr": "कैवल्यधाम परंपरेत 12 वर्षांहून अधिक प्रशिक्षण, शास्त्रीय हठयोग आणि उपचारात्मक प्राणायामात प्रमाणपत्र. त्यांचे शिकवणे अचूक आसन-रचना आणि श्वास यांना जोडते."
     }
   },
-  "classes": [
-    {
-      "key": "hatha",
-      "name": {"en": "Hatha Yoga", "hi": "हठ योग", "mr": "हठयोग"},
-      "level": {"en": "All levels", "hi": "सभी स्तर", "mr": "सर्व स्तर"},
-      "about": {
-        "en": "Classical postures held with steady breath. Builds strength, balance and flexibility.",
-        "hi": "स्थिर श्वास के साथ शास्त्रीय आसन। शक्ति, संतुलन और लचीलापन बढ़ाता है।",
-        "mr": "स्थिर श्वासासह शास्त्रीय आसने. ताकद, संतुलन आणि लवचिकता वाढवते."
-      }
-    },
-    {
-      "key": "pranayama",
-      "name": {"en": "Pranayama", "hi": "प्राणायाम", "mr": "प्राणायाम"},
-      "level": {"en": "All levels", "hi": "सभी स्तर", "mr": "सर्व स्तर"},
-      "about": {
-        "en": "Breathwork: slow, guided breathing practices to calm and focus the mind.",
-        "hi": "श्वास-अभ्यास: मन को शांत और एकाग्र करने के लिए धीमी, निर्देशित श्वास।",
-        "mr": "श्वासाचा सराव: मन शांत आणि एकाग्र करण्यासाठी संथ, मार्गदर्शित श्वसन."
-      }
-    },
-    {
-      "key": "vinyasa",
-      "name": {"en": "Vinyasa Flow", "hi": "विन्यास फ्लो", "mr": "विन्यास फ्लो"},
-      "level": {"en": "Intermediate", "hi": "मध्यम स्तर", "mr": "मध्यम स्तर"},
-      "about": {
-        "en": "Postures linked in a flowing sequence, one movement to one breath.",
-        "hi": "एक श्वास, एक गति: आसनों का बहता हुआ क्रम।",
-        "mr": "एक श्वास, एक हालचाल: आसनांचा प्रवाही क्रम."
-      }
-    },
-    {
-      "key": "dhyana",
-      "name": {"en": "Dhyana · Meditation", "hi": "ध्यान", "mr": "ध्यान"},
-      "level": {"en": "All levels", "hi": "सभी स्तर", "mr": "सर्व स्तर"},
-      "about": {
-        "en": "Seated stillness and guided attention.",
-        "hi": "बैठकर स्थिरता और निर्देशित ध्यान।",
-        "mr": "बसून स्थिरता आणि मार्गदर्शित ध्यान."
-      }
-    },
-    {
-      "key": "nidra",
-      "name": {"en": "Yoga Nidra", "hi": "योग निद्रा", "mr": "योगनिद्रा"},
-      "level": {"en": "All levels", "hi": "सभी स्तर", "mr": "सर्व स्तर"},
-      "about": {
-        "en": "Deep guided relaxation, lying down.",
-        "hi": "लेटकर गहरा, निर्देशित विश्राम।",
-        "mr": "झोपून केलेली खोल, मार्गदर्शित विश्रांती."
-      }
-    },
-    {
-      "key": "beginners",
-      "name": {"en": "Beginners' Path", "hi": "शुरुआती पथ", "mr": "नवशिक्यांचा मार्ग"},
-      "level": {"en": "Foundations", "hi": "बुनियाद", "mr": "पाया"},
-      "about": {
-        "en": "The foundations, step by step: posture, breath and rest.",
-        "hi": "बुनियादी बातें, कदम-दर-कदम: आसन, श्वास और विश्राम।",
-        "mr": "पायाभूत गोष्टी, टप्प्याटप्प्याने: आसन, श्वास आणि विश्रांती."
-      }
-    },
-    {
-      "key": "satsang",
-      "name": {"en": "Satsang · Open Practice", "hi": "सत्संग · खुला अभ्यास", "mr": "सत्संग · मुक्त सराव"},
-      "level": {"en": "All levels", "hi": "सभी स्तर", "mr": "सर्व स्तर"},
-      "about": {
-        "en": "Sunday gathering: open practice, questions and conversation.",
-        "hi": "रविवार की सभा: खुला अभ्यास, प्रश्न और बातचीत।",
-        "mr": "रविवारचा मेळावा: मुक्त सराव, प्रश्न आणि गप्पा."
-      }
-    }
+  "batches": [
+    {"key": "beginner", "name": {"en": "Beginner", "hi": "शुरुआती", "mr": "नवशिके"}, "curriculum": "beginner", "days": ["mon", "tue", "wed", "thu", "fri", "sat"], "time": "07:00", "duration_min": 55,
+     "about": {"en": "Foundations at an easy pace: the breath, simple postures held steady, then stillness.", "hi": "आसान गति से बुनियाद: साँस, स्थिर रखे सरल आसन, फिर स्थिरता।", "mr": "सोप्या गतीने पाया: श्वास, स्थिर ठेवलेली सोपी आसने, मग स्थिरता."}},
+    {"key": "intermediate", "name": {"en": "Intermediate", "hi": "मध्यम", "mr": "मध्यम"}, "curriculum": "intermediate", "days": ["mon", "tue", "wed", "thu", "fri", "sat"], "time": "08:00", "duration_min": 55,
+     "about": {"en": "For a steady practice: sun salutations, standing poses, twists and backbends, longer holds.", "hi": "नियमित अभ्यास के लिए: सूर्य नमस्कार, खड़े आसन, मोड़ और पीछे झुकना, लंबे ठहराव।", "mr": "नियमित सरावासाठी: सूर्यनमस्कार, उभी आसने, पीळ आणि मागे वाकणे, जास्त वेळ धरणे."}},
+    {"key": "advanced", "name": {"en": "Advanced", "hi": "उन्नत", "mr": "प्रगत"}, "curriculum": "advanced", "days": ["mon", "tue", "wed", "thu", "fri", "sat"], "time": "09:00", "duration_min": 55,
+     "about": {"en": "For an established practice: inversions with the teacher, stronger breathwork, longer meditation.", "hi": "पक्के अभ्यास के लिए: शिक्षक के साथ उलटे आसन, गहरा प्राणायाम, लंबा ध्यान।", "mr": "पक्क्या सरावासाठी: शिक्षकांसोबत उलटी आसने, सखोल प्राणायाम, जास्त वेळ ध्यान."}},
+    {"key": "pain_management", "name": {"en": "Pain management", "hi": "दर्द प्रबंधन", "mr": "वेदना व्यवस्थापन"}, "curriculum": "pain_management", "days": ["mon", "wed", "fri"], "time": "17:30", "duration_min": 45,
+     "about": {"en": "Gentle and supported, for knee, back and neck pain: easier variants, the breath and deep rest.", "hi": "कोमल और सहारे के साथ, घुटने, पीठ और गर्दन के दर्द के लिए: आसान रूप, साँस और गहरा विश्राम।", "mr": "सौम्य आणि आधारासह, गुडघा, पाठ आणि मानदुखीसाठी: सोपे प्रकार, श्वास आणि खोल विश्रांती."}}
   ],
-  "weekly": {"mon": "hatha", "tue": "pranayama", "wed": "vinyasa", "thu": "dhyana", "fri": "hatha", "sat": "nidra", "sun": "satsang"},
   "words": {
     "blessing": {
       "sa": "ॐ सर्वेषां स्वस्तिर्भवतु। सर्वेषां शान्तिर्भवतु।\nसर्वेषां पूर्णं भवतु। सर्वेषां मङ्गलं भवतु।\nॐ शान्तिः शान्तिः शान्तिः॥",
@@ -110,11 +45,6 @@
       "en": "A rhythm to return to, week after week.",
       "hi": "एक लय, जिसमें हर हफ़्ते लौटा जा सके।",
       "mr": "दर आठवड्याला परत येण्यासाठी एक लय."
-    },
-    "classes": {
-      "en": "Each class is a door. Walk through whichever calls to you — the path joins them all in the end.",
-      "hi": "हर कक्षा एक द्वार है। जो आपको पुकारे, उसमें से चलिए — अंत में राह सबको जोड़ देती है।",
-      "mr": "प्रत्येक वर्ग एक दार आहे. जो तुम्हाला साद घालेल, त्यातून चला — शेवटी मार्ग सर्वांना जोडतो."
     },
     "teacher": {
       "en": "A teacher who walks the way himself.",

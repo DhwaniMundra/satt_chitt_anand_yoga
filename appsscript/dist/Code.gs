@@ -23,8 +23,6 @@ const STUDIO = {
     "mr": "सत्य · चैतन्य · आनंद"
   },
   "since": 1994,
-  "class_start_ist": "08:00",
-  "duration_min": 55,
   "teacher": {
     "name": "Ramit M Tippannavar",
     "short": {
@@ -43,143 +41,101 @@ const STUDIO = {
       "mr": "कैवल्यधाम परंपरेत 12 वर्षांहून अधिक प्रशिक्षण, शास्त्रीय हठयोग आणि उपचारात्मक प्राणायामात प्रमाणपत्र. त्यांचे शिकवणे अचूक आसन-रचना आणि श्वास यांना जोडते."
     }
   },
-  "classes": [
+  "batches": [
     {
-      "key": "hatha",
+      "key": "beginner",
       "name": {
-        "en": "Hatha Yoga",
-        "hi": "हठ योग",
-        "mr": "हठयोग"
+        "en": "Beginner",
+        "hi": "शुरुआती",
+        "mr": "नवशिके"
       },
-      "level": {
-        "en": "All levels",
-        "hi": "सभी स्तर",
-        "mr": "सर्व स्तर"
-      },
+      "curriculum": "beginner",
+      "days": [
+        "mon",
+        "tue",
+        "wed",
+        "thu",
+        "fri",
+        "sat"
+      ],
+      "time": "07:00",
+      "duration_min": 55,
       "about": {
-        "en": "Classical postures held with steady breath. Builds strength, balance and flexibility.",
-        "hi": "स्थिर श्वास के साथ शास्त्रीय आसन। शक्ति, संतुलन और लचीलापन बढ़ाता है।",
-        "mr": "स्थिर श्वासासह शास्त्रीय आसने. ताकद, संतुलन आणि लवचिकता वाढवते."
+        "en": "Foundations at an easy pace: the breath, simple postures held steady, then stillness.",
+        "hi": "आसान गति से बुनियाद: साँस, स्थिर रखे सरल आसन, फिर स्थिरता।",
+        "mr": "सोप्या गतीने पाया: श्वास, स्थिर ठेवलेली सोपी आसने, मग स्थिरता."
       }
     },
     {
-      "key": "pranayama",
+      "key": "intermediate",
       "name": {
-        "en": "Pranayama",
-        "hi": "प्राणायाम",
-        "mr": "प्राणायाम"
-      },
-      "level": {
-        "en": "All levels",
-        "hi": "सभी स्तर",
-        "mr": "सर्व स्तर"
-      },
-      "about": {
-        "en": "Breathwork: slow, guided breathing practices to calm and focus the mind.",
-        "hi": "श्वास-अभ्यास: मन को शांत और एकाग्र करने के लिए धीमी, निर्देशित श्वास।",
-        "mr": "श्वासाचा सराव: मन शांत आणि एकाग्र करण्यासाठी संथ, मार्गदर्शित श्वसन."
-      }
-    },
-    {
-      "key": "vinyasa",
-      "name": {
-        "en": "Vinyasa Flow",
-        "hi": "विन्यास फ्लो",
-        "mr": "विन्यास फ्लो"
-      },
-      "level": {
         "en": "Intermediate",
-        "hi": "मध्यम स्तर",
-        "mr": "मध्यम स्तर"
+        "hi": "मध्यम",
+        "mr": "मध्यम"
       },
+      "curriculum": "intermediate",
+      "days": [
+        "mon",
+        "tue",
+        "wed",
+        "thu",
+        "fri",
+        "sat"
+      ],
+      "time": "08:00",
+      "duration_min": 55,
       "about": {
-        "en": "Postures linked in a flowing sequence, one movement to one breath.",
-        "hi": "एक श्वास, एक गति: आसनों का बहता हुआ क्रम।",
-        "mr": "एक श्वास, एक हालचाल: आसनांचा प्रवाही क्रम."
+        "en": "For a steady practice: sun salutations, standing poses, twists and backbends, longer holds.",
+        "hi": "नियमित अभ्यास के लिए: सूर्य नमस्कार, खड़े आसन, मोड़ और पीछे झुकना, लंबे ठहराव।",
+        "mr": "नियमित सरावासाठी: सूर्यनमस्कार, उभी आसने, पीळ आणि मागे वाकणे, जास्त वेळ धरणे."
       }
     },
     {
-      "key": "dhyana",
+      "key": "advanced",
       "name": {
-        "en": "Dhyana · Meditation",
-        "hi": "ध्यान",
-        "mr": "ध्यान"
+        "en": "Advanced",
+        "hi": "उन्नत",
+        "mr": "प्रगत"
       },
-      "level": {
-        "en": "All levels",
-        "hi": "सभी स्तर",
-        "mr": "सर्व स्तर"
-      },
+      "curriculum": "advanced",
+      "days": [
+        "mon",
+        "tue",
+        "wed",
+        "thu",
+        "fri",
+        "sat"
+      ],
+      "time": "09:00",
+      "duration_min": 55,
       "about": {
-        "en": "Seated stillness and guided attention.",
-        "hi": "बैठकर स्थिरता और निर्देशित ध्यान।",
-        "mr": "बसून स्थिरता आणि मार्गदर्शित ध्यान."
+        "en": "For an established practice: inversions with the teacher, stronger breathwork, longer meditation.",
+        "hi": "पक्के अभ्यास के लिए: शिक्षक के साथ उलटे आसन, गहरा प्राणायाम, लंबा ध्यान।",
+        "mr": "पक्क्या सरावासाठी: शिक्षकांसोबत उलटी आसने, सखोल प्राणायाम, जास्त वेळ ध्यान."
       }
     },
     {
-      "key": "nidra",
+      "key": "pain_management",
       "name": {
-        "en": "Yoga Nidra",
-        "hi": "योग निद्रा",
-        "mr": "योगनिद्रा"
+        "en": "Pain management",
+        "hi": "दर्द प्रबंधन",
+        "mr": "वेदना व्यवस्थापन"
       },
-      "level": {
-        "en": "All levels",
-        "hi": "सभी स्तर",
-        "mr": "सर्व स्तर"
-      },
+      "curriculum": "pain_management",
+      "days": [
+        "mon",
+        "wed",
+        "fri"
+      ],
+      "time": "17:30",
+      "duration_min": 45,
       "about": {
-        "en": "Deep guided relaxation, lying down.",
-        "hi": "लेटकर गहरा, निर्देशित विश्राम।",
-        "mr": "झोपून केलेली खोल, मार्गदर्शित विश्रांती."
-      }
-    },
-    {
-      "key": "beginners",
-      "name": {
-        "en": "Beginners' Path",
-        "hi": "शुरुआती पथ",
-        "mr": "नवशिक्यांचा मार्ग"
-      },
-      "level": {
-        "en": "Foundations",
-        "hi": "बुनियाद",
-        "mr": "पाया"
-      },
-      "about": {
-        "en": "The foundations, step by step: posture, breath and rest.",
-        "hi": "बुनियादी बातें, कदम-दर-कदम: आसन, श्वास और विश्राम।",
-        "mr": "पायाभूत गोष्टी, टप्प्याटप्प्याने: आसन, श्वास आणि विश्रांती."
-      }
-    },
-    {
-      "key": "satsang",
-      "name": {
-        "en": "Satsang · Open Practice",
-        "hi": "सत्संग · खुला अभ्यास",
-        "mr": "सत्संग · मुक्त सराव"
-      },
-      "level": {
-        "en": "All levels",
-        "hi": "सभी स्तर",
-        "mr": "सर्व स्तर"
-      },
-      "about": {
-        "en": "Sunday gathering: open practice, questions and conversation.",
-        "hi": "रविवार की सभा: खुला अभ्यास, प्रश्न और बातचीत।",
-        "mr": "रविवारचा मेळावा: मुक्त सराव, प्रश्न आणि गप्पा."
+        "en": "Gentle and supported, for knee, back and neck pain: easier variants, the breath and deep rest.",
+        "hi": "कोमल और सहारे के साथ, घुटने, पीठ और गर्दन के दर्द के लिए: आसान रूप, साँस और गहरा विश्राम।",
+        "mr": "सौम्य आणि आधारासह, गुडघा, पाठ आणि मानदुखीसाठी: सोपे प्रकार, श्वास आणि खोल विश्रांती."
       }
     }
   ],
-  "weekly": {
-    "mon": "hatha",
-    "tue": "pranayama",
-    "wed": "vinyasa",
-    "thu": "dhyana",
-    "fri": "hatha",
-    "sat": "nidra",
-    "sun": "satsang"
-  },
   "words": {
     "blessing": {
       "sa": "ॐ सर्वेषां स्वस्तिर्भवतु। सर्वेषां शान्तिर्भवतु।\nसर्वेषां पूर्णं भवतु। सर्वेषां मङ्गलं भवतु।\nॐ शान्तिः शान्तिः शान्तिः॥",
@@ -227,11 +183,6 @@ const STUDIO = {
       "en": "A rhythm to return to, week after week.",
       "hi": "एक लय, जिसमें हर हफ़्ते लौटा जा सके।",
       "mr": "दर आठवड्याला परत येण्यासाठी एक लय."
-    },
-    "classes": {
-      "en": "Each class is a door. Walk through whichever calls to you — the path joins them all in the end.",
-      "hi": "हर कक्षा एक द्वार है। जो आपको पुकारे, उसमें से चलिए — अंत में राह सबको जोड़ देती है।",
-      "mr": "प्रत्येक वर्ग एक दार आहे. जो तुम्हाला साद घालेल, त्यातून चला — शेवटी मार्ग सर्वांना जोडतो."
     },
     "teacher": {
       "en": "A teacher who walks the way himself.",
@@ -1473,6 +1424,133 @@ const CURRICULUM = {
           }
         }
       ]
+    },
+    {
+      "key": "pain_management",
+      "level": 1,
+      "name": {
+        "en": "Pain management",
+        "hi": "दर्द प्रबंधन",
+        "mr": "वेदना व्यवस्थापन"
+      },
+      "about": {
+        "en": "Gentle and supported, for knee, back and neck pain. Every item has an easier variant; stop at any sharp pain and tell {teacher} what hurts. Not a treatment: follow your doctor's advice.",
+        "hi": "कोमल और सहारे के साथ, घुटने, पीठ और गर्दन के दर्द के लिए। हर आसन का आसान रूप है; तेज़ दर्द हो तो रुकें और {teacher} को बताएँ कि कहाँ दर्द है। यह इलाज नहीं है: अपने डॉक्टर की सलाह मानें।",
+        "mr": "सौम्य आणि आधारासह, गुडघा, पाठ आणि मानदुखीसाठी. प्रत्येक आसनाचा सोपा प्रकार आहे; तीव्र वेदना झाल्यास थांबा आणि {teacher} यांना काय दुखते ते सांगा. हा उपचार नाही: तुमच्या डॉक्टरांचा सल्ला पाळा."
+      },
+      "source": "Common Yoga Protocol (Ministry of AYUSH), its supine and seated practices; Bihar School of Yoga, Asana Pranayama Mudra Bandha (the pawanmuktasana series for the joints); Swami Kuvalayananda, Asanas (Kaivalyadhama), for the relaxing asanas",
+      "items": [
+        {
+          "item": "sectional_breathing",
+          "dose": 3,
+          "unit": "minutes",
+          "cue": {
+            "en": "Lying down, knees bent and feet on the floor; belly, ribs, then chest.",
+            "hi": "लेटकर, घुटने मोड़कर पैर ज़मीन पर; पेट, पसलियाँ, फिर छाती।",
+            "mr": "झोपून, गुडघे वाकवून पाय जमिनीवर; पोट, बरगड्या, मग छाती."
+          }
+        },
+        {
+          "item": "pavanamuktasana",
+          "dose": 5,
+          "unit": "breaths",
+          "cue": {
+            "en": "Each side, one knee at a time. Hold under the thigh, not over the knee; no pulling.",
+            "hi": "दोनों ओर, एक-एक घुटना। जाँघ के नीचे से पकड़ें, घुटने के ऊपर से नहीं; खींचें नहीं।",
+            "mr": "दोन्ही बाजूंनी, एकेक गुडघा. मांडीखाली धरा, गुडघ्यावर नाही; ओढू नका."
+          }
+        },
+        {
+          "item": "setu_bandhasana",
+          "dose": 5,
+          "unit": "breaths",
+          "cue": {
+            "en": "Half bridge: lift the hips a hand's width, feet hip-width apart. Come down at any back or knee pain.",
+            "hi": "आधा सेतु: कूल्हे एक हथेली भर उठाएँ, पैर कूल्हों जितने खुले। पीठ या घुटने में दर्द हो तो नीचे आ जाएँ।",
+            "mr": "अर्धा सेतू: कंबर एक तळहाताइतकी उचला, पाय कंबरेइतके अंतरावर. पाठ किंवा गुडघा दुखल्यास खाली या."
+          }
+        },
+        {
+          "item": "makarasana",
+          "dose": 2,
+          "unit": "minutes",
+          "cue": {
+            "en": "Rest face down, forehead on the hands; let the low back settle.",
+            "hi": "पेट के बल आराम, माथा हथेलियों पर; कमर को ढीला होने दें।",
+            "mr": "पोटावर विश्रांती, कपाळ हातांवर; कंबर सैल होऊ द्या."
+          }
+        },
+        {
+          "item": "bhujangasana",
+          "dose": 3,
+          "unit": "rounds",
+          "cue": {
+            "en": "Low cobra on the forearms (sphinx); lift only as far as is easy, with no pain in the back.",
+            "hi": "कोहनियों पर नीचा भुजंगासन; उतना ही उठें जितना आसान हो, पीठ में दर्द न हो।",
+            "mr": "कोपरांवर कमी उंचीचे भुजंगासन; जितके सहज तितकेच उचला, पाठ दुखू नये."
+          }
+        },
+        {
+          "item": "shalabhasana",
+          "dose": 3,
+          "unit": "rounds",
+          "cue": {
+            "en": "One leg at a time, a small lift; hips stay on the floor.",
+            "hi": "एक-एक पैर, थोड़ा-सा उठाएँ; कूल्हे ज़मीन पर रहें।",
+            "mr": "एकेक पाय, थोडासा उचला; कंबर जमिनीवरच राहू द्या."
+          }
+        },
+        {
+          "item": "vakrasana",
+          "dose": 5,
+          "unit": "breaths",
+          "cue": {
+            "en": "Each side, seated on a chair or a cushion. Turn gently from the belly; never force the neck.",
+            "hi": "दोनों ओर, कुर्सी या गद्दी पर बैठकर। पेट से धीरे मुड़ें; गर्दन पर ज़ोर न डालें।",
+            "mr": "दोन्ही बाजूंनी, खुर्चीवर किंवा उशीवर बसून. पोटापासून हळू वळा; मानेवर जोर देऊ नका."
+          }
+        },
+        {
+          "item": "tadasana",
+          "dose": 5,
+          "unit": "breaths",
+          "cue": {
+            "en": "Stand by a wall or a chair for support; weight even on both feet, knees soft, not locked.",
+            "hi": "सहारे के लिए दीवार या कुर्सी के पास खड़े हों; दोनों पैरों पर बराबर भार, घुटने ढीले, कसे नहीं।",
+            "mr": "आधारासाठी भिंतीजवळ किंवा खुर्चीजवळ उभे राहा; दोन्ही पायांवर समान भार, गुडघे सैल, ताठ नाही."
+          }
+        },
+        {
+          "item": "nadi_shodhana",
+          "dose": 5,
+          "unit": "rounds",
+          "cue": {
+            "en": "Sit as is comfortable, on a chair if the knees or back ask; slow and even, no holding.",
+            "hi": "जैसे आराम हो वैसे बैठें, घुटने या पीठ कहें तो कुर्सी पर; धीमी और बराबर, रोकें नहीं।",
+            "mr": "आरामात बसा, गुडघे किंवा पाठ सांगत असल्यास खुर्चीवर; संथ आणि समान, रोखू नका."
+          }
+        },
+        {
+          "item": "bhramari",
+          "dose": 5,
+          "unit": "rounds",
+          "cue": {
+            "en": "A soft hum on the out-breath; let the jaw and shoulders go.",
+            "hi": "छोड़ती साँस के साथ धीमी गुंजन; जबड़ा और कंधे ढीले छोड़ें।",
+            "mr": "सोडत्या श्वासासोबत हलका गुंजारव; जबडा आणि खांदे सैल सोडा."
+          }
+        },
+        {
+          "item": "shavasana",
+          "dose": 5,
+          "unit": "minutes",
+          "cue": {
+            "en": "A cushion under the knees eases the back; a folded cloth under the head eases the neck.",
+            "hi": "घुटनों के नीचे गद्दी पीठ को आराम देती है; सिर के नीचे मुड़ा कपड़ा गर्दन को।",
+            "mr": "गुडघ्यांखाली उशी पाठीला आराम देते; डोक्याखाली घडी केलेले कापड मानेला."
+          }
+        }
+      ]
     }
   ]
 };
@@ -1584,7 +1662,6 @@ function routes_() {
     ['POST', '/auth/logout', logout_],
     ['GET', '/me', me_],
     ['POST', '/me', updateMe_, LOCK_],
-    ['POST', '/me/group_code', joinGroup_, LOCK_],
     ['GET', '/me/practice', myPractice_],
     ['POST', '/me/solo', soloPractice_, LOCK_],
     ['GET', '/me/asanas', myItems_],
@@ -1601,10 +1678,12 @@ function routes_() {
     ['PUT', '/teacher/sessions/{session_id}/curriculum', setCurriculum_, LOCK_],
     ['GET', '/teacher/sessions/{session_id}/practice', classReview_],
     ['PUT', '/teacher/settings', updateSettings_, LOCK_],
+    ['PUT', '/teacher/batches/{key}', setBatchLink_, LOCK_],
     ['POST', '/teacher/group_code', rotateGroupCode_, LOCK_],
     ['GET', '/teacher/invite', invite_],
     ['GET', '/teacher/students', students_],
     ['POST', '/teacher/students/{user_id}/status', setStatus_, LOCK_],
+    ['PUT', '/teacher/students/{user_id}/batch', placeInBatch_, LOCK_],
     ['POST', '/teacher/students/{user_id}/password', resetPassword_],
     ['GET', '/teacher/students/{user_id}/asanas', studentItems_],
     ['GET', '/teacher/students/{user_id}/asanas/{item}', studentItem_],
@@ -1725,11 +1804,11 @@ const BODY_ = {
     name: F_.str({ min: 1, max: 80, nullable: true, def: null }),
     lang: F_.oneOf(LANGS_, { nullable: true, def: null }),
   },
-  code: { code: F_.str(REQUIRED_) },
   checkin: { phase: F_.oneOf(['before', 'after'], REQUIRED_), mood: F_.int({ required: true, ge: 1, le: 5 }) },
   feedback: { screen: F_.str({ required: true, max: 40 }), text: F_.str({ required: true, min: 1, max: 2000 }) },
   link: { meet_link: F_.str(REQUIRED_) },
-  settings: { group_link: F_.str({ nullable: true, def: null }), default_meet_link: F_.str({ nullable: true, def: null }) },
+  settings: { group_link: F_.str({ nullable: true, def: null }) },
+  place: { batch: F_.str({ required: true, min: 1, max: 40 }), note: F_.str({ nullable: true, def: null, max: 300 }) },
   status: { status: F_.oneOf(['approved', 'rejected'], REQUIRED_) },
   shared: { text: F_.str({ required: true, min: 1, max: 500 }) },
   curriculum: { curriculum: F_.str({ required: true, min: 1, max: 40 }) },
@@ -1758,6 +1837,7 @@ const QUERY_LANG_ = { lang: F_.oneOf(LANGS_, { def: 'en' }) };
 // A 422 names the parameter, so they carry their names.
 const PATH_SESSION_ = { session_id: F_.int(REQUIRED_) };
 const PATH_USER_ = { user_id: F_.int(REQUIRED_) };
+const PATH_BATCH_ = { key: F_.str({ required: true, min: 1, max: 40 }) };
 const PATH_ITEM_ = { item: F_.str({ required: true, min: 1, max: 40 }) };
 
 function validateBody_(fields, body, errors) {
@@ -1876,17 +1956,25 @@ function plural_(n, word) {
 // UTC ISO-8601 strings. Writes happen under the script lock; ids are the largest id + 1, worked out under that lock.
 
 const TABLES_ = {
+  // A student's batch (a key of the batches tab) and since when; empty until the teacher places them.
   users: [['id', 'int'], ['name', 'text'], ['phone', 'text'], ['role', 'text'], ['status', 'text'], ['pw_hash', 'text'],
-    ['lang', 'text'], ['created_at', 'time']],
+    ['lang', 'text'], ['created_at', 'time'], ['batch', 'text?'], ['batch_since', 'time']],
   tokens: [['token_hash', 'text'], ['user_id', 'int'], ['created_at', 'time']],
-  class_sessions: [['id', 'int'], ['class_key', 'text'], ['starts_at', 'time'], ['duration_min', 'int'], ['meet_link', 'text?'],
+  // A class of one batch; its own Meet link and curriculum, when set, win over the batch's.
+  class_sessions: [['id', 'int'], ['batch', 'text'], ['starts_at', 'time'], ['duration_min', 'int'], ['meet_link', 'text?'],
     ['curriculum', 'text?'], ['updated_at', 'time']],
-  // `class` and `class_date` copy the session's class name and India date, for the owner's queries; the app uses session_id.
+  // `class` and `class_date` copy the class's batch name and India date, for the owner's queries; the app uses session_id.
   checkins: [['user_id', 'int'], ['session_id', 'int'], ['phase', 'text'], ['mood', 'int'], ['created_at', 'time'],
     ['class', 'text'], ['class_date', 'date']],
   feedback: [['id', 'int'], ['user_id', 'int'], ['screen', 'text'], ['text', 'text'], ['created_at', 'time']],
   shared_notes: [['id', 'int'], ['user_id', 'int'], ['text', 'text'], ['created_at', 'time']],
   settings: [['key', 'text'], ['value', 'text?']],
+  // Each placement of a student in a batch, and each move between batches: the review history.
+  batch_changes: [['id', 'int'], ['student_id', 'int'], ['from', 'text?'], ['to', 'text'], ['note', 'text?'], ['created_at', 'time']],
+  // The batches: seeded by setup() from content/studio.json while the tab is empty, then the owner's to edit. `days`
+  // like "mon, tue, wed", `time` like "07:00" in India; `curriculum` is its classes' default.
+  batches: [['key', 'text'], ['name', 'text'], ['name_hi', 'text'], ['name_mr', 'text'], ['curriculum', 'text'], ['days', 'text'],
+    ['time', 'text'], ['duration_min', 'int'], ['meet_link', 'text?'], ['about', 'text'], ['about_hi', 'text'], ['about_mr', 'text']],
   // The curriculum: seeded by setup() from content/curriculum.json while the tabs are empty, then the owner's to edit.
   library: [['key', 'text'], ['type', 'text'], ['level', 'int'], ['sanskrit', 'text'], ['name', 'text'], ['english', 'text'],
     ['aliases', 'text'], ['source', 'text']],
@@ -2275,7 +2363,8 @@ function signIn_(ctx, user) {
 }
 
 function userJson_(u) {
-  return { id: u.id, name: u.name, phone: u.phone, role: u.role, status: u.status, lang: u.lang };
+  return { id: u.id, name: u.name, phone: u.phone, role: u.role, status: u.status, lang: u.lang, batch: u.batch || null,
+    batch_since: u.batch_since ? isoTime_(u.batch_since) : null };
 }
 
 // ---------- Studio: the classes, the weekly rhythm in India time, and the sums over check-ins ----------
@@ -2342,70 +2431,120 @@ function cleanGroupLink_(raw) {
   return cleanLink_(raw, GROUP_LINK_, 'bad_group_link');
 }
 
-function classInfo_(key, lang) {
-  const entry = STUDIO.classes.filter((c) => c.key === key)[0];
-  if (!entry) throw new Error('unknown class ' + key);
-  return { key: key, name: pick_(entry.name, lang), level: pick_(entry.level, lang), about: pick_(entry.about, lang) };
+/** The batches, from the batches tab, by key: names and words in each language, the default curriculum, the days
+ * ("mon"…), the start in minutes after midnight in India, the length and the everyday Meet link. */
+function batches_(ctx) {
+  const out = {};
+  ctx.db.t('batches').rows.forEach((r) => {
+    if (!r.key) return;
+    out[r.key] = {
+      key: r.key,
+      name: { en: r.name, hi: r.name_hi || r.name, mr: r.name_mr || r.name },
+      about: { en: r.about, hi: r.about_hi || r.about, mr: r.about_mr || r.about },
+      curriculum: r.curriculum,
+      days: String(r.days || '').split(',').map((d) => d.trim().toLowerCase().slice(0, 3)).filter((d) => DAYS_.indexOf(d) >= 0),
+      start_min: startMinutes_(r.time),
+      duration_min: r.duration_min || 55,
+      meet_link: r.meet_link,
+    };
+  });
+  return out;
 }
 
-/** A session for the app. The link is shown only to approved members; without its own link a session uses the
- * teacher's standing link. */
-function sessionJson_(row, lang, showLink, defaultLink) {
-  const link = row.meet_link || defaultLink;
+/** "07:00" (or a time the owner typed, which Sheets keeps as a time of day) as minutes after midnight in India. */
+function startMinutes_(time) {
+  const text = String(time || '');
+  const iso = /T(\d\d):(\d\d)/.exec(text); // a time-of-day cell, read back as a UTC moment
+  if (iso) return (Number(iso[1]) * 60 + Number(iso[2]) + IST_OFFSET_MS_ / 60000) % 1440;
+  const plain = /(\d{1,2})[:.](\d\d)/.exec(text);
+  return plain ? Number(plain[1]) * 60 + Number(plain[2]) : 0;
+}
+
+/** A batch for the app, in `lang`: its key, name, words, days and start ("07:00"). */
+function batchJson_(batch, key, lang) {
+  if (!batch) return { key: key, name: key || '', about: '', days: [], time: null };
+  const h = Math.floor(batch.start_min / 60);
+  const m = batch.start_min % 60;
+  return { key: batch.key, name: pick_(batch.name, lang), about: pick_(batch.about, lang), days: batch.days,
+    time: (h < 10 ? '0' : '') + h + ':' + (m < 10 ? '0' : '') + m };
+}
+
+/** A session for the app. The link is shown only to approved members; without its own link a session uses its batch's
+ * everyday link. */
+function sessionJson_(row, lang, showLink, batches) {
+  const batch = batches[row.batch];
+  const link = row.meet_link || (batch && batch.meet_link);
   return {
     id: row.id,
     starts_at: isoTime_(row.starts_at),
     duration_min: row.duration_min,
-    class: classInfo_(row.class_key, lang),
+    batch: batchJson_(batch, row.batch, lang),
     meet_link: showLink ? link || null : null,
     has_link: Boolean(link),
   };
 }
 
-function studioJson_(lang) {
+function studioJson_(ctx, lang) {
   const teacher = STUDIO.teacher;
+  const batches = batches_(ctx);
   return {
     name: pick_(STUDIO.name, lang),
     tagline: pick_(STUDIO.tagline, lang),
     since: STUDIO.since,
     teacher: { name: teacher.name, title: pick_(teacher.title, lang), bio: pick_(teacher.bio, lang) },
-    classes: STUDIO.classes.map((c) => classInfo_(c.key, lang)),
-    weekly: DAYS_.map((day) => ({ day: day, class: classInfo_(STUDIO.weekly[day], lang) })),
-    class_start_ist: STUDIO.class_start_ist,
-    duration_min: STUDIO.duration_min,
+    batches: Object.keys(batches).map((key) => batchJson_(batches[key], key, lang)),
   };
 }
 
-/** The class start of each of the 7 days from `now`'s India date. */
-function weekStarts_(now) {
-  const [hour, minute] = STUDIO.class_start_ist.split(':').map(Number);
+/** Each batch's classes on its days, over the 7 days from `now`'s India date. */
+function weekStarts_(now, batches) {
   const today = istDay_(now);
   const out = [];
   for (let offset = 0; offset < 7; offset++) {
     const day = today + offset;
-    out.push({ starts_at: istMidnight_(day) + (hour * 60 + minute) * 60000, class_key: STUDIO.weekly[DAYS_[(day + 3) % 7]] });
+    const weekday = DAYS_[(day + 3) % 7]; // 1 Jan 1970 was a Thursday
+    Object.keys(batches).forEach((key) => {
+      const b = batches[key];
+      if (b.days.indexOf(weekday) >= 0) out.push({ batch: key, starts_at: istMidnight_(day) + b.start_min * 60000, duration_min: b.duration_min });
+    });
   }
   return out;
 }
 
-/** Makes sure a session row exists for each of the next 7 days; takes the lock only when one is missing. */
+/** Makes the next 7 days' classes match the batches: adds each one missing and removes one outside the schedule (after
+ * the owner changed a batch's days or time) that has not begun and nobody has checked in to. Takes the lock only
+ * when there is something to change. */
 function ensureWeek_(ctx) {
-  const wanted = weekStarts_(ctx.now);
-  const have = (table) => {
-    const starts = {};
+  const wanted = weekStarts_(ctx.now, batches_(ctx));
+  const keyOf = (r) => r.batch + '@' + r.starts_at;
+  const want = {};
+  wanted.forEach((w) => {
+    want[keyOf(w)] = true;
+  });
+  const horizon = istMidnight_(istDay_(ctx.now) + 7);
+  const changes = (table) => {
+    const present = {};
     table.rows.forEach((r) => {
-      starts[r.starts_at] = true;
+      present[keyOf(r)] = true;
     });
-    return starts;
+    const joined = {};
+    ctx.db.t('checkins').rows.forEach((c) => {
+      joined[c.session_id] = true;
+    });
+    return {
+      missing: wanted.filter((w) => !present[keyOf(w)]),
+      stale: table.rows.filter((r) => r.starts_at > ctx.now && r.starts_at < horizon && !want[keyOf(r)] && !joined[r.id]),
+    };
   };
-  let present = have(ctx.db.t('class_sessions'));
-  if (wanted.every((w) => present[w.starts_at])) return;
+  let todo = changes(ctx.db.t('class_sessions'));
+  if (!todo.missing.length && !todo.stale.length) return;
   ctx.lock(() => {
     const table = ctx.db.t('class_sessions');
-    present = have(table);
+    todo = changes(table);
+    if (todo.stale.length) table.remove(todo.stale);
     let id = table.nextId();
-    table.insert(wanted.filter((w) => !present[w.starts_at]).map((w) => ({
-      id: id++, class_key: w.class_key, starts_at: w.starts_at, duration_min: STUDIO.duration_min, meet_link: null, updated_at: ctx.now,
+    table.insert(todo.missing.map((w) => ({
+      id: id++, batch: w.batch, starts_at: w.starts_at, duration_min: w.duration_min, meet_link: null, updated_at: ctx.now,
     })));
   });
 }
@@ -2416,14 +2555,14 @@ function afterOpen_(session, now) {
   return end - 10 * 60000 <= now && now <= end + 12 * 3600000;
 }
 
-/** Sessions that have not ended yet, soonest first. */
-function upcoming_(ctx, limit) {
+/** Sessions that have not ended yet, soonest first: [batch]'s, or every batch's. */
+function upcoming_(ctx, limit, batch) {
   ensureWeek_(ctx);
   const from = ctx.now - 2 * 3600000;
   return ctx.db.t('class_sessions').rows
-    .filter((r) => r.starts_at >= from && r.starts_at + r.duration_min * 60000 > ctx.now)
-    .sort((a, b) => a.starts_at - b.starts_at)
-    .slice(0, limit || 7);
+    .filter((r) => (!batch || r.batch === batch) && r.starts_at >= from && r.starts_at + r.duration_min * 60000 > ctx.now)
+    .sort((a, b) => a.starts_at - b.starts_at || String(a.batch).localeCompare(String(b.batch)))
+    .slice(0, limit);
 }
 
 function sessionRow_(ctx, id) {
@@ -2501,6 +2640,7 @@ function average1_(values) {
 function practiceSummary_(ctx, userId, days, lang) {
   days = Math.max(1, Math.min(days, 90));
   const sessions = sessionsById_(ctx);
+  const batches = batches_(ctx);
   const mine = ctx.db.t('checkins').rows.filter((c) => c.user_id === userId);
   const afterBySession = {};
   mine.forEach((c) => {
@@ -2517,7 +2657,7 @@ function practiceSummary_(ctx, userId, days, lang) {
   const byClass = {};
   const plan = sessionCurricula_(ctx);
   rows.forEach((r) => {
-    const name = classInfo_(r.session.class_key, lang).name;
+    const name = batchJson_(batches[r.session.batch], r.session.batch, lang).name;
     classes.push({ date: istDate_(r.session.starts_at), class: name, curriculum: plan[r.session.id], mood_before: r.before, mood_after: r.after });
     const entry = byClass[name] || (byClass[name] = { times: 0, before: [], after: [] });
     entry.times += 1;
@@ -2559,9 +2699,10 @@ function itemTitle_(entry, key, lang) {
 
 /** The WhatsApp message for one session, its wa.me link, and the group to post it in. */
 function shareFor_(ctx, row, lang) {
-  const link = row.meet_link || ctx.db.setting('default_meet_link');
+  const batch = batches_(ctx)[row.batch];
+  const link = row.meet_link || (batch && batch.meet_link);
   if (!link) throw new HttpError_(400, 'no_link');
-  const name = classInfo_(row.class_key, lang).name;
+  const name = batchJson_(batch, row.batch, lang).name;
   const text = classMessage_(name, row.starts_at, row.duration_min, link, lang);
   return { text: text, url: shareUrl_(text), group_link: ctx.db.setting('group_link') };
 }
@@ -2632,19 +2773,18 @@ function curriculum_(ctx) {
   return { library: library, curricula: ctx.db.t('curricula').rows.filter((r) => r.key), items: items };
 }
 
-/** Each session's curriculum by session id: its own, else the one last used for a class of its kind, else the first
- * in the curricula tab (Beginner, as seeded). */
+/** Each session's curriculum by session id: its own, else its batch's, else the first in the curricula tab. */
 function sessionCurricula_(ctx) {
   const known = {};
   const keys = ctx.db.t('curricula').rows.filter((r) => r.key).map((r) => r.key);
   keys.forEach((k) => {
     known[k] = true;
   });
-  const last = {};
+  const batches = batches_(ctx);
   const out = {};
-  ctx.db.t('class_sessions').rows.slice().sort((a, b) => a.starts_at - b.starts_at).forEach((r) => {
-    if (known[r.curriculum]) last[r.class_key] = r.curriculum;
-    out[r.id] = last[r.class_key] || keys[0] || null;
+  ctx.db.t('class_sessions').rows.forEach((r) => {
+    const batch = batches[r.batch];
+    out[r.id] = (known[r.curriculum] && r.curriculum) || (batch && known[batch.curriculum] && batch.curriculum) || keys[0] || null;
   });
   return out;
 }
@@ -2904,7 +3044,7 @@ function health_() {
 
 function studio_(ctx) {
   const { query } = ctx.check({ query: QUERY_LANG_ });
-  return studioJson_(query.lang);
+  return studioJson_(ctx, query.lang);
 }
 
 function signup_(ctx) {
@@ -2924,10 +3064,15 @@ function signup_(ctx) {
       }
     }, true);
     status = 'approved';
-  } else if (code) {
-    if (!codeMatches_(ctx, code, 'group_code')) throw new HttpError_(400, 'bad_group_code');
-    status = 'approved';
   } else {
+    // The group code, from the class's WhatsApp invite, keeps sign-ups to the class; the teacher then places each
+    // student in a batch.
+    const key = 'group-code:' + phone;
+    if (attemptsBlocked_(key)) throw new HttpError_(429, 'too_many_attempts');
+    if (!codeMatches_(ctx, code, 'group_code')) {
+      attemptsFail_(key);
+      throw new HttpError_(400, 'bad_group_code');
+    }
     status = 'pending';
   }
   if (ctx.db.t('users').rows.some((u) => u.phone === phone)) throw new HttpError_(409, 'phone_taken');
@@ -3001,19 +3146,6 @@ function updateMe_(ctx) {
 }
 
 /** A pending student who later gets the group code from the WhatsApp group is approved at once. */
-function joinGroup_(ctx) {
-  const user = currentUser_(ctx);
-  const { body } = ctx.check({ body: BODY_.code });
-  const key = 'code:' + user.id;
-  if (attemptsBlocked_(key)) throw new HttpError_(429, 'too_many_attempts');
-  if (!codeMatches_(ctx, body.code.trim().toUpperCase(), 'group_code')) {
-    attemptsFail_(key);
-    throw new HttpError_(400, 'bad_group_code');
-  }
-  if (user.status === 'pending') ctx.db.t('users').update(user, { status: 'approved' });
-  return { user: userJson_(user) };
-}
-
 /** What the get_my_practice tool on the phone hands Gemma: this student's classes over the last `days` days. */
 function myPractice_(ctx) {
   const user = member_(ctx);
@@ -3040,7 +3172,7 @@ function home_(ctx) {
   const { query } = ctx.check({ query: QUERY_LANG_ });
   const lang = query.lang;
   const member = user.status === 'approved';
-  const defaultLink = ctx.db.setting('default_meet_link');
+  const batches = batches_(ctx);
   const checkins = ctx.db.t('checkins').rows.filter((c) => c.user_id === user.id);
   const joined = {};
   const answered = {};
@@ -3052,8 +3184,9 @@ function home_(ctx) {
     if (p.user_id === user.id) answered[p.session_id] = true;
   });
   const plan = sessionCurricula_(ctx);
-  const sessions = upcoming_(ctx).map((r) => {
-    const s = sessionJson_(r, lang, member, defaultLink);
+  // A student sees only their batch's classes, once placed.
+  const sessions = (member && user.batch ? upcoming_(ctx, 7, user.batch) : []).map((r) => {
+    const s = sessionJson_(r, lang, member, batches);
     s.checked_in = Boolean(joined[r.id]);
     s.curriculum = plan[r.id];
     return s;
@@ -3067,7 +3200,7 @@ function home_(ctx) {
     .sort((a, b) => b.starts_at - a.starts_at)[0];
   let after = null;
   if (open) {
-    after = sessionJson_(open, lang, false, null);
+    after = sessionJson_(open, lang, false, batches);
     after.curriculum = plan[open.id];
     const mood = checkins.filter((c) => c.session_id === open.id && c.phase === 'after').map((c) => c.mood)[0];
     after.said = !answered[open.id] ? null : {
@@ -3078,7 +3211,8 @@ function home_(ctx) {
   }
   return {
     user: userJson_(user),
-    studio: studioJson_(lang),
+    batch: user.batch ? batchJson_(batches[user.batch], user.batch, lang) : null,
+    studio: studioJson_(ctx, lang),
     sessions: sessions,
     after_checkin: after,
     group_link: member ? ctx.db.setting('group_link') : null,
@@ -3090,6 +3224,7 @@ function checkin_(ctx) {
   const { path, body } = ctx.check({ path: PATH_SESSION_, body: BODY_.checkin });
   if (user.status !== 'approved') throw new HttpError_(403, 'pending');
   const row = sessionRow_(ctx, path.session_id);
+  if (user.role === 'student' && row.batch !== user.batch) throw new HttpError_(403, 'other_batch');
   const start = row.starts_at;
   const end = start + row.duration_min * 60000;
   const now = ctx.now;
@@ -3107,7 +3242,7 @@ function checkin_(ctx) {
     checkins.update(existing, { mood: body.mood });
   } else {
     checkins.insert([{ user_id: user.id, session_id: row.id, phase: body.phase, mood: body.mood, created_at: now,
-      class: classInfo_(row.class_key, 'en').name, class_date: istMidnight_(istDay_(start)) }]);
+      class: batchJson_(batches_(ctx)[row.batch], row.batch, 'en').name, class_date: istMidnight_(istDay_(start)) }]);
   }
   return { ok: true, stats: practiceStats_(ctx, user.id) };
 }
@@ -3122,17 +3257,21 @@ function feedback_(ctx) {
 
 // ---------- teacher ----------
 
+/** The teacher's day: the classes of the next day that has some left (today, or tomorrow once today's are over),
+ * every batch's, each with its curriculum and link; the batches with their everyday links; the settings. */
 function teacherHome_(ctx) {
   teacher_(ctx);
   const { query } = ctx.check({ query: QUERY_LANG_ });
-  const defaultLink = ctx.db.setting('default_meet_link');
+  const batches = batches_(ctx);
   const joined = {};
   ctx.db.t('checkins').rows.forEach((c) => {
     if (c.phase === 'before') joined[c.session_id] = (joined[c.session_id] || 0) + 1;
   });
   const plan = sessionCurricula_(ctx);
-  const sessions = upcoming_(ctx).map((r) => {
-    const s = sessionJson_(r, query.lang, true, defaultLink);
+  const ahead = upcoming_(ctx, 100);
+  const day = ahead.length ? istDay_(ahead[0].starts_at) : null;
+  const sessions = ahead.filter((r) => istDay_(r.starts_at) === day).map((r) => {
+    const s = sessionJson_(r, query.lang, true, batches);
     s.own_link = r.meet_link !== null && r.meet_link !== '';
     s.joined = joined[r.id] || 0;
     s.curriculum = plan[r.id];
@@ -3140,9 +3279,20 @@ function teacherHome_(ctx) {
   });
   return {
     sessions: sessions,
-    settings: { group_link: ctx.db.setting('group_link'), group_code: ctx.db.setting('group_code'), default_meet_link: defaultLink },
+    batches: Object.keys(batches).map((key) => Object.assign(batchJson_(batches[key], key, query.lang), { meet_link: batches[key].meet_link })),
+    settings: { group_link: ctx.db.setting('group_link'), group_code: ctx.db.setting('group_code') },
     pending_students: ctx.db.t('users').rows.filter((u) => u.status === 'pending').length,
   };
+}
+
+/** A batch's everyday Meet link, for its classes without their own. */
+function setBatchLink_(ctx) {
+  teacher_(ctx);
+  const { path, body } = ctx.check({ path: PATH_BATCH_, body: BODY_.link });
+  const row = ctx.db.t('batches').rows.filter((r) => r.key === path.key)[0];
+  if (!row) throw new HttpError_(404, 'no_batch');
+  ctx.db.t('batches').update(row, { meet_link: cleanMeetLink_(body.meet_link) });
+  return { ok: true, meet_link: row.meet_link };
 }
 
 function setLink_(ctx) {
@@ -3164,12 +3314,8 @@ function updateSettings_(ctx) {
   teacher_(ctx);
   const { body } = ctx.check({ body: BODY_.settings });
   // Check both before saving either, so a bad link never leaves the other half-saved.
-  const updates = {};
-  if (body.group_link !== null) updates.group_link = cleanGroupLink_(body.group_link);
-  if (body.default_meet_link !== null) updates.default_meet_link = cleanMeetLink_(body.default_meet_link);
-  Object.keys(updates).forEach((key) => ctx.db.setSetting(key, updates[key]));
-  return { group_link: ctx.db.setting('group_link'), group_code: ctx.db.setting('group_code'),
-    default_meet_link: ctx.db.setting('default_meet_link') };
+  if (body.group_link !== null) ctx.db.setSetting('group_link', cleanGroupLink_(body.group_link));
+  return { group_link: ctx.db.setting('group_link'), group_code: ctx.db.setting('group_code') };
 }
 
 function rotateGroupCode_(ctx) {
@@ -3197,11 +3343,28 @@ function students_(ctx) {
   return { students: rows.map((u) => Object.assign(userJson_(u), { joined: joined[u.id] || 0, created_at: isoTime_(u.created_at) })) };
 }
 
+/** Removes a student, or takes a removed one back into their batch; placing a new student is placeInBatch_. */
 function setStatus_(ctx) {
   teacher_(ctx);
   const { path, body } = ctx.check({ path: PATH_USER_, body: BODY_.status });
-  ctx.db.t('users').update(studentRow_(ctx, path.user_id), { status: body.status });
+  const student = studentRow_(ctx, path.user_id);
+  if (body.status === 'approved' && !student.batch) throw new HttpError_(400, 'needs_batch');
+  ctx.db.t('users').update(student, { status: body.status });
   return { ok: true };
+}
+
+/** Places a student in a batch: a new one ("Approve into a batch"), or one moving after a review. Each is logged in
+ * batch_changes, with the teacher's note. */
+function placeInBatch_(ctx) {
+  teacher_(ctx);
+  const { path, body } = ctx.check({ path: PATH_USER_, body: BODY_.place });
+  const student = studentRow_(ctx, path.user_id);
+  if (!batches_(ctx)[body.batch]) throw new HttpError_(400, 'no_batch');
+  const changes = ctx.db.t('batch_changes');
+  changes.insert([{ id: changes.nextId(), student_id: student.id, from: student.batch || null, to: body.batch,
+    note: body.note === null ? null : body.note.trim() || null, created_at: ctx.now }]);
+  ctx.db.t('users').update(student, { batch: body.batch, batch_since: ctx.now, status: 'approved' });
+  return { ok: true, student: userJson_(student) };
 }
 
 /** A new temporary password for a student who forgot theirs; the teacher passes it on in person or on WhatsApp.
@@ -3229,6 +3392,7 @@ function resetPassword_(ctx) {
 function insights_(ctx) {
   teacher_(ctx);
   const { query } = ctx.check({ query: QUERY_LANG_ });
+  const batches = batches_(ctx);
   const now = ctx.now;
   const checkins = ctx.db.t('checkins').rows;
   const bySession = {};
@@ -3243,7 +3407,7 @@ function insights_(ctx) {
       const list = bySession[s.id] || [];
       const before = list.filter((c) => c.phase === 'before').map((c) => c.mood);
       const after = list.filter((c) => c.phase === 'after').map((c) => c.mood);
-      return { id: s.id, starts_at: isoTime_(s.starts_at), class: classInfo_(s.class_key, query.lang).name, joined: before.length,
+      return { id: s.id, starts_at: isoTime_(s.starts_at), class: batchJson_(batches[s.batch], s.batch, query.lang).name, joined: before.length,
         mood_before: mean(before), mood_after: mean(after), answered_after: after.length };
     });
   const [change, pairs] = moodChange_(checkins);
@@ -3285,17 +3449,17 @@ function sharedNotes_(ctx) {
 
 // ---------- Setup: the tabs, the codes and the Dashboard ----------
 // Run setup() once from the script editor (it asks for permission the first time). Running it again is safe: it adds
-// what is missing and leaves the data, the codes, the curriculum and an existing Dashboard alone. Only the classes
-// tab, which comes from the studio constant, is written afresh.
+// what is missing and leaves the data, the codes, the batches, the curriculum and an existing Dashboard alone.
 
-const DATA_TABS_ = ['users', 'class_sessions', 'checkins', 'practice', 'solo_sessions', 'asana_feedback', 'feedback', 'shared_notes', 'tokens', 'settings'];
-const CURRICULUM_TABS_ = ['library', 'curricula', 'curriculum_items']; // the owner's to edit: no warning on hand edits
+const DATA_TABS_ = ['users', 'class_sessions', 'checkins', 'practice', 'solo_sessions', 'asana_feedback', 'batch_changes', 'feedback',
+  'shared_notes', 'tokens', 'settings'];
+const CURRICULUM_TABS_ = ['library', 'curricula', 'curriculum_items'];
+const OWNER_TABS_ = ['batches'].concat(CURRICULUM_TABS_); // the owner's to edit: no warning on hand edits
 const HIDDEN_TABS_ = ['tokens', 'settings']; // login-token hashes and the codes: nothing to browse
 const SETTING_NOTES_ = [
   ['teacher_code', 'The one-time code the teacher signs up with. It stops working once the teacher has an account.'],
-  ['group_code', 'Students who sign up with this code are approved at once. The teacher can change it in the app.'],
+  ['group_code', 'Students sign up with this code, from the class\'s WhatsApp invite; the teacher then places them in a batch. The teacher can change it in the app.'],
   ['group_link', 'The WhatsApp group invite link, set by the teacher in the app.'],
-  ['default_meet_link', 'The standing Meet or Zoom link for classes without their own, set by the teacher in the app.'],
 ];
 const TIME_FORMAT_ = 'yyyy-mm-dd hh:mm:ss';
 const DATE_FORMAT_ = 'yyyy-mm-dd';
@@ -3307,9 +3471,9 @@ function setup() {
   let codes;
   try {
     ss.setSpreadsheetTimeZone('Asia/Kolkata');
-    DATA_TABS_.concat(CURRICULUM_TABS_).forEach((name) => ensureTab_(ss, name));
+    DATA_TABS_.concat(OWNER_TABS_).forEach((name) => ensureTab_(ss, name));
+    seedBatches_(ss);
     seedCurriculum_(ss);
-    writeClassesTab_(ss);
     codes = ensureSettings_(ss);
     if (!ss.getSheetByName('Dashboard')) writeDashboard_(ss);
     arrangeTabs_(ss);
@@ -3350,16 +3514,13 @@ function ensureTab_(ss, name) {
   return sheet;
 }
 
-/** The classes, for reading and for lookups in the owner's own formulas. Rewritten from the code on every setup. */
-function writeClassesTab_(ss) {
-  const sheet = ss.getSheetByName('classes') || ss.insertSheet('classes');
-  sheet.clearContents();
-  const days = (key) => DAYS_.filter((d) => STUDIO.weekly[d] === key).map((d) => WEEKDAY_NAMES_[DAYS_.indexOf(d)]).join(', ');
-  const rows = [['key', 'name', 'name_hi', 'name_mr', 'level', 'about', 'days']].concat(STUDIO.classes.map((c) =>
-    [c.key, c.name.en, c.name.hi, c.name.mr, c.level.en, c.about.en, days(c.key)].map((v) => encode_(v, 'text'))));
-  sheet.getRange(1, 1, rows.length, rows[0].length).setValues(rows);
-  sheet.getRange(1, 1, 1, rows[0].length).setFontWeight('bold');
-  sheet.setFrozenRows(1);
+/** The batches tab, filled from content/studio.json while it is empty; after that the Sheet's rows are the batches. */
+function seedBatches_(ss) {
+  const table = new Table_(ss.getSheetByName('batches'), 'batches');
+  if (table.rows.length) return;
+  table.insert(STUDIO.batches.map((b) => ({ key: b.key, name: b.name.en, name_hi: b.name.hi, name_mr: b.name.mr, curriculum: b.curriculum,
+    days: b.days.join(', '), time: b.time, duration_min: b.duration_min, meet_link: null, about: b.about.en, about_hi: b.about.hi,
+    about_mr: b.about.mr })));
 }
 
 /** The curriculum tabs, filled from content/curriculum.json while they are empty, with "{teacher}" in its text
@@ -3412,8 +3573,8 @@ function setRow_(table, have, key, value) {
 }
 
 function arrangeTabs_(ss) {
-  const ours = { Dashboard: true, classes: true };
-  DATA_TABS_.concat(CURRICULUM_TABS_).forEach((name) => {
+  const ours = { Dashboard: true };
+  DATA_TABS_.concat(OWNER_TABS_).forEach((name) => {
     ours[name] = true;
   });
   const dashboard = ss.getSheetByName('Dashboard');
@@ -3460,6 +3621,7 @@ function dashboardBlocks_(ss) {
   const f = columnLetters_(ss, 'feedback');
   const n = columnLetters_(ss, 'shared_notes');
   const p = columnLetters_(ss, 'practice');
+  const m = columnLetters_(ss, 'batch_changes');
   const users = 'users!A1:' + u._last;
   const checkins = 'checkins!A1:' + c._last;
   const col = (tab, letter) => tab + '!' + letter + '2:' + letter;
@@ -3469,15 +3631,23 @@ function dashboardBlocks_(ss) {
     ['A5', 'Students by status', 'Students only, not the teacher.',
       '=IFERROR(QUERY(' + users + ', "select ' + u.status + ', count(' + u.id + ') where ' + u.role + " = 'student' group by " +
         u.status + ' label ' + u.status + " 'status', count(" + u.id + ") 'students'\", 1), \"No students yet\")", {}],
+    ['H5', 'Students per batch', 'Approved students in each batch.',
+      '=IFERROR(QUERY(' + users + ', "select ' + u.batch + ', count(' + u.id + ') where ' + u.role + " = 'student' and " + u.status +
+        " = 'approved' group by " + u.batch + ' label ' + u.batch + " 'batch', count(" + u.id + ") 'students'\", 1), \"No students yet\")", {}],
+    ['K5', 'Batch changes', 'The latest 8 placements and moves, newest first; the batch_changes tab has them all.',
+      '=IFERROR(QUERY({' + [col('batch_changes', m.created_at), nameOf('batch_changes', m.student_id), col('batch_changes', m.from),
+        col('batch_changes', m.to), col('batch_changes', m.note)].join(', ') + "}, \"select Col1, Col2, Col3, Col4, Col5 where Col1 is not " +
+        "null order by Col1 desc limit 8 label Col1 'when', Col2 'student', Col3 'from', Col4 'to', Col5 'note'\", 0), \"No batch changes yet\")",
+      { 'K6:K13': 'yyyy-mm-dd' }],
     ['D5', 'Mood per class', 'Average mood after and before class, all classes so far. 1 very low to 5 great.',
       '=IFERROR(QUERY(' + checkins + ', "select ' + c.class + ', avg(' + c.mood + ') where ' + c.user_id + ' is not null group by ' +
         c.class + ' pivot ' + c.phase + '", 1), "No check-ins yet")', { 'E6:F13': '0.0' }],
-    ['A16', 'Students', 'Every student, newest first, with the number of classes they checked in to.',
-      '=IFERROR(QUERY({' + [col('users', u.name), col('users', u.phone), col('users', u.status), col('users', u.lang),
+    ['A16', 'Students', 'Every student, newest first, with their batch and the number of classes they checked in to.',
+      '=IFERROR(QUERY({' + [col('users', u.name), col('users', u.phone), col('users', u.status), col('users', u.batch), col('users', u.lang),
         'ARRAYFORMULA(IF(' + col('users', u.id) + ' = "", , COUNTIFS(' + col('checkins', c.user_id) + ', ' + col('users', u.id) + ', ' +
           col('checkins', c.phase) + ', "before")))', col('users', u.created_at), col('users', u.role)].join(', ') +
-        "}, \"select Col1, Col2, Col3, Col4, Col5, Col6 where Col7 = 'student' order by Col6 desc label Col1 'name', Col2 'phone', " +
-        "Col3 'status', Col4 'language', Col5 'classes joined', Col6 'signed up'\", 0), \"No students yet\")", { 'F17:F': DATE_FORMAT_ }],
+        "}, \"select Col1, Col2, Col3, Col4, Col5, Col6, Col7 where Col8 = 'student' order by Col7 desc label Col1 'name', Col2 'phone', " +
+        "Col3 'status', Col4 'batch', Col5 'language', Col6 'classes joined', Col7 'signed up'\", 0), \"No students yet\")", { 'G17:G': DATE_FORMAT_ }],
     ['H16', 'Attendance per class', 'Students who checked in before each class, newest first.',
       '=IFERROR(QUERY(' + checkins + ', "select ' + c.class_date + ', ' + c.class + ', count(' + c.user_id + ') where ' + c.phase +
         " = 'before' group by " + c.class_date + ', ' + c.class + ' order by ' + c.class_date + ' desc label count(' + c.user_id +

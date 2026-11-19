@@ -20,19 +20,18 @@ function curriculum_(ctx) {
   return { library: library, curricula: ctx.db.t('curricula').rows.filter((r) => r.key), items: items };
 }
 
-/** Each session's curriculum by session id: its own, else the one last used for a class of its kind, else the first
- * in the curricula tab (Beginner, as seeded). */
+/** Each session's curriculum by session id: its own, else its batch's, else the first in the curricula tab. */
 function sessionCurricula_(ctx) {
   const known = {};
   const keys = ctx.db.t('curricula').rows.filter((r) => r.key).map((r) => r.key);
   keys.forEach((k) => {
     known[k] = true;
   });
-  const last = {};
+  const batches = batches_(ctx);
   const out = {};
-  ctx.db.t('class_sessions').rows.slice().sort((a, b) => a.starts_at - b.starts_at).forEach((r) => {
-    if (known[r.curriculum]) last[r.class_key] = r.curriculum;
-    out[r.id] = last[r.class_key] || keys[0] || null;
+  ctx.db.t('class_sessions').rows.forEach((r) => {
+    const batch = batches[r.batch];
+    out[r.id] = (known[r.curriculum] && r.curriculum) || (batch && known[batch.curriculum] && batch.curriculum) || keys[0] || null;
   });
   return out;
 }

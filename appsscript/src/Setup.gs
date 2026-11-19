@@ -1,16 +1,16 @@
 // ---------- Setup: the tabs, the codes and the Dashboard ----------
 // Run setup() once from the script editor (it asks for permission the first time). Running it again is safe: it adds
-// what is missing and leaves the data, the codes, the curriculum and an existing Dashboard alone. Only the classes
-// tab, which comes from the studio constant, is written afresh.
+// what is missing and leaves the data, the codes, the batches, the curriculum and an existing Dashboard alone.
 
-const DATA_TABS_ = ['users', 'class_sessions', 'checkins', 'practice', 'solo_sessions', 'asana_feedback', 'feedback', 'shared_notes', 'tokens', 'settings'];
-const CURRICULUM_TABS_ = ['library', 'curricula', 'curriculum_items']; // the owner's to edit: no warning on hand edits
+const DATA_TABS_ = ['users', 'class_sessions', 'checkins', 'practice', 'solo_sessions', 'asana_feedback', 'batch_changes', 'feedback',
+  'shared_notes', 'tokens', 'settings'];
+const CURRICULUM_TABS_ = ['library', 'curricula', 'curriculum_items'];
+const OWNER_TABS_ = ['batches'].concat(CURRICULUM_TABS_); // the owner's to edit: no warning on hand edits
 const HIDDEN_TABS_ = ['tokens', 'settings']; // login-token hashes and the codes: nothing to browse
 const SETTING_NOTES_ = [
   ['teacher_code', 'The one-time code the teacher signs up with. It stops working once the teacher has an account.'],
-  ['group_code', 'Students who sign up with this code are approved at once. The teacher can change it in the app.'],
+  ['group_code', 'Students sign up with this code, from the class\'s WhatsApp invite; the teacher then places them in a batch. The teacher can change it in the app.'],
   ['group_link', 'The WhatsApp group invite link, set by the teacher in the app.'],
-  ['default_meet_link', 'The standing Meet or Zoom link for classes without their own, set by the teacher in the app.'],
 ];
 const TIME_FORMAT_ = 'yyyy-mm-dd hh:mm:ss';
 const DATE_FORMAT_ = 'yyyy-mm-dd';
@@ -22,9 +22,9 @@ function setup() {
   let codes;
   try {
     ss.setSpreadsheetTimeZone('Asia/Kolkata');
-    DATA_TABS_.concat(CURRICULUM_TABS_).forEach((name) => ensureTab_(ss, name));
+    DATA_TABS_.concat(OWNER_TABS_).forEach((name) => ensureTab_(ss, name));
+    seedBatches_(ss);
     seedCurriculum_(ss);
-    writeClassesTab_(ss);
     codes = ensureSettings_(ss);
     if (!ss.getSheetByName('Dashboard')) writeDashboard_(ss);
     arrangeTabs_(ss);
@@ -65,16 +65,13 @@ function ensureTab_(ss, name) {
   return sheet;
 }
 
-/** The classes, for reading and for lookups in the owner's own formulas. Rewritten from the code on every setup. */
-function writeClassesTab_(ss) {
-  const sheet = ss.getSheetByName('classes') || ss.insertSheet('classes');
-  sheet.clearContents();
-  const days = (key) => DAYS_.filter((d) => STUDIO.weekly[d] === key).map((d) => WEEKDAY_NAMES_[DAYS_.indexOf(d)]).join(', ');
-  const rows = [['key', 'name', 'name_hi', 'name_mr', 'level', 'about', 'days']].concat(STUDIO.classes.map((c) =>
-    [c.key, c.name.en, c.name.hi, c.name.mr, c.level.en, c.about.en, days(c.key)].map((v) => encode_(v, 'text'))));
-  sheet.getRange(1, 1, rows.length, rows[0].length).setValues(rows);
-  sheet.getRange(1, 1, 1, rows[0].length).setFontWeight('bold');
-  sheet.setFrozenRows(1);
+/** The batches tab, filled from content/studio.json while it is empty; after that the Sheet's rows are the batches. */
+function seedBatches_(ss) {
+  const table = new Table_(ss.getSheetByName('batches'), 'batches');
+  if (table.rows.length) return;
+  table.insert(STUDIO.batches.map((b) => ({ key: b.key, name: b.name.en, name_hi: b.name.hi, name_mr: b.name.mr, curriculum: b.curriculum,
+    days: b.days.join(', '), time: b.time, duration_min: b.duration_min, meet_link: null, about: b.about.en, about_hi: b.about.hi,
+    about_mr: b.about.mr })));
 }
 
 /** The curriculum tabs, filled from content/curriculum.json while they are empty, with "{teacher}" in its text
@@ -127,8 +124,8 @@ function setRow_(table, have, key, value) {
 }
 
 function arrangeTabs_(ss) {
-  const ours = { Dashboard: true, classes: true };
-  DATA_TABS_.concat(CURRICULUM_TABS_).forEach((name) => {
+  const ours = { Dashboard: true };
+  DATA_TABS_.concat(OWNER_TABS_).forEach((name) => {
     ours[name] = true;
   });
   const dashboard = ss.getSheetByName('Dashboard');
@@ -175,6 +172,7 @@ function dashboardBlocks_(ss) {
   const f = columnLetters_(ss, 'feedback');
   const n = columnLetters_(ss, 'shared_notes');
   const p = columnLetters_(ss, 'practice');
+  const m = columnLetters_(ss, 'batch_changes');
   const users = 'users!A1:' + u._last;
   const checkins = 'checkins!A1:' + c._last;
   const col = (tab, letter) => tab + '!' + letter + '2:' + letter;
@@ -184,15 +182,23 @@ function dashboardBlocks_(ss) {
     ['A5', 'Students by status', 'Students only, not the teacher.',
       '=IFERROR(QUERY(' + users + ', "select ' + u.status + ', count(' + u.id + ') where ' + u.role + " = 'student' group by " +
         u.status + ' label ' + u.status + " 'status', count(" + u.id + ") 'students'\", 1), \"No students yet\")", {}],
+    ['H5', 'Students per batch', 'Approved students in each batch.',
+      '=IFERROR(QUERY(' + users + ', "select ' + u.batch + ', count(' + u.id + ') where ' + u.role + " = 'student' and " + u.status +
+        " = 'approved' group by " + u.batch + ' label ' + u.batch + " 'batch', count(" + u.id + ") 'students'\", 1), \"No students yet\")", {}],
+    ['K5', 'Batch changes', 'The latest 8 placements and moves, newest first; the batch_changes tab has them all.',
+      '=IFERROR(QUERY({' + [col('batch_changes', m.created_at), nameOf('batch_changes', m.student_id), col('batch_changes', m.from),
+        col('batch_changes', m.to), col('batch_changes', m.note)].join(', ') + "}, \"select Col1, Col2, Col3, Col4, Col5 where Col1 is not " +
+        "null order by Col1 desc limit 8 label Col1 'when', Col2 'student', Col3 'from', Col4 'to', Col5 'note'\", 0), \"No batch changes yet\")",
+      { 'K6:K13': 'yyyy-mm-dd' }],
     ['D5', 'Mood per class', 'Average mood after and before class, all classes so far. 1 very low to 5 great.',
       '=IFERROR(QUERY(' + checkins + ', "select ' + c.class + ', avg(' + c.mood + ') where ' + c.user_id + ' is not null group by ' +
         c.class + ' pivot ' + c.phase + '", 1), "No check-ins yet")', { 'E6:F13': '0.0' }],
-    ['A16', 'Students', 'Every student, newest first, with the number of classes they checked in to.',
-      '=IFERROR(QUERY({' + [col('users', u.name), col('users', u.phone), col('users', u.status), col('users', u.lang),
+    ['A16', 'Students', 'Every student, newest first, with their batch and the number of classes they checked in to.',
+      '=IFERROR(QUERY({' + [col('users', u.name), col('users', u.phone), col('users', u.status), col('users', u.batch), col('users', u.lang),
         'ARRAYFORMULA(IF(' + col('users', u.id) + ' = "", , COUNTIFS(' + col('checkins', c.user_id) + ', ' + col('users', u.id) + ', ' +
           col('checkins', c.phase) + ', "before")))', col('users', u.created_at), col('users', u.role)].join(', ') +
-        "}, \"select Col1, Col2, Col3, Col4, Col5, Col6 where Col7 = 'student' order by Col6 desc label Col1 'name', Col2 'phone', " +
-        "Col3 'status', Col4 'language', Col5 'classes joined', Col6 'signed up'\", 0), \"No students yet\")", { 'F17:F': DATE_FORMAT_ }],
+        "}, \"select Col1, Col2, Col3, Col4, Col5, Col6, Col7 where Col8 = 'student' order by Col7 desc label Col1 'name', Col2 'phone', " +
+        "Col3 'status', Col4 'batch', Col5 'language', Col6 'classes joined', Col7 'signed up'\", 0), \"No students yet\")", { 'G17:G': DATE_FORMAT_ }],
     ['H16', 'Attendance per class', 'Students who checked in before each class, newest first.',
       '=IFERROR(QUERY(' + checkins + ', "select ' + c.class_date + ', ' + c.class + ', count(' + c.user_id + ') where ' + c.phase +
         " = 'before' group by " + c.class_date + ', ' + c.class + ' order by ' + c.class_date + ' desc label count(' + c.user_id +

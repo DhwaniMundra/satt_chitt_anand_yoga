@@ -68,7 +68,7 @@ private class Data(private val api: Api, private val store: LocalStore) : Studen
     override fun practice(days: Int, lang: String): Map<String, Any?> = api.getNow("/me/practice?days=$days&lang=$lang").toMap()
 
     override fun upcoming(lang: String): List<UpcomingClass> =
-        Home.from(api.getNow("/home?lang=$lang")).sessions.map { UpcomingClass(it.startsAt, it.info.name, it.info.level, it.info.about) }
+        Home.from(api.getNow("/home?lang=$lang")).sessions.map { UpcomingClass(it.startsAt, it.batch.name, it.batch.about) }
 
     override fun saveNote(text: String) = store.addNote(text)
 

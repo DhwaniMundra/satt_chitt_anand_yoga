@@ -44,12 +44,36 @@ export function setSetting(b, key, value) {
   b.context.onEdit({}); // what a hand edit triggers
 }
 
-export function signup(b, phone, { role = 'student', code = '', name } = {}) {
+/** A sign-up through the API. A student signs up with the group code and waits; given a `code` (as the teacher passes
+ * it on), the student is then placed in `batch` too, as the teacher would, so tests of what members do start there. */
+export function signup(b, phone, { role = 'student', code = '', name, batch = 'beginner' } = {}) {
   const r = b.call('POST', '/auth/signup', {
-    body: { name: name || role + ' ' + phone, phone, password: 'secret1', role, code },
+    body: { name: name || role + ' ' + phone, phone, password: 'secret1', role, code: code || (role === 'student' ? setting(b, 'group_code') : '') },
   });
   assert.equal(r.status, 200, JSON.stringify(r));
+  if (role === 'student' && code) return { token: r.body.token, user: place(b, r.body.user.id, batch) };
   return { token: r.body.token, user: r.body.user };
+}
+
+/** A student placed in `batch` by a hand edit of the users tab, as the teacher's placement leaves them; the user. */
+export function place(b, userId, batch) {
+  const sheet = b.ss.getSheetByName('users');
+  const header = sheet.rows()[0];
+  const row = sheet.rows().findIndex((r) => r[0] === userId) + 1;
+  sheet.getRange(row, header.indexOf('batch') + 1).setValue("'" + batch);
+  sheet.getRange(row, header.indexOf('batch_since') + 1).setValue(new Date(b.clock()));
+  sheet.getRange(row, header.indexOf('status') + 1).setValue("'approved");
+  b.context.onEdit({});
+  return userRow(b, userId);
+}
+
+function userRow(b, userId) {
+  const sheet = b.ss.getSheetByName('users');
+  const [header, ...rows] = sheet.rows();
+  const r = rows.find((x) => x[0] === userId);
+  const v = (k) => r[header.indexOf(k)];
+  return { id: v('id'), name: v('name'), phone: v('phone'), role: v('role'), status: v('status'), lang: v('lang'), batch: v('batch'),
+    batch_since: v('batch_since') ? new Date(v('batch_since')).toISOString().replace('.000', '') : null };
 }
 
 export function teacherAndCode(b) {
@@ -80,23 +104,23 @@ function nextId(b, tab) {
 }
 
 /** A 55-minute class that started `minutesAgo` minutes ago; its id. */
-export function classStarted(b, minutesAgo, classKey = 'hatha') {
+export function classStarted(b, minutesAgo, batch = 'beginner') {
   const id = nextId(b, 'class_sessions');
   const start = Math.floor((b.clock() - minutesAgo * MIN) / 1000) * 1000;
-  addRow(b, 'class_sessions', { id, class_key: classKey, starts_at: start, duration_min: 55, updated_at: b.clock() });
+  addRow(b, 'class_sessions', { id, batch, starts_at: start, duration_min: 55, updated_at: b.clock() });
   return id;
 }
 
 /** A class `daysAgo` days ago that `userId` joined, with moods. Classmates share the class. */
-export function attend(b, userId, classKey, daysAgo, before, after) {
+export function attend(b, userId, batch, daysAgo, before, after) {
   const start = Math.floor((b.clock() - daysAgo * DAY) / 60000) * 60000;
   const sessions = b.ss.getSheetByName('class_sessions').rows().slice(1);
-  let session = sessions.find((r) => r[2] instanceof Date && r[2].getTime() === start);
+  let session = sessions.find((r) => r[1] === batch && r[2] instanceof Date && r[2].getTime() === start);
   let id;
   if (session) id = session[0];
   else {
     id = nextId(b, 'class_sessions');
-    addRow(b, 'class_sessions', { id, class_key: classKey, starts_at: start, duration_min: 55, updated_at: start });
+    addRow(b, 'class_sessions', { id, batch, starts_at: start, duration_min: 55, updated_at: start });
   }
   addRow(b, 'checkins', { user_id: userId, session_id: id, phase: 'before', mood: before, created_at: start });
   if (after !== null && after !== undefined) addRow(b, 'checkins', { user_id: userId, session_id: id, phase: 'after', mood: after, created_at: start });

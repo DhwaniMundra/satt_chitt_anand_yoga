@@ -3,7 +3,7 @@
 <resources>
     <string name="app_name">सत्·चित्·आनन्द</string>
 
-    <string name="welcome_sub">%1$s यांच्यासोबत लाइव्ह योग, दररोज सकाळी 8 वाजता.</string>
+    <string name="welcome_sub">%1$s यांच्यासोबत लाइव्ह योग, तुमच्यासाठी योग्य बॅचमध्ये.</string>
     <string name="language">भाषा</string>
     <string name="i_am_student">मी विद्यार्थी आहे</string>
     <string name="i_am_teacher">मी शिक्षक आहे</string>
@@ -12,8 +12,8 @@
     <string name="name">तुमचे नाव</string>
     <string name="phone">व्हॉट्सॲप नंबर</string>
     <string name="password">पासवर्ड (किमान 6 अक्षरे)</string>
-    <string name="group_code">ग्रुप कोड (व्हॉट्सॲप ग्रुपमधून)</string>
-    <string name="group_code_help">कोड नाही? तरीही साइन अप करा, %1$s तुम्हाला मंजुरी देतील.</string>
+    <string name="group_code">ग्रुप कोड (वर्गाच्या व्हॉट्सॲप आमंत्रणातून)</string>
+    <string name="group_code_help">कोड नाही? %1$s यांना विचारा.</string>
     <string name="teacher_code">शिक्षक कोड</string>
     <string name="back">मागे</string>
     <string name="role_student">विद्यार्थी</string>
@@ -21,7 +21,7 @@
     <string name="err_bad_phone">कृपया योग्य व्हॉट्सॲप नंबर टाका.</string>
     <string name="err_bad_login">नंबर किंवा पासवर्ड चुकीचा आहे.</string>
     <string name="err_phone_taken">या नंबरचे खाते आधीच आहे. कृपया लॉग इन करा.</string>
-    <string name="err_bad_group_code">ग्रुप कोड बरोबर नाही. व्हॉट्सॲप ग्रुप पाहा.</string>
+    <string name="err_bad_group_code">ग्रुप कोडसाठी %1$s यांना विचारा; तो वर्गाच्या व्हॉट्सॲप आमंत्रणात आहे.</string>
     <string name="err_bad_teacher_code">शिक्षक कोड बरोबर नाही.</string>
     <string name="err_bad_meet_link">कृपया Google Meet किंवा Zoom ची लिंक टाका.</string>
     <string name="err_bad_group_link">कृपया व्हॉट्सॲप ग्रुपची इनव्हाइट लिंक टाका (chat.whatsapp.com/…).</string>
@@ -51,9 +51,16 @@
     <string name="join_class">वर्गात सामील व्हा</string>
     <string name="link_soon">वर्गाची लिंक वर्गापूर्वी इथे दिसेल.</string>
     <string name="checked_in">तुम्ही चेक-इन केले ✓</string>
-    <string name="pending_title">मंजुरीची प्रतीक्षा</string>
-    <string name="pending_body">%1$s लवकरच तुम्हाला मंजुरी देतील. व्हॉट्सॲप ग्रुपचा कोड आहे? इथे टाका.</string>
-    <string name="enter_code">कोड टाका</string>
+    <string name="pending_title">%1$s यांची प्रतीक्षा</string>
+    <string name="pending_body">%1$s तुम्हाला योग्य बॅचमध्ये ठेवतील, मग तुम्ही तिच्या वर्गांत सामील होऊ शकाल.</string>
+    <string name="your_batch">तुमची बॅच: %1$s</string>
+    <string name="batch_since">%1$s · %2$s पासून</string>
+    <string name="place_in_batch">बॅच निवडा</string>
+    <string name="approve_into">%1$s मध्ये मंजूर करा</string>
+    <string name="move_batch">बॅच बदला</string>
+    <string name="move_to">%1$s मध्ये हलवा</string>
+    <string name="batch_note">आढाव्यासाठी नोंद (ऐच्छिक)</string>
+    <string name="take_back">परत घ्या</string>
     <string name="open_group">व्हॉट्सॲप ग्रुप उघडा</string>
     <string name="how_feel_before">आत्ता तुम्हाला कसे वाटते?</string>
     <string name="how_feel_after">वर्ग संपला! आता तुम्हाला कसे वाटते?</string>
@@ -80,7 +87,6 @@
     <string name="mood_5">खूप छान</string>
     <string name="skip">वगळा</string>
 
-    <string name="week_time">सकाळी 8:00 – 8:55 (भारतीय वेळ), Google Meet वर लाइव्ह</string>
     <string name="first_class_free">पहिला वर्ग मोफत आहे.</string>
 
 
@@ -122,15 +128,15 @@
     <string name="meet_link">Google Meet लिंक</string>
     <string name="save_share">सेव्ह करा आणि व्हॉट्सॲपवर पाठवा</string>
     <string name="share_whatsapp">व्हॉट्सॲपवर पाठवा</string>
-    <string name="uses_standing_link">रोजची लिंक वापरली जात आहे</string>
+    <string name="uses_standing_link">बॅचची रोजची लिंक वापरली जात आहे</string>
     <string name="no_link_yet">अजून लिंक नाही</string>
     <plurals name="joined_count">
         <item quantity="one">%d सामील</item>
         <item quantity="other">%d सामील</item>
     </plurals>
     <string name="settings_title">वर्ग लिंक आणि ग्रुप</string>
-    <string name="standing_link">रोजची Meet लिंक</string>
-    <string name="standing_link_help">ज्या वर्गाला स्वतःची लिंक नाही, त्याला हीच वापरली जाईल.</string>
+    <string name="standing_link">प्रत्येक बॅचची रोजची Meet लिंक</string>
+    <string name="standing_link_help">बॅचच्या ज्या वर्गाला स्वतःची लिंक नाही, त्याला हीच वापरली जाईल.</string>
     <string name="group_link">व्हॉट्सॲप ग्रुप इनव्हाइट लिंक</string>
     <string name="group_code_label">ग्रुप कोड</string>
     <string name="invite_students">व्हॉट्सॲपवर विद्यार्थ्यांना बोलवा</string>
@@ -140,7 +146,6 @@
     <string name="waiting">प्रतीक्षेत</string>
     <string name="approved">मंजूर</string>
     <string name="removed">काढले</string>
-    <string name="approve">मंजूर करा</string>
     <string name="remove">काढा</string>
     <string name="new_password">नवीन पासवर्ड</string>
     <string name="new_password_is">%1$s चा नवीन पासवर्ड: %2$s</string>

@@ -66,7 +66,7 @@ fun SoloChoose(vm: AppViewModel, close: () -> Unit) {
         }
         Label(stringResource(R.string.repeat_sequence))
         val keys = curricula.curricula.map { it.key }
-        Choices(curricula.curricula.map { it.name }, keys.indexOf(from).takeIf { it >= 0 }) { repeat(keys[it]) }
+        Choices(curricula.curricula.map { it.name }, keys.indexOf(from).takeIf { it >= 0 }, perRow = 2) { repeat(keys[it]) }
         Label(stringResource(R.string.choose_items))
         OutlinedTextField(query, { query = it }, placeholder = { Text(stringResource(R.string.search_library)) }, singleLine = true,
             modifier = Modifier.fillMaxWidth())

@@ -21,7 +21,7 @@ class CompanionTest {
             if (!reachable) error("no network")
             practiceAsked = days to lang
             return linkedMapOf("period_days" to days, "classes_joined" to 3,
-                "classes" to listOf(linkedMapOf("date" to "2026-11-16", "class" to "Hatha Yoga", "mood_before" to 3, "mood_after" to 4)),
+                "classes" to listOf(linkedMapOf("date" to "2026-11-16", "class" to "Intermediate", "mood_before" to 3, "mood_after" to 4)),
                 "solo" to listOf(linkedMapOf("date" to "2026-11-17", "minutes" to 20, "items" to listOf("Vajrasana"))))
         }
         override fun upcoming(lang: String): List<UpcomingClass> = if (reachable) classes else error("no network")
@@ -30,12 +30,12 @@ class CompanionTest {
     }
 
     private val week = listOf(
-        UpcomingClass(Instant.parse("2026-11-19T02:30:00Z"), "Dhyana · Meditation", "All levels", "Seated stillness."),
-        UpcomingClass(Instant.parse("2026-11-20T02:30:00Z"), "Hatha Yoga", "All levels", "Classical postures."),
-        UpcomingClass(Instant.parse("2026-11-21T02:30:00Z"), "Yoga Nidra", "All levels", "Deep relaxation."),
-        UpcomingClass(Instant.parse("2026-11-22T02:30:00Z"), "Satsang · Open Practice", "All levels", "Sunday gathering."),
-        UpcomingClass(Instant.parse("2026-11-23T02:30:00Z"), "Hatha Yoga", "All levels", "Classical postures."),
-        UpcomingClass(Instant.parse("2026-11-24T02:30:00Z"), "Pranayama", "All levels", "Breathwork."),
+        UpcomingClass(Instant.parse("2026-11-19T02:30:00Z"), "Intermediate", "For a steady practice."),
+        UpcomingClass(Instant.parse("2026-11-20T02:30:00Z"), "Intermediate", "For a steady practice."),
+        UpcomingClass(Instant.parse("2026-11-21T02:30:00Z"), "Intermediate", "For a steady practice."),
+        UpcomingClass(Instant.parse("2026-11-23T02:30:00Z"), "Intermediate", "For a steady practice."),
+        UpcomingClass(Instant.parse("2026-11-24T02:30:00Z"), "Intermediate", "For a steady practice."),
+        UpcomingClass(Instant.parse("2026-11-25T02:30:00Z"), "Intermediate", "For a steady practice."),
     )
 
     private fun tools(server: StudentData = Server(week), lang: String = "en") = Tools(server, NOTES, lang) { now }
@@ -63,11 +63,12 @@ class CompanionTest {
     @Test fun aMessageAboutClassesGetsTheScheduleWithUnambiguousDays() {
         val t = tools()
         val system = companion.system("Asha", "Which class suits me tomorrow?", "en", t)
-        assertTrue(system, "Today is Thursday 19 November. The studio's coming classes. Answer from them:\n" +
-            "- today, Thursday 19 November: Dhyana · Meditation at 8:00 AM India time (All levels)\n" +
-            "- tomorrow, Friday 20 November: Hatha Yoga at 8:00 AM India time (All levels)\n" +
-            "- Saturday 21 November: Yoga Nidra at 8:00 AM India time (All levels)" in system)
-        assertFalse("Pranayama" in system) // the next five classes only
+        assertTrue(system, "Today is Thursday 19 November. This student's coming classes, in their batch. Answer from them:\n" +
+            "- today, Thursday 19 November: Intermediate at 8:00 AM India time\n" +
+            "- tomorrow, Friday 20 November: Intermediate at 8:00 AM India time\n" +
+            "- Saturday 21 November: Intermediate at 8:00 AM India time\n" +
+            "- Monday 23 November: Intermediate at 8:00 AM India time" in system)
+        assertFalse("Wednesday 25 November" in system) // the next five classes only
         assertFalse("### About the studio and classes" in system)
         assertEquals(listOf("get_upcoming_classes"), t.used)
         assertTrue(system.startsWith("You are the practice companion in the Lotus Yoga app, talking with one student, Asha."))

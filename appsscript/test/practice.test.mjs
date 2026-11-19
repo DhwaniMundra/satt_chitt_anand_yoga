@@ -13,31 +13,31 @@ function classmates(b) {
 test('the practice summary does the sums for one student', () => {
   const b = freshBackend();
   const { one, two } = classmates(b);
-  attend(b, one.user.id, 'hatha', 1, 3, 4);
-  attend(b, one.user.id, 'hatha', 3, 3, 5);
-  attend(b, one.user.id, 'pranayama', 2, 2, null);
-  attend(b, one.user.id, 'hatha', 20, 1, 1); // outside the week
-  attend(b, two.user.id, 'hatha', 1, 5, 5); // someone else's, in the same class
+  attend(b, one.user.id, 'beginner', 1, 3, 4);
+  attend(b, one.user.id, 'beginner', 3, 3, 5);
+  attend(b, one.user.id, 'intermediate', 2, 2, null);
+  attend(b, one.user.id, 'beginner', 20, 1, 1); // outside the week
+  attend(b, two.user.id, 'beginner', 1, 5, 5); // someone else's, in the same class
   const week = b.call('GET', '/me/practice', { token: one.token, query: { days: 7 } }).body;
   assert.equal(week.classes_joined, 3);
   assert.equal(week.average_mood_before, 2.7); // round(8 / 3, 1)
   assert.equal(week.average_mood_after, 4.5);
-  assert.deepEqual(week.by_class['Hatha Yoga'], { times: 2, average_mood_before: 3, average_mood_after: 4.5 });
-  assert.equal(week.by_class.Pranayama.average_mood_after, null);
-  assert.deepEqual(Object.keys(week.by_class), ['Hatha Yoga', 'Pranayama']); // in the order first met, oldest first
+  assert.deepEqual(week.by_class['Beginner'], { times: 2, average_mood_before: 3, average_mood_after: 4.5 });
+  assert.equal(week.by_class.Intermediate.average_mood_after, null);
+  assert.deepEqual(Object.keys(week.by_class), ['Beginner', 'Intermediate']); // in the order first met, oldest first
   assert.deepEqual(Object.keys(week), ['period_days', 'classes_joined', 'mood_scale', 'average_mood_before', 'average_mood_after', 'by_class', 'classes', 'solo']);
   assert.equal(week.mood_scale, '1 very low to 5 great');
-  assert.deepEqual(week.classes.map((c) => [c.class, c.mood_before, c.mood_after]), [['Hatha Yoga', 3, 5], ['Pranayama', 2, null], ['Hatha Yoga', 3, 4]]);
+  assert.deepEqual(week.classes.map((c) => [c.class, c.mood_before, c.mood_after]), [['Beginner', 3, 5], ['Intermediate', 2, null], ['Beginner', 3, 4]]);
   assert.match(week.classes[0].date, /^\d{4}-\d\d-\d\d$/); // the India date, ISO
-  assert.ok(week.classes.every((c) => c.curriculum === 'beginner'), 'each class with its curriculum, for repeating it alone');
+  assert.deepEqual(week.classes.map((c) => c.curriculum), ['beginner', 'intermediate', 'beginner'], 'each class with its curriculum, for repeating it alone');
 });
 
 test('the practice route is the summary for the signed-in student only', () => {
   const b = freshBackend();
   const { one, two } = classmates(b);
-  attend(b, one.user.id, 'hatha', 1, 3, 4);
-  attend(b, one.user.id, 'hatha', 3, 3, 5);
-  attend(b, one.user.id, 'pranayama', 20, 2, null);
+  attend(b, one.user.id, 'beginner', 1, 3, 4);
+  attend(b, one.user.id, 'beginner', 3, 3, 5);
+  attend(b, one.user.id, 'intermediate', 20, 2, null);
   const practice = (token, query) => b.call('GET', '/me/practice', { token, query });
   const week = practice(one.token, { days: '7' }).body;
   assert.equal(week.classes_joined, 2);
@@ -69,11 +69,11 @@ test('the practice is for members and the teacher', () => {
 test('the practice names classes in the student’s language', () => {
   const b = freshBackend();
   const { one } = classmates(b);
-  attend(b, one.user.id, 'hatha', 1, 3, 4);
+  attend(b, one.user.id, 'beginner', 1, 3, 4);
   const names = (lang) => Object.keys(b.call('GET', '/me/practice', { token: one.token, query: { days: '7', lang } }).body.by_class);
-  assert.deepEqual(names('hi'), ['हठ योग']);
-  assert.deepEqual(names('mr'), ['हठयोग']);
-  assert.deepEqual(names('en'), ['Hatha Yoga']);
+  assert.deepEqual(names('hi'), ['शुरुआती']);
+  assert.deepEqual(names('mr'), ['नवशिके']);
+  assert.deepEqual(names('en'), ['Beginner']);
 });
 
 test('averages round as Python’s round(x, 1) does', () => {
@@ -82,7 +82,7 @@ test('averages round as Python’s round(x, 1) does', () => {
   const cases = [[2.25, 2.2], [2.75, 2.8], [1.25, 1.2], [4.75, 4.8], [3.25, 3.2], [8 / 3, 2.7], [3.35, 3.4], [4.5, 4.5], [2.125, 2.1], [3, 3]];
   for (const [x, want] of cases) assert.equal(b.evaluate('round1_(' + x + ')'), want, String(x));
   const { one } = classmates(b);
-  for (const [days, before] of [[1, 2], [2, 2], [3, 3], [4, 2]]) attend(b, one.user.id, 'hatha', days, before, null); // mean 2.25
+  for (const [days, before] of [[1, 2], [2, 2], [3, 3], [4, 2]]) attend(b, one.user.id, 'beginner', days, before, null); // mean 2.25
   assert.equal(b.call('GET', '/me/practice', { token: one.token }).body.average_mood_before, 2.2);
 });
 
