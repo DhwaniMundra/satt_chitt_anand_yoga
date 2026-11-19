@@ -1,5 +1,5 @@
-// Shared steps for the tests: a set-up backend, sign-ups, and rows written straight into the fake Sheet (as the
-// Python tests write straight into SQLite).
+// Shared steps for the tests: a set-up backend, sign-ups, and rows written straight into the fake Sheet, for past
+// classes the API cannot create.
 import assert from 'node:assert/strict';
 import { loadBackend } from './fakes.mjs';
 
@@ -23,7 +23,7 @@ export function setting(b, key) {
   return row ? row[1] : null;
 }
 
-/** As the FastAPI server's SCA_TEACHER_CODE does: the owner types a code of her choosing into the settings tab. */
+/** The owner typing a value into the settings tab by hand (which fires the onEdit trigger). */
 export function setSetting(b, key, value) {
   const sheet = b.ss.getSheetByName('settings');
   const rows = sheet.rows();
@@ -67,7 +67,7 @@ function nextId(b, tab) {
   return rows.reduce((top, r) => Math.max(top, Number(r[0])), 0) + 1;
 }
 
-/** A 55-minute class that started `minutesAgo` minutes ago; its id (test_api.py's class_started). */
+/** A 55-minute class that started `minutesAgo` minutes ago; its id. */
 export function classStarted(b, minutesAgo, classKey = 'hatha') {
   const id = nextId(b, 'class_sessions');
   const start = Math.floor((b.clock() - minutesAgo * MIN) / 1000) * 1000;
@@ -75,7 +75,7 @@ export function classStarted(b, minutesAgo, classKey = 'hatha') {
   return id;
 }
 
-/** A class `daysAgo` days ago that `userId` joined, with moods (test_companion.py's attend). Classmates share it. */
+/** A class `daysAgo` days ago that `userId` joined, with moods. Classmates share the class. */
 export function attend(b, userId, classKey, daysAgo, before, after) {
   const start = Math.floor((b.clock() - daysAgo * DAY) / 60000) * 60000;
   const sessions = b.ss.getSheetByName('class_sessions').rows().slice(1);

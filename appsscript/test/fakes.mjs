@@ -39,8 +39,6 @@ export class FakeRange {
   }
   getRow() { return this.row; }
   getColumn() { return this.col; }
-  getNumRows() { return this.rows; }
-  getNumColumns() { return this.cols; }
   getValues() {
     const out = [];
     for (let r = 0; r < this.rows; r++) {
@@ -66,8 +64,7 @@ export class FakeRange {
     return this;
   }
   setFormula(f) { this.sheet.setCell(this.row, this.col, { formula: f }); return this; }
-  getFormula() { const v = this.sheet.cell(this.row, this.col); return v && v.formula ? v.formula : ''; }
-  setNumberFormat(f) { this.sheet.formats.push([this.row, this.col, this.rows, this.cols, f]); return this; }
+  setNumberFormat() { return this; }
   setFontWeight() { return this; }
   setFontSize() { return this; }
   setNote(note) { this.sheet.notes[this.row + ':' + this.col] = note; return this; }
@@ -75,10 +72,9 @@ export class FakeRange {
 
 export class FakeSheet {
   constructor(ss, name) {
-    Object.assign(this, { ss, name, maxRows: 1000, maxCols: 26, data: [], formats: [], notes: {}, hidden: false, frozen: 0, protections: [] });
+    Object.assign(this, { ss, name, maxRows: 1000, maxCols: 26, data: [], notes: {}, hidden: false, protections: [] });
   }
   getName() { return this.name; }
-  setName(n) { this.name = n; return this; }
   cell(r, c) { return (this.data[r - 1] || [])[c - 1] ?? ''; }
   setCell(r, c, v) {
     if (!this.data[r - 1]) this.data[r - 1] = [];
@@ -114,7 +110,7 @@ export class FakeSheet {
     return new FakeRange(this, a, b, c || 1, d || 1);
   }
   clearContents() { this.data = []; return this; }
-  setFrozenRows(n) { this.frozen = n; return this; }
+  setFrozenRows() { return this; }
   hideSheet() { this.hidden = true; return this; }
   isSheetHidden() { return this.hidden; }
   protect() {
@@ -133,11 +129,9 @@ export class FakeSpreadsheet {
     this.sheets = [];
     this.timeZone = 'America/Los_Angeles';
     this.writes = 0;
-    this.reads = 0;
     this.sheets.push(new FakeSheet(this, 'Sheet1'));
     this.active = this.sheets[0];
   }
-  getId() { return 'fake-spreadsheet'; }
   getSheetByName(name) { return this.sheets.find((s) => s.name === name) || null; }
   getSheets() { return this.sheets.slice(); }
   insertSheet(name) {
@@ -153,7 +147,6 @@ export class FakeSpreadsheet {
     this.sheets.splice(position - 1, 0, this.active);
   }
   setSpreadsheetTimeZone(tz) { this.timeZone = tz; }
-  getSpreadsheetTimeZone() { return this.timeZone; }
 }
 
 export class FakeCache {
@@ -188,7 +181,6 @@ export function loadBackend({ code } = {}) {
     tryLock() { if (!state.lockFree) return false; state.lockHeld++; state.locks++; return true; },
     waitLock() { if (!this.tryLock()) throw new Error('Lock timeout'); },
     releaseLock() { state.lockHeld = Math.max(0, state.lockHeld - 1); },
-    hasLock() { return state.lockHeld > 0; },
   };
   const toSigned = (buf) => Array.from(buf, (b) => (b > 127 ? b - 256 : b));
   const services = {
@@ -199,12 +191,6 @@ export function loadBackend({ code } = {}) {
     },
     LockService: { getScriptLock: () => lock },
     CacheService: { getScriptCache: () => cache },
-    PropertiesService: (() => {
-      const props = new Map();
-      const store = { getProperty: (k) => props.get(k) ?? null, setProperty: (k, v) => { props.set(k, String(v)); return store; },
-        deleteProperty: (k) => { props.delete(k); return store; } };
-      return { getScriptProperties: () => store };
-    })(),
     Utilities: {
       DigestAlgorithm: { SHA_256: 'SHA_256' },
       Charset: { UTF_8: 'UTF_8' },
@@ -217,14 +203,13 @@ export function loadBackend({ code } = {}) {
       getUuid: () => randomUUID(),
     },
     ContentService: {
-      MimeType: { JSON: 'JSON', TEXT: 'TEXT' },
+      MimeType: { JSON: 'JSON' },
       createTextOutput(content) {
         return { content, mime: 'TEXT', setMimeType(m) { this.mime = m; return this; }, getContent() { return this.content; } };
       },
     },
     Logger: { log: (...args) => { state.logs.push(args.join(' ')); } },
-    console: { log: (...args) => state.logs.push(args.join(' ')), error: (...args) => state.logs.push('ERROR ' + args.join(' ')),
-      warn: (...args) => state.logs.push(args.join(' ')) },
+    console: { error: (...args) => state.logs.push('ERROR ' + args.join(' ')) },
     Date: ShiftedDate,
   };
   const context = vm.createContext(services);

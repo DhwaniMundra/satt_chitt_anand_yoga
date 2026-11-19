@@ -1,4 +1,4 @@
-// The API end to end through the envelope: the rules of backend/tests/test_api.py, route by route.
+// The API end to end through the envelope, route by route: sign-up and login, links, check-ins, the teacher's routes.
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { attend, classStarted, DAY, freshBackend, MIN, setSetting, setting, signup, teacherAndCode } from './helpers.mjs';
@@ -323,7 +323,7 @@ test('the teacher sees students, pending first, then the newest', () => {
 test('feedback reaches the insights with the name, newest first, at most twenty', () => {
   const b = freshBackend();
   const { t, code } = teacherAndCode(b);
-  const s = signup(b, '9000000002', { code, name: 'Asha' });
+  const s = signup(b, '9000000002', { code, name: 'Student One' });
   for (let i = 0; i < 22; i++) {
     b.state.offsetMs += 1000;
     assert.deepEqual(b.call('POST', '/feedback', { token: s.token, body: { screen: 'today', text: ' note ' + i + ' ' } }).body, { ok: true });
@@ -331,7 +331,7 @@ test('feedback reaches the insights with the name, newest first, at most twenty'
   const feedback = b.call('GET', '/teacher/insights', { token: t.token }).body.feedback;
   assert.equal(feedback.length, 20);
   assert.deepEqual(Object.keys(feedback[0]), ['screen', 'text', 'created_at', 'name']);
-  assert.deepEqual([feedback[0].text, feedback[0].name, feedback[0].screen], ['note 21', 'Asha', 'today']);
+  assert.deepEqual([feedback[0].text, feedback[0].name, feedback[0].screen], ['note 21', 'Student One', 'today']);
   assert.equal(b.call('POST', '/feedback', { token: s.token, body: { screen: 'x'.repeat(41), text: 'hi' } }).status, 422);
   assert.equal(b.call('POST', '/feedback', { token: s.token, body: { screen: 'today', text: '' } }).status, 422);
 });
@@ -397,11 +397,11 @@ test('logging out ends that token only', () => {
 test('a name is updated trimmed, and must not be empty', () => {
   const b = freshBackend();
   const s = signup(b, '9000000002');
-  assert.equal(b.call('POST', '/me', { token: s.token, body: { name: '  Asha K  ' } }).body.user.name, 'Asha K');
+  assert.equal(b.call('POST', '/me', { token: s.token, body: { name: '  Student 1  ' } }).body.user.name, 'Student 1');
   assert.equal(b.call('POST', '/me', { token: s.token, body: { name: '' } }).status, 422);
   assert.equal(b.call('POST', '/me', { token: s.token, body: { lang: 'fr' } }).status, 422);
-  assert.equal(b.call('POST', '/me', { token: s.token, body: {} }).body.user.name, 'Asha K');
-  assert.equal(b.call('GET', '/me', { token: s.token }).body.user.name, 'Asha K');
+  assert.equal(b.call('POST', '/me', { token: s.token, body: {} }).body.user.name, 'Student 1');
+  assert.equal(b.call('GET', '/me', { token: s.token }).body.user.name, 'Student 1');
 });
 
 test('the studio in three languages', () => {

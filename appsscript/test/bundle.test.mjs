@@ -14,8 +14,8 @@ test('dist/ is the build of src/ and studio.json', () => {
   assert.equal(readFileSync(MANIFEST_PATH, 'utf8'), manifest);
 });
 
-test('the studio constant is studio.json', () => {
-  const b = loadBackend();
+test('the studio constant is studio.json, in a fresh build too', () => {
+  const b = loadBackend({ code: bundle().code });
   const studio = JSON.parse(readFileSync(join(ROOT, '..', 'backend', 'content', 'studio.json'), 'utf8'));
   assert.deepEqual(JSON.parse(b.evaluate('JSON.stringify(STUDIO)')), studio);
 });

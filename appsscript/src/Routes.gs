@@ -1,12 +1,12 @@
-// ---------- Routes: one function per route of backend/sca/app.py ----------
-// Each checks who is asking first, then the inputs, then the rules, in the order FastAPI does, so the same request
-// gets the same status and detail. Routes marked LOCK_ in routes_() run entirely under the script lock; the others
-// take it only around their writes, so a slow password hash never holds up everyone else.
+// ---------- Routes: one function per route ----------
+// Each checks who is asking first, then the inputs, then the rules: a signed-out request is a 401 whatever its inputs,
+// and a bad input is a 422 before any rule is applied. Routes marked LOCK_ in routes_() run entirely under the script
+// lock; the others take it only around their writes, so a slow password hash never holds up everyone else.
 
 // ---------- public ----------
 
 function health_() {
-  // Gemma runs on the phone now; the server has no assistant of its own.
+  // The assistant runs on the phone; this server has none.
   return { ok: true, assistant: 'off', model: null };
 }
 
@@ -18,12 +18,12 @@ function studio_(ctx) {
 function signup_(ctx) {
   const { body } = ctx.check({ body: BODY_.signup });
   const phone = normalizePhone_(body.phone);
-  const code = pyStrip_(body.code).toUpperCase();
+  const code = body.code.trim().toUpperCase();
   const hasTeacher = () => ctx.db.t('users').rows.some((u) => u.role === 'teacher');
   let status;
   // The quick refusals come first, before the slow password hash; the lock below checks again.
   if (body.role === 'teacher') {
-    if (hasTeacher()) throw new HttpError_(409, 'teacher_exists'); // one teacher per studio; the code no longer works
+    if (hasTeacher()) throw new HttpError_(409, 'teacher_exists'); // one teacher per studio: the code works once
     ctx.lock(() => {
       if (attemptsBlocked_('login:teacher-code')) throw new HttpError_(429, 'too_many_attempts');
       if (!codeMatches_(ctx, code, 'teacher_code')) {
@@ -45,7 +45,7 @@ function signup_(ctx) {
     if (body.role === 'teacher' && hasTeacher()) throw new HttpError_(409, 'teacher_exists');
     if (users.rows.some((u) => u.phone === phone)) throw new HttpError_(409, 'phone_taken');
     const user = users.insert([{
-      id: users.nextId(), name: pyStrip_(body.name), phone: phone, role: body.role, status: status, pw_hash: pwHash,
+      id: users.nextId(), name: body.name.trim(), phone: phone, role: body.role, status: status, pw_hash: pwHash,
       lang: body.lang, research_consent: body.research_consent, created_at: ctx.now,
     }])[0];
     return signIn_(ctx, user);
@@ -54,7 +54,7 @@ function signup_(ctx) {
 
 /** Teacher and group codes are compared in capitals, so "ramit2024" and "RAMIT2024" are the same code. */
 function codeMatches_(ctx, code, key) {
-  const want = pyStrip_(ctx.db.setting(key) || '').toUpperCase();
+  const want = (ctx.db.setting(key) || '').trim().toUpperCase();
   return want !== '' && code === want;
 }
 
@@ -102,7 +102,7 @@ function updateMe_(ctx) {
   const user = currentUser_(ctx);
   const { body } = ctx.check({ body: BODY_.me });
   const changes = {};
-  if (body.name !== null) changes.name = pyStrip_(body.name);
+  if (body.name !== null) changes.name = body.name.trim();
   if (body.lang !== null) changes.lang = body.lang;
   if (body.research_consent !== null) changes.research_consent = body.research_consent;
   // Withdrawing consent removes what it allowed: here nothing, as questions never reach this server.
@@ -116,7 +116,7 @@ function joinGroup_(ctx) {
   const { body } = ctx.check({ body: BODY_.code });
   const key = 'code:' + user.id;
   if (attemptsBlocked_(key)) throw new HttpError_(429, 'too_many_attempts');
-  if (!codeMatches_(ctx, pyStrip_(body.code).toUpperCase(), 'group_code')) {
+  if (!codeMatches_(ctx, body.code.trim().toUpperCase(), 'group_code')) {
     attemptsFail_(key);
     throw new HttpError_(400, 'bad_group_code');
   }
@@ -136,7 +136,7 @@ function shareNote_(ctx) {
   const user = member_(ctx);
   const { body } = ctx.check({ body: BODY_.shared });
   if (user.role !== 'student') throw new HttpError_(403, 'pending');
-  const text = pyStrip_(body.text);
+  const text = body.text.trim();
   if (!text) throw new HttpError_(422, 'empty_note');
   const notes = ctx.db.t('shared_notes');
   let row = notes.rows.filter((n) => n.user_id === user.id && n.text === text)[0];
@@ -214,7 +214,7 @@ function feedback_(ctx) {
   const user = currentUser_(ctx);
   const { body } = ctx.check({ body: BODY_.feedback });
   const table = ctx.db.t('feedback');
-  table.insert([{ id: table.nextId(), user_id: user.id, screen: body.screen, text: pyStrip_(body.text), created_at: ctx.now }]);
+  table.insert([{ id: table.nextId(), user_id: user.id, screen: body.screen, text: body.text.trim(), created_at: ctx.now }]);
   return { ok: true };
 }
 
@@ -353,7 +353,7 @@ function insights_(ctx) {
   });
   const feedback = ctx.db.t('feedback').rows
     .filter((f) => Object.prototype.hasOwnProperty.call(names, f.user_id))
-    .sort((a, b) => b.created_at - a.created_at || a.id - b.id) // equal times keep table order, as SQLite's sort does
+    .sort((a, b) => b.created_at - a.created_at || a.id - b.id) // equal times in the order written
     .slice(0, 20)
     .map((f) => ({ screen: f.screen, text: f.text, created_at: isoTime_(f.created_at), name: names[f.user_id] }));
   return {

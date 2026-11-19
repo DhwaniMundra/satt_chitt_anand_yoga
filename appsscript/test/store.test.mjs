@@ -27,7 +27,7 @@ test('the envelope: query in the path or apart, the token with or without "Beare
   assert.equal(post(b, JSON.stringify({ method: 'GET', path: '/me/practice', query: { days: 30 }, token: s.token })).body.detail, 'pending');
 });
 
-test('unknown paths and methods, as FastAPI answers them', () => {
+test('an unknown path is a 404, a wrong method a 405', () => {
   const b = freshBackend();
   assert.deepEqual(b.call('GET', '/nope'), { status: 404, body: { detail: 'Not Found' } });
   assert.deepEqual(b.call('GET', '/home/'), { status: 404, body: { detail: 'Not Found' } });
@@ -36,7 +36,7 @@ test('unknown paths and methods, as FastAPI answers them', () => {
   assert.deepEqual(b.call('GET', '/auth/login'), { status: 405, body: { detail: 'Method Not Allowed' } });
 });
 
-test('validation errors come back as FastAPI shapes them, after the sign-in check', () => {
+test('validation errors are a 422 with a list of problems, after the sign-in check', () => {
   const b = freshBackend();
   const { code } = teacherAndCode(b);
   const s = signup(b, '9000000002', { code });
@@ -57,7 +57,7 @@ test('validation errors come back as FastAPI shapes them, after the sign-in chec
   const mood = (value) => b.call('POST', '/sessions/1/checkin', { token: s.token, body: { phase: 'before', mood: value } });
   assert.equal(mood(2.5).body.detail[0].type, 'int_from_float');
   assert.equal(mood('x').body.detail[0].type, 'int_parsing');
-  assert.notEqual(mood('3').status, 422); // "3" is an integer to pydantic
+  assert.notEqual(mood('3').status, 422); // "3" counts as an integer
   assert.equal(b.call('POST', '/me', { token: s.token, body: { research_consent: 'yes' } }).body.user.research_consent, true);
   assert.equal(b.call('POST', '/me', { token: s.token, body: { research_consent: 'perhaps' } }).body.detail[0].type, 'bool_parsing');
 });
@@ -144,10 +144,10 @@ test('a tab without a needed column is reported, not guessed at', () => {
   assert.equal(b.ss.getSheetByName('users').rows()[0].filter((h) => h === 'phone').length, 1);
 });
 
-test('setup adds a column a newer version needs to an existing tab', () => {
+test('setup adds a column the code needs to an existing tab', () => {
   const b = freshBackend();
   const checkins = b.ss.getSheetByName('checkins');
-  checkins.data[0] = checkins.data[0].slice(0, 5); // an older tab without class and class_date
+  checkins.data[0] = checkins.data[0].slice(0, 5); // a tab without class and class_date
   b.context.setup();
   assert.deepEqual(checkins.rows()[0], ['user_id', 'session_id', 'phase', 'mood', 'created_at', 'class', 'class_date']);
 });
@@ -243,6 +243,7 @@ test('setup: the Dashboard formulas point at the right columns', () => {
   const dashboard = b.ss.getSheetByName('Dashboard');
   const formulas = dashboard.data.flatMap((line, r) => (line || []).map((v, c) => [r + 1, c + 1, v])).filter(([, , v]) => v && v.formula);
   assert.equal(formulas.length, 7);
+  assert.equal(Object.keys(dashboard.notes).length, 7, 'each block title explains its block');
   const text = formulas.map(([, , v]) => v.formula).join('\n');
   assert.match(text, /QUERY\(users!A1:I, "select E, count\(A\) where D = 'student' group by E/);
   assert.match(text, /QUERY\(checkins!A1:G, "select G, F, count\(A\) where C = 'before' group by G, F order by G desc/);
