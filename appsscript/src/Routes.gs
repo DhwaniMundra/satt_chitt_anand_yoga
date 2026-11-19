@@ -156,12 +156,17 @@ function home_(ctx) {
     if (c.phase === 'before') joined[c.session_id] = true;
     else answered[c.session_id] = true;
   });
+  ctx.db.t('practice').rows.forEach((p) => {
+    if (p.user_id === user.id) answered[p.session_id] = true;
+  });
+  const plan = sessionCurricula_(ctx);
   const sessions = upcoming_(ctx).map((r) => {
     const s = sessionJson_(r, lang, member, defaultLink);
     s.checked_in = Boolean(joined[r.id]);
+    s.curriculum = plan[r.id];
     return s;
   });
-  // The last class this person joined that has (nearly) ended and has no "after" check-in yet.
+  // The last class this person joined that has (nearly) ended, with no "after" check-in and nothing said about its items.
   const byId = sessionsById_(ctx);
   const waiting = Object.keys(joined)
     .map((id) => byId[id])
@@ -170,7 +175,10 @@ function home_(ctx) {
   let after = null;
   if (waiting) {
     const end = waiting.starts_at + waiting.duration_min * 60000;
-    if (end - 10 * 60000 <= ctx.now && ctx.now <= end + 12 * 3600000) after = sessionJson_(waiting, lang, false, null);
+    if (end - 10 * 60000 <= ctx.now && ctx.now <= end + 12 * 3600000) {
+      after = sessionJson_(waiting, lang, false, null);
+      after.curriculum = plan[waiting.id];
+    }
   }
   return {
     user: userJson_(user),
@@ -226,10 +234,12 @@ function teacherHome_(ctx) {
   ctx.db.t('checkins').rows.forEach((c) => {
     if (c.phase === 'before') joined[c.session_id] = (joined[c.session_id] || 0) + 1;
   });
+  const plan = sessionCurricula_(ctx);
   const sessions = upcoming_(ctx).map((r) => {
     const s = sessionJson_(r, query.lang, true, defaultLink);
     s.own_link = r.meet_link !== null && r.meet_link !== '';
     s.joined = joined[r.id] || 0;
+    s.curriculum = plan[r.id];
     return s;
   });
   return {

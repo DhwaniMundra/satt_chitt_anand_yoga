@@ -240,8 +240,8 @@ test('setup: the Dashboard formulas point at the right columns', () => {
   const b = freshBackend();
   const dashboard = b.ss.getSheetByName('Dashboard');
   const formulas = dashboard.data.flatMap((line, r) => (line || []).map((v, c) => [r + 1, c + 1, v])).filter(([, , v]) => v && v.formula);
-  assert.equal(formulas.length, 7);
-  assert.equal(Object.keys(dashboard.notes).length, 7, 'each block title explains its block');
+  assert.equal(formulas.length, 9);
+  assert.equal(Object.keys(dashboard.notes).length, 9, 'each block title explains its block');
   const text = formulas.map(([, , v]) => v.formula).join('\n');
   assert.match(text, /QUERY\(users!A1:H, "select E, count\(A\) where D = 'student' group by E/);
   assert.match(text, /QUERY\(checkins!A1:G, "select G, F, count\(A\) where C = 'before' group by G, F order by G desc/);
@@ -249,6 +249,8 @@ test('setup: the Dashboard formulas point at the right columns', () => {
   assert.match(text, /VLOOKUP\(feedback!B2:B, \{users!A2:A, users!B2:B\}, 2, FALSE\)/);
   assert.match(text, /VLOOKUP\(shared_notes!B2:B, \{users!A2:A, users!B2:B\}, 2, FALSE\)/);
   assert.match(text, /COUNTIFS\(checkins!A2:A, users!A2:A, checkins!C2:C, "before"\)/);
+  assert.match(text, /practice!F2:F\}, "select Col1, Col2, Col3, Col4 where Col5 = 1 and Col1 >= datetime '" & TEXT\(TODAY\(\) - 14/);
+  assert.match(text, /QUERY\(practice!A1:J, "select I, avg\(E\) where E is not null group by I pivot J", 1\)/);
   for (const [, , v] of formulas) {
     assert.equal((v.formula.match(/\(/g) || []).length, (v.formula.match(/\)/g) || []).length, v.formula);
     assert.equal((v.formula.match(/"/g) || []).length % 2, 0, v.formula);

@@ -31,7 +31,7 @@ class PhoneCompanion(context: Context, private val api: Api, studio: JSONObject)
         fun asset(name: String) = context.assets.open("studio/$name").bufferedReader().use { it.readText() }
         companion = PracticeCompanion(
             StudioNotes(asset("yoga_health.md"), asset("yoga_health.mr.md")),
-            studio.getJSONObject("name").getString("en"), studio.getJSONObject("teacher").getString("short"),
+            studio.getJSONObject("name").getString("en"), studio.getJSONObject("teacher").getJSONObject("short").getString("en"),
         )
     }
 

@@ -3,7 +3,7 @@
 <resources>
     <string name="app_name">सत् चित् आनंद</string>
 
-    <string name="welcome_sub">रमित जींसोबत लाइव्ह योग, दररोज सकाळी 8 वाजता.</string>
+    <string name="welcome_sub">%1$s यांच्यासोबत लाइव्ह योग, दररोज सकाळी 8 वाजता.</string>
     <string name="language">भाषा</string>
     <string name="i_am_student">मी विद्यार्थी आहे</string>
     <string name="i_am_teacher">मी शिक्षक आहे</string>
@@ -13,11 +13,10 @@
     <string name="phone">व्हॉट्सॲप नंबर</string>
     <string name="password">पासवर्ड (किमान 6 अक्षरे)</string>
     <string name="group_code">ग्रुप कोड (व्हॉट्सॲप ग्रुपमधून)</string>
-    <string name="group_code_help">कोड नाही? तरीही साइन अप करा, रमित जी तुम्हाला मंजुरी देतील.</string>
+    <string name="group_code_help">कोड नाही? तरीही साइन अप करा, %1$s तुम्हाला मंजुरी देतील.</string>
     <string name="teacher_code">शिक्षक कोड</string>
     <string name="back">मागे</string>
     <string name="role_student">विद्यार्थी</string>
-    <string name="role_teacher">शिक्षक</string>
 
     <string name="err_bad_phone">कृपया योग्य व्हॉट्सॲप नंबर टाका.</string>
     <string name="err_bad_login">नंबर किंवा पासवर्ड चुकीचा आहे.</string>
@@ -29,23 +28,21 @@
     <string name="err_network">स्टुडिओ सर्व्हरशी जोडता येत नाही. इंटरनेट तपासा आणि पुन्हा प्रयत्न करा.</string>
     <string name="err_short_password">पासवर्डमध्ये किमान 6 अक्षरे हवीत.</string>
     <string name="err_generic">काहीतरी चुकले. कृपया पुन्हा प्रयत्न करा.</string>
-    <string name="err_pending">रमित जींच्या मंजुरीनंतर तुम्ही प्रश्न विचारू शकाल. ग्रुप कोड आहे? आजच्या स्क्रीनवर टाका.</string>
+    <string name="err_pending">%1$s यांच्या मंजुरीनंतर तुम्ही प्रश्न विचारू शकाल. ग्रुप कोड आहे? आजच्या स्क्रीनवर टाका.</string>
     <string name="err_busy">स्टुडिओचा सर्व्हर व्यस्त आहे. कृपया एका मिनिटाने पुन्हा प्रयत्न करा.</string>
     <string name="err_too_many_attempts">खूप प्रयत्न झाले. कृपया 15 मिनिटांनी पुन्हा प्रयत्न करा.</string>
     <string name="err_teacher_exists">या स्टुडिओचे शिक्षक आधीच आहेत. विद्यार्थी म्हणून साइन अप करा.</string>
     <string name="err_checkin_closed">चेक-इन वर्गाच्या एक तास आधी सुरू होते.</string>
 
     <string name="tab_today">आज</string>
-    <string name="tab_week">आठवडा</string>
+    <string name="tab_practice">सराव</string>
     <string name="tab_ask">विचारा</string>
     <string name="tab_me">मी</string>
-    <string name="tab_classes">वर्ग</string>
     <string name="tab_students">विद्यार्थी</string>
     <string name="tab_insights">माहिती</string>
 
     <string name="greeting">नमस्ते, %1$s</string>
     <string name="next_class">पुढचा वर्ग</string>
-    <string name="coming_up">पुढील वर्ग</string>
     <string name="today">आज</string>
     <string name="tomorrow">उद्या</string>
     <string name="minutes">%1$d मिनिटे</string>
@@ -55,11 +52,24 @@
     <string name="link_soon">वर्गाची लिंक वर्गापूर्वी इथे दिसेल.</string>
     <string name="checked_in">तुम्ही चेक-इन केले ✓</string>
     <string name="pending_title">मंजुरीची प्रतीक्षा</string>
-    <string name="pending_body">रमित जी लवकरच तुम्हाला मंजुरी देतील. व्हॉट्सॲप ग्रुपचा कोड आहे? इथे टाका.</string>
+    <string name="pending_body">%1$s लवकरच तुम्हाला मंजुरी देतील. व्हॉट्सॲप ग्रुपचा कोड आहे? इथे टाका.</string>
     <string name="enter_code">कोड टाका</string>
     <string name="open_group">व्हॉट्सॲप ग्रुप उघडा</string>
     <string name="how_feel_before">आत्ता तुम्हाला कसे वाटते?</string>
     <string name="how_feel_after">वर्ग संपला! आता तुम्हाला कसे वाटते?</string>
+    <string name="how_did_it_go">कसे झाले?</string>
+    <string name="tell_teacher">%1$s यांना सांगा</string>
+    <string name="after_class_help">प्रत्येकावर एक टॅप; हवे ते सोडून द्या.</string>
+    <string name="reaction_1">अजून नाही</string>
+    <string name="reaction_2">कष्टाने</string>
+    <string name="reaction_3">स्थिर</string>
+    <string name="reaction_4">सहज</string>
+    <string name="pain_flag">ताण किंवा वेदना जाणवली</string>
+    <string name="add_note">नोंद जोडा</string>
+    <string name="done">झाले</string>
+    <string name="todays_sequence">आजचा क्रम</string>
+    <string name="show_all">सर्व %1$d पाहा</string>
+    <string name="show_less">कमी दाखवा</string>
     <string name="mood_1">खूप वाईट</string>
     <string name="mood_2">वाईट</string>
     <string name="mood_3">ठीक</string>
@@ -69,13 +79,6 @@
 
     <string name="week_time">सकाळी 8:00 – 8:55 (भारतीय वेळ), Google Meet वर लाइव्ह</string>
     <string name="first_class_free">पहिला वर्ग मोफत आहे.</string>
-    <string name="mon">सोम</string>
-    <string name="tue">मंगळ</string>
-    <string name="wed">बुध</string>
-    <string name="thu">गुरु</string>
-    <string name="fri">शुक्र</string>
-    <string name="sat">शनि</string>
-    <string name="sun">रवि</string>
 
 
     <string name="ask_title">सराव सोबती</string>
@@ -100,8 +103,8 @@
     <string name="mood_lift">मूडमध्ये सुधारणा</string>
     <string name="mood_lift_help">वर्गानंतर सरासरी तुम्हाला किती बरे वाटते (−4 ते +4).</string>
     <string name="memory_title">माझ्या आरोग्याच्या नोंदी</string>
-    <string name="privacy">तुमची चॅट आणि आरोग्याच्या नोंदी याच फोनवर राहतात. रमित जी तुमचे नाव आणि नंबर, तुमचे चेक-इन आणि वर्गापूर्वी व नंतरचा मूड, तुमच्या सूचना, आणि तुम्ही शेअर करायचे ठरवलेली नोंद पाहतात.</string>
-    <string name="memory_empty">अजून नोंदी नाहीत. खाली लिहा, जसे एखादी जुनी दुखापत जी रमित जींना माहीत असावी.</string>
+    <string name="privacy">%1$s तुमचे नाव आणि नंबर आणि तुमचा सराव पाहतात: चेक-इन, मूड, वर्गातील प्रत्येक आसन कसे झाले आणि त्यावरच्या तुमच्या नोंदी, आणि तुमच्या सूचना. तुमची Gemma चॅट आणि आरोग्याच्या नोंदी याच फोनवर राहतात, जोपर्यंत तुम्ही एखादी नोंद शेअर करत नाही.</string>
+    <string name="memory_empty">अजून नोंदी नाहीत. खाली लिहा, जसे एखादी जुनी दुखापत जी %1$s यांना माहीत असावी.</string>
     <string name="note_hint">उदा.: वज्रासनात माझा डावा गुडघा दुखतो</string>
     <string name="forget_note">विसरा</string>
     <string name="feedback_title">आम्ही काय सुधारावे?</string>
@@ -144,6 +147,11 @@
     <string name="after">नंतर</string>
     <string name="what_students_said">विद्यार्थी काय म्हणाले</string>
     <string name="no_data">अजून चेक-इन नाहीत.</string>
+    <string name="curriculum">अभ्यासक्रम</string>
+    <string name="review_title">वर्ग कसा झाला</string>
+    <string name="review_open">प्रत्येक आसन कसे झाले</string>
+    <string name="review_counts">%1$d सामील · %2$d जणांनी सांगितले</string>
+    <string name="review_empty">अजून कोणीही कसे झाले ते सांगितलेले नाही.</string>
     <!-- Gemma on the phone -->
     <string name="ask_thinking_phone">तुमच्या फोनवर विचार करत आहे…</string>
     <string name="gemma_title">तुमच्या फोनवर Gemma</string>
@@ -166,10 +174,10 @@
     <string name="try_again">पुन्हा प्रयत्न करा</string>
     <string name="gemma_download_title">सत् चित् आनंदसाठी Gemma</string>
     <string name="gemma_download_note">तुमच्या फोनसाठी सराव सोबती (एकदाच)</string>
-    <string name="share_note">रमित जींना शेअर करा</string>
-    <string name="shared_note">रमित जींना शेअर केले</string>
-    <string name="share_confirm_title">रमित जींना शेअर करायचे?</string>
-    <string name="share_confirm_body">रमित जी ही नोंद त्यांच्या ‘विद्यार्थी’ स्क्रीनवर पाहतील. नंतर इथे नोंद विसरली तरी ती रमित जींकडून काढली जात नाही.</string>
+    <string name="share_note">%1$s यांना शेअर करा</string>
+    <string name="shared_note">%1$s यांना शेअर केले</string>
+    <string name="share_confirm_title">%1$s यांना शेअर करायचे?</string>
+    <string name="share_confirm_body">%1$s ही नोंद ‘विद्यार्थी’ स्क्रीनवर पाहतील. नंतर इथे नोंद विसरली तरी ती %1$s यांच्याकडून काढली जात नाही.</string>
     <string name="share">शेअर करा</string>
     <string name="shared_title">तुमच्याशी शेअर केलेले</string>
     <string name="shared_help">विद्यार्थ्यांनी तुमच्याशी शेअर केलेल्या आरोग्याच्या नोंदी.</string>
@@ -185,5 +193,25 @@
     <plurals name="until_minutes">
         <item quantity="one">%d मिनिट</item>
         <item quantity="other">%d मिनिटे</item>
+    </plurals>
+    <plurals name="dose_breaths">
+        <item quantity="one">%d श्वास</item>
+        <item quantity="other">%d श्वास</item>
+    </plurals>
+    <plurals name="dose_seconds">
+        <item quantity="one">%d सेकंद</item>
+        <item quantity="other">%d सेकंद</item>
+    </plurals>
+    <plurals name="dose_minutes">
+        <item quantity="one">%d मिनिट</item>
+        <item quantity="other">%d मिनिटे</item>
+    </plurals>
+    <plurals name="dose_rounds">
+        <item quantity="one">%d फेरी</item>
+        <item quantity="other">%d फेऱ्या</item>
+    </plurals>
+    <plurals name="dose_strokes">
+        <item quantity="one">%d वेळ</item>
+        <item quantity="other">%d वेळा</item>
     </plurals>
 </resources>

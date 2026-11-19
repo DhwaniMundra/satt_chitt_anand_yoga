@@ -8,10 +8,9 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.launch
+import org.json.JSONArray
 import org.json.JSONException
 import org.json.JSONObject
-import java.time.LocalDate
-import java.time.ZoneId
 
 /** All screen state, and every call to the server. Errors land in [error] as the server's code. */
 class AppViewModel(app: Application) : AndroidViewModel(app) {
@@ -35,6 +34,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var teacherHome by mutableStateOf<TeacherHome?>(null); private set
     var students by mutableStateOf<List<Student>>(emptyList()); private set
     var insights by mutableStateOf<Insights?>(null); private set
+    /** The studio's library and curricula, in the chosen language. */
+    var curricula by mutableStateOf<Curricula?>(null); private set
+    /** For the teacher: how one class went, item by item. */
+    var review by mutableStateOf<ClassReview?>(null); private set
     /** The conversation with the practice companion, as kept on this phone. */
     val chat = mutableStateListOf<ChatLine>()
     var asking by mutableStateOf(false); private set
@@ -78,6 +81,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (user?.id != account.id) openStore(account)
         user = account
         stats = Stats.from(me.getJSONObject("stats"))
+        if (curricula == null) curricula = Curricula.from(api.get("/curricula?lang=${prefs.lang}"))
         if (account.isTeacher) {
             teacherHome = TeacherHome.from(api.get("/teacher/home?lang=${prefs.lang}"))
         } else {
@@ -117,7 +121,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun signOutLocally() {
         prefs.token = null
-        user = null; home = null; stats = null; teacherHome = null; insights = null
+        user = null; home = null; stats = null; teacherHome = null; insights = null; review = null
         practice = emptyList(); students = emptyList(); notes = emptyList(); sharedNotes = emptyList()
         chat.clear()
         store = null // the chat and notes stay on the phone, under this account, for its next sign-in
@@ -136,6 +140,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      *  The activity then restarts in it. */
     fun setLanguage(lang: String) {
         prefs.lang = lang
+        curricula = null // its names and cues are in the language
         if (user == null) {
             loadStudio()
         } else {
@@ -162,15 +167,25 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     // ---------- student ----------
 
-    fun checkin(sessionId: Int, phase: String, mood: Int, then: () -> Unit = {}) = launchCall {
-        stats = Stats.from(api.post("/sessions/$sessionId/checkin", JSONObject().put("phase", phase).put("mood", mood)).getJSONObject("stats"))
+    fun checkInBefore(sessionId: Int, mood: Int, then: () -> Unit) = launchCall {
+        stats = Stats.from(api.post("/sessions/$sessionId/checkin", JSONObject().put("phase", "before").put("mood", mood)).getJSONObject("stats"))
         home = Home.from(api.get("/home?lang=${prefs.lang}"))
         then()
     }
 
     fun loadPractice() = launchCall {
-        val today = LocalDate.now(ZoneId.of("Asia/Kolkata"))
-        practice = api.get("/me/practice?days=14&lang=${prefs.lang}").getJSONArray("classes").map { JoinedClass.from(it, today) }.reversed()
+        practice = api.get("/me/practice?days=14&lang=${prefs.lang}").getJSONArray("classes").map(JoinedClass::from).reversed()
+    }
+
+    /** After class: the mood, if picked, and how each item went, if anything was said. */
+    fun sendAfterClass(sessionId: Int, mood: Int?, items: List<ItemFeedback>, done: () -> Unit) = launchCall {
+        if (mood != null) {
+            stats = Stats.from(api.post("/sessions/$sessionId/checkin", JSONObject().put("phase", "after").put("mood", mood)).getJSONObject("stats"))
+        }
+        val said = items.filter { it.said }
+        if (said.isNotEmpty()) api.post("/sessions/$sessionId/practice", JSONObject().put("entries", JSONArray(said.map { it.json() })))
+        home = Home.from(api.get("/home?lang=${prefs.lang}"))
+        done()
     }
 
     /** Sends [question] to the companion on this phone: the student's line shows at once, the reply when it comes.
@@ -270,6 +285,16 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun resetPassword(userId: Int, show: (String) -> Unit) = launchCall {
         show(api.post("/teacher/students/$userId/password").getString("password"))
+    }
+
+    fun setCurriculum(sessionId: Int, curriculum: String) = launchCall {
+        api.put("/teacher/sessions/$sessionId/curriculum", JSONObject().put("curriculum", curriculum))
+        teacherHome = TeacherHome.from(api.get("/teacher/home?lang=${prefs.lang}"))
+    }
+
+    fun loadReview(sessionId: Int) = launchCall {
+        review = null
+        review = ClassReview.from(api.get("/teacher/sessions/$sessionId/practice"))
     }
 
     fun loadInsights() = launchCall {
