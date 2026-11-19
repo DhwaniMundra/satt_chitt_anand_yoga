@@ -68,6 +68,8 @@ fun TodayScreen(vm: AppViewModel) {
     val now = rememberNow()
     val words = vm.words()
     var afterClass by rememberSaveable { mutableStateOf(false) }
+    var aboutMe by rememberSaveable { mutableStateOf(false) }
+    if (aboutMe) return IntakeScreen(vm) { aboutMe = false }
     val after = home.afterCheckin
     if (afterClass && after != null) {
         BackHandler { afterClass = false }
@@ -95,7 +97,7 @@ fun TodayScreen(vm: AppViewModel) {
                     TextButton(onClick = { afterClass = true }) { Text(stringResource(R.string.change)) }
                 }
             }
-            if (!home.user.isApproved) PendingCard()
+            if (!home.user.isApproved) PendingCard { aboutMe = true }
 
             home.sessions.firstOrNull()?.let { NextClassCard(vm, it, now) }
 
@@ -186,10 +188,11 @@ private fun NextClassCard(vm: AppViewModel, s: ClassSession, now: Instant) {
 }
 
 @Composable
-private fun PendingCard() {
+private fun PendingCard(tellAbout: () -> Unit) {
     SectionCard(tint = Palette.saffronLight) {
         Text(stringResource(R.string.pending_title, LocalTeacher.current), style = MaterialTheme.typography.titleMedium)
         Text(stringResource(R.string.pending_body, LocalTeacher.current), style = MaterialTheme.typography.bodyMedium)
+        Button(onClick = tellAbout, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.tell_about_you, LocalTeacher.current)) }
     }
 }
 

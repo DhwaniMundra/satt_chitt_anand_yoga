@@ -140,6 +140,8 @@ curl -sL "$URL" -H 'Content-Type: text/plain' \
 | `POST /auth/logout` | anyone | yes | ends this token → `{ok: true}` |
 | `GET /me` | signed in | | `{user, stats: {classes_joined, streak_days, mood_change, mood_pairs}}` |
 | `POST /me` | signed in | yes | `{name?, lang?}` → `{user}` |
+| `GET /me/intake` | signed in | | `{intake}`: the student's own answers about themselves, or null before they fill them |
+| `PUT /me/intake` | student | yes | `{age, height_cm, weight_kg, food, meals?, pain?, pain_note?, ratings: [{item, reaction, pain}]}` → `{intake}`: filled after sign-up (pending) or later; a second send replaces the first. `food` one of `vegetarian`, `eggetarian`, `non_vegetarian`, `vegan`; `pain` areas like `knee, back` from knee, back, neck, shoulder, hip, other (`bad_pain_area`); `ratings` for the assessment asanas of `content/studio.json` only (`unknown_item`); `students_only`. The intake comes back with `suggested_batch`: any pain, Pain management; most of the self-assessment steady or at ease (four or more answered), Intermediate; else Beginner, never Advanced |
 | `GET /me/practice?days=&lang=` | approved student, teacher | | the student's classes over the last `days` (1 to 90, default 7) with the sums done: `{period_days, classes_joined, mood_scale, average_mood_before, average_mood_after, by_class, classes, solo}`, each class's `date` its India date (`2026-11-16`) and its `curriculum`; `solo` lists the sessions on one's own, `[{date, minutes, items}]`, the item names in `lang`; `pending` |
 | `POST /me/solo` | approved student | yes | practice on one's own: `{minutes, entries: [{item, hold_s, reaction, pain, note}]}` → `{ok, id, saved}`. The server dates it (it ends now and began `minutes` ago, up to 240); `hold_s` is the stopwatch's seconds (up to 3600); an item with nothing timed or said is not kept; `nothing_said` when none is left, `unknown_item` |
 | `GET /me/asanas` | approved student, teacher | | `{items: [{item, in_class, solo, last, reaction_trend, pain_times, teacher_said}]}`: each item the student practised, in class or on their own, or had feedback on: those with strain or pain first, then those with the teacher's feedback (the latest first), then the most practised; `teacher_said` is the date of the latest feedback |
@@ -159,7 +161,7 @@ curl -sL "$URL" -H 'Content-Type: text/plain' \
 | `PUT /teacher/settings` | teacher | yes | `{group_link?}`, checked before it is saved → `{group_link, group_code}` |
 | `POST /teacher/group_code` | teacher | yes | a new group code → `{group_code}` |
 | `GET /teacher/invite?lang=` | teacher | | `{text, url, group_link}` |
-| `GET /teacher/students` | teacher | | `{students: [user + joined, created_at]}`, pending first, then newest |
+| `GET /teacher/students` | teacher | | `{students: [user + joined, created_at, intake]}`, pending first, then newest; `intake` as `/me/intake` gives it, with `suggested_batch` |
 | `PUT /teacher/students/{user_id}/batch` | teacher | yes | `{batch, note?}` → `{ok, student}`: places the student in the batch ("Approve into a batch" for a pending one, "Move to batch" after a review), approved from then; logged in `batch_changes`; `no_batch`, `no_student` |
 | `POST /teacher/students/{user_id}/status` | teacher | yes | `{status: approved\|rejected}` → `{ok}`: removes a student, or takes a removed one back into their batch; `needs_batch` for one never placed, `no_student` |
 | `GET /teacher/students/{user_id}/asanas`, `…/asanas/{item}` | teacher | | the same as `/me/asanas` and `/me/asanas/{item}`, for that student; `no_student` |
@@ -191,6 +193,8 @@ add columns of her own (to the right is tidiest); `setup()` adds back any column
 | `curriculum_items` | curriculum, position, item, dose, unit, cue, cue_hi, cue_mr | each curriculum's items in order; unit `breaths`, `seconds`, `minutes`, `rounds` or `strokes` |
 | `feedback` | id, user_id, screen, text, created_at | |
 | `shared_notes` | id, user_id, text, created_at | notes students chose to share with the teacher |
+| `intake` (hidden) | user_id, age, height_cm, weight_kg, food, meals, pain, pain_note, updated_at | each student's answers about themselves, for the teacher to place them: health data, on the Dashboard only as counts |
+| `intake_ratings` (hidden) | user_id, item, reaction, pain | the intake's self-assessment, one row per asana answered |
 | `tokens` (hidden) | token_hash, user_id, created_at | SHA-256 of each login token |
 | `settings` (hidden) | key, value, about | teacher_code, group_code, group_link |
 
@@ -210,7 +214,7 @@ an apostrophe. Deleting a student's row leaves their check-ins in place.
 ## The Dashboard
 
 One tab of formulas, each block a single `QUERY` (click its first cell to read it): students by status, students per
-batch, the latest batch changes, mood per class (average after and before, all time), every student with their batch
+batch, the latest batch changes, pain areas from the intake (counts only), mood per class (average after and before, all time), every student with their batch
 and check-in count, attendance per class by date,
 mood by class and date, feedback with the student's name, shared notes, items with strain or pain in the last 14
 days, and the average reaction per item, week by week (one column per week, headed by its Monday). Times show in
@@ -329,6 +333,8 @@ done
   replacing), and the teacher's review of a class.
 - [`history.test.mjs`](test/history.test.mjs): a student's history per item (the trend, strain or pain, the notes,
   the list), and the teacher's feedback on an item.
+- [`intake.test.mjs`](test/intake.test.mjs): the intake: filling and changing it, the batch it points to, the checks,
+  and that only the student and the teacher read it.
 - [`solo.test.mjs`](test/solo.test.mjs): practice on one's own: what is kept, the holds, the history mixing classes
   and sessions on one's own, the practice summary, and the rules.
 - [`store.test.mjs`](test/store.test.mjs): the envelope, validation shapes, text kept as typed, hashed tokens and

@@ -105,6 +105,8 @@ function routes_() {
     ['POST', '/auth/logout', logout_],
     ['GET', '/me', me_],
     ['POST', '/me', updateMe_, LOCK_],
+    ['GET', '/me/intake', myIntake_],
+    ['PUT', '/me/intake', saveIntake_, LOCK_],
     ['GET', '/me/practice', myPractice_],
     ['POST', '/me/solo', soloPractice_, LOCK_],
     ['GET', '/me/asanas', myItems_],
