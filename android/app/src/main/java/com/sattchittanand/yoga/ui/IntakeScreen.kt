@@ -73,8 +73,7 @@ private fun IntakeForm(vm: AppViewModel, before: Intake?, close: () -> Unit) {
     val number = KeyboardOptions(keyboardType = KeyboardType.Number)
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         BackHeader(stringResource(R.string.intake_title), close)
-        Text(stringResource(R.string.intake_help, teacher), style = MaterialTheme.typography.bodyMedium, color = Palette.muted)
-        // Who sees these answers, before any is given.
+        // Who sees these answers, and what for, before any is given.
         Text(stringResource(R.string.intake_consent, teacher), style = MaterialTheme.typography.bodyMedium)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedTextField(age, { age = it.filter(Char::isDigit).take(3) }, label = { Text(stringResource(R.string.age)) }, singleLine = true,

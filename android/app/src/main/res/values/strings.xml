@@ -67,7 +67,6 @@
     <string name="batch_note">A note for the review (optional)</string>
     <string name="take_back">Take back</string>
     <string name="intake_title">About you</string>
-    <string name="intake_help">Your answers help %1$s place you in a batch that suits you.</string>
     <string name="tell_about_you">Tell %1$s about yourself</string>
     <string name="about_me">About me, for %1$s</string>
     <string name="age">Age</string>
@@ -89,7 +88,7 @@
     <string name="pain_note_hint">What hurts, and when (optional)</string>
     <string name="assessment_title">Try a few poses</string>
     <string name="assessment_help">Try each gently, near a wall or a chair. Stop at any pain, and skip any you cannot do.</string>
-    <string name="intake_consent">These answers go to %1$s, to place you in a batch.</string>
+    <string name="intake_consent">These answers go to %1$s, to place you in a batch that suits you.</string>
     <string name="send_to">Send to %1$s</string>
     <string name="intake_thanks">Thank you. %1$s will place you soon.</string>
     <string name="intake_line">%1$d yrs · %2$d cm · %3$d kg · %4$s</string>

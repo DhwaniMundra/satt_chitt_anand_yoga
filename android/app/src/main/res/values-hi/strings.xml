@@ -62,7 +62,6 @@
     <string name="batch_note">समीक्षा के लिए नोट (वैकल्पिक)</string>
     <string name="take_back">वापस लें</string>
     <string name="intake_title">आपके बारे में</string>
-    <string name="intake_help">आपके जवाबों से %1$s आपको सही बैच में रख पाएँगे।</string>
     <string name="tell_about_you">%1$s को अपने बारे में बताएँ</string>
     <string name="about_me">मेरे बारे में, %1$s के लिए</string>
     <string name="age">उम्र</string>
@@ -84,7 +83,7 @@
     <string name="pain_note_hint">क्या दर्द होता है, और कब (वैकल्पिक)</string>
     <string name="assessment_title">कुछ आसन आज़माएँ</string>
     <string name="assessment_help">हर आसन धीरे से, दीवार या कुर्सी के पास करें। दर्द हो तो रुकें, और जो न हो सके उसे छोड़ दें।</string>
-    <string name="intake_consent">ये जवाब %1$s के पास जाते हैं, आपको बैच में रखने के लिए।</string>
+    <string name="intake_consent">ये जवाब %1$s के पास जाते हैं, ताकि वे आपको सही बैच में रख सकें।</string>
     <string name="send_to">%1$s को भेजें</string>
     <string name="intake_thanks">धन्यवाद। %1$s जल्द ही आपको बैच में रखेंगे।</string>
     <string name="intake_line">%1$d वर्ष · %2$d से.मी. · %3$d कि.ग्रा. · %4$s</string>
