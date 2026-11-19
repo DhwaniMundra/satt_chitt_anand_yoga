@@ -49,8 +49,10 @@ Rules:
 4. You are not a doctor: never diagnose, never promise a cure, never tell anyone to start, change or stop a medicine.
    For pain, illness, pregnancy or medicine, give only gentle general guidance and say to ask their doctor and to tell
    {teacher} before class. If something hurts in practice, say to stop and to tell {teacher}.
-5. Keep replies short and warm: at most 90 words.
-6. Reply only in {language}.{script}"""
+5. You cannot reach {teacher} or anyone else, or do anything outside this chat. For whatever is {teacher}'s to
+   decide, say the student can ask {teacher}.
+6. Keep replies short and warm: at most 90 words.
+7. Reply only in {language}.{script}"""
 
 /** For Hindi and Marathi: the whole reply in Devanagari, with no English beside it. */
 private const val DEVANAGARI_ONLY = " Write every word in Devanagari, the names of asanas, batches and the teacher too. Add no " +
@@ -141,9 +143,9 @@ private fun inWords(a: Double, words: List<String>): String {
     return if (a % 1 < 0.05 || a >= words.size) low else "between $low and ${words[a.toInt().coerceIn(0, words.lastIndex)]}"
 }
 
-/** An item's progress as Gemma reads it ([Tools.asanaProgress]): the server's sums, each date with its weekday and
- *  each average reaction in words, so the model has nothing to work out. */
-fun progressSummary(item: ItemName, p: Map<String, Any?>): Map<String, Any?> {
+/** An item's progress as Gemma reads it ([Tools.asanaProgress]): the server's sums, the item named as fits [lang], each
+ *  date with its weekday and each average reaction in words, so the model has nothing to work out. */
+fun progressSummary(item: ItemName, p: Map<String, Any?>, lang: String): Map<String, Any?> {
     fun day(value: Any?) = (value as? String)?.let { DATE.format(LocalDate.parse(it)) }
 
     @Suppress("UNCHECKED_CAST")
@@ -153,7 +155,7 @@ fun progressSummary(item: ItemName, p: Map<String, Any?>): Map<String, Any?> {
     @Suppress("UNCHECKED_CAST")
     val notes = (p["your_notes"] as? List<Map<String, Any?>>).orEmpty()
     return linkedMapOf(
-        "asana" to item.full,
+        "asana" to if (lang == "en") item.full else item.sanskrit, // in Hindi and Marathi, no English name to copy
         "times_in_class" to p["in_class"],
         "times_on_own" to p["solo"],
         "first" to day(p["first"]),
@@ -232,7 +234,7 @@ class Tools(private val data: StudentData, private val notes: StudioNotes, priva
             val library = data.library()
             val key = resolveItem(asana, library)
                 ?: return mapOf("error" to "Nothing called \"$asana\" is in the studio's list. The closest: ${closestItems(asana, library).joinToString(", ")}.")
-            progressSummary(library.first { it.key == key }, data.itemProgress(key))
+            progressSummary(library.first { it.key == key }, data.itemProgress(key), lang)
         } catch (e: Exception) {
             mapOf("error" to UNREACHABLE)
         }
