@@ -6,7 +6,7 @@ copying from this text, so it must say exactly what the English notes say. When 
 change it here too. (First draft machine-written; to be checked by a Marathi speaker before release.)
 
 ## About the studio and classes
-- Satt Chitt Anand Yoga Classes (सत् चित् आनंद योग वर्ग) 1994 पासून चालू आहेत. सत्-चित्-आनंद म्हणजे सत्य, चैतन्य आणि आनंद.
+- Satt Chitt Anand Yoga Classes (सत्·चित्·आनन्द योग वर्ग) 1994 पासून चालू आहेत. सत्-चित्-आनंद म्हणजे सत्य, चैतन्य आणि आनंद.
 - वर्ग रोज, थेट ऑनलाइन, भारतीय वेळेनुसार सकाळी 8:00 ते 8:55, Google Meet वर होतात.
 - आठवड्याचे वेळापत्रक: सोमवार हठयोग, मंगळवार प्राणायाम, बुधवार विन्यास फ्लो, गुरुवार ध्यान, शुक्रवार हठयोग,
   शनिवार योगनिद्रा, रविवार सत्संग आणि मुक्त सराव.

@@ -183,6 +183,8 @@ test('check-ins feed the stats and the insights', () => {
   assert.deepEqual(insights.questions, { count: 0, gemma_latency_s: null });
   const row = insights.sessions.find((x) => x.id === id);
   assert.deepEqual([row.class, row.joined, row.mood_before, row.mood_after, row.answered_after], ['Hatha Yoga', 1, 2, 5, 1]);
+  const mr = b.call('GET', '/teacher/insights', { token: t.token, query: { lang: 'mr' } }).body;
+  assert.equal(mr.sessions.find((x) => x.id === id).class, 'हठयोग', 'the class names in the language asked');
 });
 
 test('checking in twice changes the mood, not the count', () => {
@@ -198,16 +200,20 @@ test('checking in twice changes the mood, not the count', () => {
   assert.equal(rows[0][5], 'Hatha Yoga'); // the copy for the owner's queries
 });
 
-test('the after check-in is offered once class ends, and only until it is answered', () => {
+test('the after check-in is offered once class ends, with what was said, to be changed until the window closes', () => {
   const b = freshBackend();
   const { code } = teacherAndCode(b);
   const s = signup(b, '9000000002', { code });
   const id = classStarted(b, 50);
   b.call('POST', '/sessions/' + id + '/checkin', { token: s.token, body: { phase: 'before', mood: 3 } });
-  assert.equal(b.call('GET', '/home', { token: s.token }).body.after_checkin.id, id);
-  assert.equal(b.call('GET', '/home', { token: s.token }).body.after_checkin.meet_link, null);
+  const home = () => b.call('GET', '/home', { token: s.token }).body.after_checkin;
+  assert.deepEqual([home().id, home().meet_link, home().said], [id, null, null]);
   b.call('POST', '/sessions/' + id + '/checkin', { token: s.token, body: { phase: 'after', mood: 4 } });
-  assert.equal(b.call('GET', '/home', { token: s.token }).body.after_checkin, null);
+  assert.deepEqual(home().said, { mood: 4, items: [] }, 'answered: still offered, to change');
+  b.call('POST', '/sessions/' + id + '/checkin', { token: s.token, body: { phase: 'after', mood: 5 } });
+  assert.equal(home().said.mood, 5, 'a second answer replaces the first');
+  b.state.offsetMs += 13 * 3600000;
+  assert.equal(home(), null, 'the window has closed');
 });
 
 test('the after check-in is not offered half a day after class', () => {
@@ -350,7 +356,7 @@ test('the invite carries the group code', () => {
   const { t, code } = teacherAndCode(b);
   const invite = b.call('GET', '/teacher/invite', { token: t.token, query: { lang: 'hi' } }).body;
   assert.ok(invite.text.includes('*' + code + '*'));
-  assert.ok(invite.text.startsWith('🙏 ऐप में सत् चित् आनंद योग से जुड़ें।'));
+  assert.ok(invite.text.startsWith('🙏 ऐप में सत्·चित्·आनन्द योग से जुड़ें।'));
   assert.equal(invite.group_link, null);
 });
 

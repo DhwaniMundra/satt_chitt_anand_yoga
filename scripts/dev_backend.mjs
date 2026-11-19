@@ -5,7 +5,8 @@
 //
 // It answers as the live web app does: a POST of the envelope gets a 302 to a one-time /echo address, which the client
 // then fetches with GET. A plain GET answers the health check. A new Sheet's teacher sign-up code is SCA_TEACHER_CODE,
-// else the one setup() made, printed at start.
+// else the one setup() made, printed at start. SCA_DELAY_MS holds each answer back that long, as the live web app takes
+// a second or more, to see the app's loading states.
 //
 // For the tour scripts, never the app: POST /dev/class {"class_key": "hatha", "minutes_from_now": -47} adds a 55-minute
 // class at that time (here, one under way), so the check-ins are open whatever the time of day.
@@ -18,6 +19,7 @@ import { FakeSheet, loadBackend } from '../appsscript/test/fakes.mjs';
 import { classStarted, setSetting, setting } from '../appsscript/test/helpers.mjs';
 
 const isDate = (v) => Object.prototype.toString.call(v) === '[object Date]';
+const DELAY_MS = Number(process.env.SCA_DELAY_MS || 0);
 
 /** The backend with its Sheet in `file`: read back when the file exists, else set up and saved. */
 export function open(file, teacherCode) {
@@ -74,7 +76,7 @@ function serve(b, host, port) {
       const key = randomUUID();
       replies.set(key, reply);
       setTimeout(() => replies.delete(key), 60000).unref();
-      res.writeHead(302, { Location: 'http://' + req.headers.host + '/echo?' + key }).end();
+      setTimeout(() => res.writeHead(302, { Location: 'http://' + req.headers.host + '/echo?' + key }).end(), DELAY_MS);
     });
   }).listen(port, host, () => console.log('dev backend on http://' + host + ':' + port));
 }
