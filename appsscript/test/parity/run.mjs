@@ -10,8 +10,7 @@ export const HERE = join(ROOT, 'test', 'parity');
 /** [{call: "METHOD /path", answer: {status, body}, skip: [keys]}], in order. */
 export function answers() {
   const steps = JSON.parse(readFileSync(join(HERE, 'scenario.json'), 'utf8'));
-  const b = loadBackend();
-  b.state.frozenMs = Date.parse('2026-11-18T03:00:00Z'); // 8:30 in India, during the day's class
+  const b = loadBackend({ now: Date.parse('2026-11-18T03:00:00Z') }); // 8:30 in India, during the day's class
   b.context.setup();
   setSetting(b, 'teacher_code', 'TEACH123');
   setSetting(b, 'group_code', 'GRP234');
