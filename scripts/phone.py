@@ -13,6 +13,7 @@ import subprocess
 import time
 import urllib.request
 import xml.etree.ElementTree as ET
+from typing import Callable
 from pathlib import Path
 
 PACKAGE = "com.sattchittanand.yoga"
@@ -63,9 +64,10 @@ def call(method: str, path: str, token: str = "", body: dict | None = None) -> d
     return reply["body"]
 
 
-def add_class(class_key: str, minutes_from_now: int) -> int:
-    """A 55-minute class starting at that time (negative: under way), so the check-ins are open whatever the hour."""
-    body = json.dumps({"class_key": class_key, "minutes_from_now": minutes_from_now}).encode()
+def add_class(batch: str, minutes_from_now: int) -> int:
+    """A 55-minute class of `batch` starting at that time (negative: under way), so the check-ins are open whatever the
+    hour."""
+    body = json.dumps({"batch": batch, "minutes_from_now": minutes_from_now}).encode()
     with urllib.request.urlopen(urllib.request.Request(BACKEND + "/dev/class", data=body), timeout=10) as answer:
         return json.load(answer)["id"]
 
@@ -137,9 +139,40 @@ def type_into(field_label: str, value: str) -> None:
     except TimeoutError:
         scroll_down()
     tap(field_label)
+    type_text(value)
+
+
+def type_text(value: str) -> None:
+    """Types `value` (ASCII) into the field that has the focus."""
     escaped = "".join("\\" + ch if ch in "()&;<>|*'\"$`!?#~\\" else ch for ch in value)  # the phone's shell reads it
     adb("shell", "input", "text", escaped.replace(" ", "%s"))
     time.sleep(0.4)
+
+
+def tap_under(anchor: str, label: str) -> None:
+    """Taps the first `label` below the element containing `anchor` (a reaction on one item's card, say), scrolling a
+    little at a time until both are on screen."""
+    tap_xy(*center(under(anchor, lambda n: (n.get("text") or n.get("content-desc")) == label, label)))
+
+
+def type_under(anchor: str, value: str) -> None:
+    """Types `value` into the first text box below the element containing `anchor`, then closes the keyboard."""
+    tap_xy(*center(under(anchor, lambda n: n.get("class") == "android.widget.EditText", "a text box")))
+    type_text(value)
+    hide_keyboard()
+
+
+def under(anchor: str, wanted: Callable[[ET.Element], bool], what: str) -> ET.Element:
+    """The first element below the one containing `anchor` that is `wanted`, scrolling a little at a time."""
+    for _ in range(12):
+        found = nodes()
+        tops = [center(n)[1] for n, _ in found if anchor in (n.get("text") or "")]
+        below = [(center(n)[1], n) for n, _ in found if tops and wanted(n) and center(n)[1] > tops[0]]
+        if below:
+            return min(below, key=lambda pair: pair[0])[1]
+        adb("shell", "input", "swipe", "540", "1500", "540", "1000", "400")
+        time.sleep(0.8)
+    raise TimeoutError(f"{what} under '{anchor}' not on screen")
 
 
 def back() -> None:
@@ -154,6 +187,12 @@ def hide_keyboard() -> None:
 
 def scroll_down() -> None:
     adb("shell", "input", "swipe", "540", "1800", "540", "700", "400")
+    time.sleep(0.8)
+
+
+def scroll_to_top() -> None:
+    for _ in range(6):
+        adb("shell", "input", "swipe", "540", "700", "540", "1900", "150")
     time.sleep(0.8)
 
 
