@@ -14,8 +14,8 @@
 const STUDIO = {
   "name": {
     "en": "Satt Chitt Anand Yoga",
-    "hi": "सत् चित् आनंद योग",
-    "mr": "सत् चित् आनंद योग"
+    "hi": "सत्·चित्·आनन्द योग",
+    "mr": "सत्·चित्·आनन्द योग"
   },
   "tagline": {
     "en": "Truth · Consciousness · Bliss",
@@ -2410,6 +2410,12 @@ function ensureWeek_(ctx) {
   });
 }
 
+/** Whether a class's after-class window is open at [now]: from 10 minutes before its end to 12 hours after it. */
+function afterOpen_(session, now) {
+  const end = session.starts_at + session.duration_min * 60000;
+  return end - 10 * 60000 <= now && now <= end + 12 * 3600000;
+}
+
 /** Sessions that have not ended yet, soonest first. */
 function upcoming_(ctx, limit) {
   ensureWeek_(ctx);
@@ -2678,9 +2684,8 @@ function sessionPractice_(ctx) {
   const { path, body } = ctx.check({ path: PATH_SESSION_, body: BODY_.practice });
   if (user.status !== 'approved') throw new HttpError_(403, 'pending');
   const row = sessionRow_(ctx, path.session_id);
-  const end = row.starts_at + row.duration_min * 60000;
   const joined = ctx.db.t('checkins').rows.some((c) => c.user_id === user.id && c.session_id === row.id && c.phase === 'before');
-  if (!joined || ctx.now < end - 10 * 60000 || ctx.now > end + 12 * 3600000) throw new HttpError_(400, 'checkin_closed');
+  if (!joined || !afterOpen_(row, ctx.now)) throw new HttpError_(400, 'checkin_closed');
   const library = curriculum_(ctx).library;
   const kept = saidEntries_(body.entries, library);
   const table = ctx.db.t('practice');
@@ -3053,19 +3058,23 @@ function home_(ctx) {
     s.curriculum = plan[r.id];
     return s;
   });
-  // The last class this person joined that has (nearly) ended, with no "after" check-in and nothing said about its items.
+  // The last class this person joined whose after-class window is open, with what they have said about it so far
+  // (null before they answer), so they can say it or change it.
   const byId = sessionsById_(ctx);
-  const waiting = Object.keys(joined)
+  const open = Object.keys(joined)
     .map((id) => byId[id])
-    .filter((s) => s && s.starts_at <= ctx.now && !answered[s.id])
+    .filter((s) => s && afterOpen_(s, ctx.now))
     .sort((a, b) => b.starts_at - a.starts_at)[0];
   let after = null;
-  if (waiting) {
-    const end = waiting.starts_at + waiting.duration_min * 60000;
-    if (end - 10 * 60000 <= ctx.now && ctx.now <= end + 12 * 3600000) {
-      after = sessionJson_(waiting, lang, false, null);
-      after.curriculum = plan[waiting.id];
-    }
+  if (open) {
+    after = sessionJson_(open, lang, false, null);
+    after.curriculum = plan[open.id];
+    const mood = checkins.filter((c) => c.session_id === open.id && c.phase === 'after').map((c) => c.mood)[0];
+    after.said = !answered[open.id] ? null : {
+      mood: mood === undefined ? null : mood,
+      items: ctx.db.t('practice').rows.filter((p) => p.user_id === user.id && p.session_id === open.id)
+        .map((p) => ({ item: p.item, reaction: p.reaction, pain: p.pain, note: p.note })),
+    };
   }
   return {
     user: userJson_(user),
@@ -3090,7 +3099,7 @@ function checkin_(ctx) {
   if (body.phase === 'before') {
     open = start - CHECKIN_BEFORE_MIN_ * 60000 <= now && now <= end;
   } else {
-    open = Boolean(mine('before')) && end - 10 * 60000 <= now && now <= end + 12 * 3600000;
+    open = Boolean(mine('before')) && afterOpen_(row, now);
   }
   if (!open) throw new HttpError_(400, 'checkin_closed');
   const existing = mine(body.phase);
@@ -3219,6 +3228,7 @@ function resetPassword_(ctx) {
 /** How the last two weeks of classes went, from the students' one-tap check-ins and feedback. */
 function insights_(ctx) {
   teacher_(ctx);
+  const { query } = ctx.check({ query: QUERY_LANG_ });
   const now = ctx.now;
   const checkins = ctx.db.t('checkins').rows;
   const bySession = {};
@@ -3233,7 +3243,7 @@ function insights_(ctx) {
       const list = bySession[s.id] || [];
       const before = list.filter((c) => c.phase === 'before').map((c) => c.mood);
       const after = list.filter((c) => c.phase === 'after').map((c) => c.mood);
-      return { id: s.id, starts_at: isoTime_(s.starts_at), class: classInfo_(s.class_key, 'en').name, joined: before.length,
+      return { id: s.id, starts_at: isoTime_(s.starts_at), class: classInfo_(s.class_key, query.lang).name, joined: before.length,
         mood_before: mean(before), mood_after: mean(after), answered_after: after.length };
     });
   const [change, pairs] = moodChange_(checkins);

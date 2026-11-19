@@ -11,13 +11,20 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.text.TextAutoSize
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LocalContentColor
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -27,13 +34,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.isSpecified
 import androidx.compose.ui.unit.sp
+import com.sattchittanand.yoga.AppViewModel
 import com.sattchittanand.yoga.R
 import java.time.Duration
 import java.time.Instant
@@ -83,32 +94,80 @@ fun Pill(text: String, background: Color = Palette.mossLight, color: Color = Pal
     }
 }
 
+/** Errors a form shows beside its own field; any other error shows in a snackbar, on any tab. */
+val FORM_ERRORS = setOf("bad_meet_link", "bad_group_link", "bad_group_code")
+
+/** What a screen shows until its data has come: a spinner while it loads; if it failed (the snackbar says why),
+ *  "Try again". */
+@Composable
+fun Waiting(vm: AppViewModel, retry: () -> Unit, modifier: Modifier = Modifier.fillMaxSize()) {
+    Column(modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically),
+        horizontalAlignment = Alignment.CenterHorizontally) {
+        if (vm.busy || vm.error == null) {
+            CircularProgressIndicator(color = Palette.moss)
+            Text(stringResource(R.string.loading), color = Palette.muted)
+        } else {
+            Text(stringResource(R.string.not_loaded), textAlign = TextAlign.Center)
+            Button(onClick = retry) { Text(stringResource(R.string.try_again)) }
+        }
+    }
+}
+
 /** A stopwatch's time: "1:05". */
 fun stopwatch(seconds: Int): String = "%d:%02d".format(seconds / 60, seconds % 60)
 
-/** Options side by side in one row, equal widths, at most one selected: the reactions after class, the curricula. */
+/** Whether the phone's font is large (1.5 times or more): a row of fixed slots then gives each slot more room. */
+@Composable
+fun largeFont() = LocalDensity.current.fontScale >= 1.5f
+
+/** One line that shrinks a little to fit its slot rather than break a word: for labels in fixed-width places. */
+@Composable
+fun FitText(text: String, modifier: Modifier = Modifier, style: TextStyle = LocalTextStyle.current, color: Color = LocalContentColor.current,
+    textAlign: TextAlign = TextAlign.Start) {
+    BasicText(text, modifier, style = style.copy(color = color, textAlign = textAlign), maxLines = 1,
+        autoSize = TextAutoSize.StepBased(minFontSize = 8.sp, maxFontSize = if (style.fontSize.isSpecified) style.fontSize else 14.sp))
+}
+
+/** Options side by side, equal widths, at most one selected: the reactions after class, the curricula. One row; two to
+ *  a row with a large font. */
 @Composable
 fun Choices(labels: List<String>, selected: Int?, enabled: Boolean = true, onPick: (Int) -> Unit) {
-    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        labels.forEachIndexed { i, label ->
-            val on = selected == i
-            Surface(
-                onClick = { onPick(i) },
-                enabled = enabled,
-                shape = MaterialTheme.shapes.small,
-                color = if (on) Palette.moss else Color.Transparent,
-                border = BorderStroke(1.dp, if (on) Palette.moss else Palette.line),
-                modifier = Modifier.weight(1f),
-            ) {
-                Text(label, Modifier.padding(vertical = 10.dp, horizontal = 4.dp), textAlign = TextAlign.Center,
-                    style = MaterialTheme.typography.labelMedium, color = if (on) Color.White else Palette.ink)
+    val perRow = if (largeFont()) 2 else labels.size
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        labels.indices.chunked(perRow).forEach { row ->
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                row.forEach { i ->
+                    val on = selected == i
+                    Surface(
+                        onClick = { onPick(i) },
+                        enabled = enabled,
+                        shape = MaterialTheme.shapes.small,
+                        color = if (on) Palette.moss else Color.Transparent,
+                        border = BorderStroke(1.dp, if (on) Palette.moss else Palette.line),
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        FitText(labels[i], Modifier.padding(vertical = 10.dp, horizontal = 4.dp), MaterialTheme.typography.labelMedium,
+                            if (on) Color.White else Palette.ink, TextAlign.Center)
+                    }
+                }
+                repeat(perRow - row.size) { Spacer(Modifier.weight(1f)) }
             }
         }
     }
 }
 
+/** Stat tiles, (value, label): side by side; one under another with a large font, so the labels keep whole words. */
 @Composable
-fun StatTile(value: String, label: String, modifier: Modifier = Modifier) {
+fun StatTiles(vararg tiles: Pair<String, String>) {
+    if (largeFont()) {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) { tiles.forEach { (value, label) -> StatTile(value, label, Modifier.fillMaxWidth()) } }
+    } else {
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) { tiles.forEach { (value, label) -> StatTile(value, label, Modifier.weight(1f)) } }
+    }
+}
+
+@Composable
+private fun StatTile(value: String, label: String, modifier: Modifier) {
     SectionCard(modifier, tint = Palette.mossLight) {
         Text(value, style = MaterialTheme.typography.headlineSmall, color = Palette.moss)
         Text(label, style = MaterialTheme.typography.labelMedium, color = Palette.muted)

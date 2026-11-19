@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Hindi. Draft translation: to be read and corrected by a native speaker before release. -->
 <resources>
-    <string name="app_name">सत् चित् आनंद</string>
+    <string name="app_name">सत्·चित्·आनन्द</string>
 
     <string name="welcome_sub">%1$s के साथ लाइव योग, हर सुबह 8 बजे।</string>
     <string name="language">भाषा</string>
@@ -59,6 +59,9 @@
     <string name="how_feel_after">कक्षा पूरी! अब आप कैसा महसूस कर रहे हैं?</string>
     <string name="how_did_it_go">कैसा रहा?</string>
     <string name="tell_teacher">%1$s को बताएँ</string>
+    <string name="told_teacher">आपने %1$s को बता दिया कि कैसा रहा</string>
+    <string name="change_until">%1$s तक बदल सकते हैं</string>
+    <string name="change">बदलें</string>
     <string name="after_class_help">हर एक पर एक टैप; जो चाहें छोड़ दें।</string>
     <string name="reaction_1">अभी नहीं</string>
     <string name="reaction_2">मेहनत से</string>
@@ -88,7 +91,7 @@
     <string name="sugg_1">इस हफ्ते मेरी प्रैक्टिस कैसी रही?</string>
     <string name="sugg_2">कमर दर्द के लिए योग?</string>
     <string name="sugg_3">कल कौन सी कक्षा मेरे लिए ठीक रहेगी?</string>
-    <string name="sugg_4">सत् चित् आनंद का अर्थ क्या है?</string>
+    <string name="sugg_4">सत्·चित्·आनन्द का अर्थ क्या है?</string>
     <string name="chat_clear">साफ़ करें</string>
     <string name="tool_practice">आपका अभ्यास देखा</string>
     <string name="tool_schedule">कक्षाओं का समय देखा</string>
@@ -121,7 +124,10 @@
     <string name="share_whatsapp">व्हाट्सऐप पर भेजें</string>
     <string name="uses_standing_link">रोज़ का लिंक लगा है</string>
     <string name="no_link_yet">अभी लिंक नहीं है</string>
-    <string name="joined_count">%1$d जुड़े</string>
+    <plurals name="joined_count">
+        <item quantity="one">%d जुड़ा</item>
+        <item quantity="other">%d जुड़े</item>
+    </plurals>
     <string name="settings_title">कक्षा लिंक और ग्रुप</string>
     <string name="standing_link">रोज़ का Meet लिंक</string>
     <string name="standing_link_help">जिस कक्षा का अपना लिंक नहीं, उसमें यही लगेगा।</string>
@@ -141,7 +147,10 @@
     <string name="no_students">अभी कोई विद्यार्थी नहीं। व्हाट्सऐप पर इनवाइट भेजें।</string>
     <string name="insights_title">कक्षाएँ कैसी चल रही हैं</string>
     <string name="avg_lift">औसत मूड सुधार</string>
-    <string name="pairs">%1$d पहले-और-बाद के चेक-इन से</string>
+    <plurals name="pairs">
+        <item quantity="one">%d पहले-और-बाद के चेक-इन से</item>
+        <item quantity="other">%d पहले-और-बाद के चेक-इन से</item>
+    </plurals>
     <string name="last_two_weeks">पिछले दो सप्ताह</string>
     <string name="before">पहले</string>
     <string name="after">बाद में</string>
@@ -154,6 +163,9 @@
     <string name="review_empty">अभी किसी ने नहीं बताया कि कैसा रहा।</string>
     <string name="each_item">हर आसन कैसा चल रहा है</string>
     <string name="no_items">कक्षा के बाद बताएँ कि हर आसन कैसा रहा; वह यहाँ दिखेगा।</string>
+    <string name="loading">लोड हो रहा है…</string>
+    <string name="not_loaded">यह लोड नहीं हो सका।</string>
+    <string name="no_items_teacher">अभी किसी आसन के बारे में कुछ नहीं बताया गया।</string>
     <string name="trend_line">शुरू में: %1$s · हाल में: %2$s</string>
     <string name="teacher_wrote">%1$s ने लिखा</string>
     <string name="you_wrote">आपने लिखा</string>
@@ -207,7 +219,7 @@
     <string name="gemma_download_failed">डाउनलोड रुक गया। इंटरनेट देखें और फिर कोशिश करें।</string>
     <string name="gemma_start_failed">Gemma इस फ़ोन पर शुरू नहीं हो सका।</string>
     <string name="try_again">फिर कोशिश करें</string>
-    <string name="gemma_download_title">सत् चित् आनंद के लिए Gemma</string>
+    <string name="gemma_download_title">सत्·चित्·आनन्द के लिए Gemma</string>
     <string name="gemma_download_note">आपके फ़ोन के लिए अभ्यास साथी (एक बार)</string>
     <string name="share_note">%1$s से साझा करें</string>
     <string name="shared_note">%1$s से साझा किया</string>

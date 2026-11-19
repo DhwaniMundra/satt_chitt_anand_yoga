@@ -90,7 +90,8 @@ test('after class, a student says how each item went; a second send replaces the
   assert.equal(new Date(tab()[0][9].getTime() + 330 * MIN).getUTCDay(), 1, 'the week is its Monday, in India');
   assert.equal(practice(b, s.token, id, [{ item: 'vajrasana', reaction: 3 }]).body.saved, 1);
   assert.deepEqual(tab().map((row) => [row[3], row[4]]), [['vajrasana', 3]]);
-  assert.equal(b.call('GET', '/home', { token: s.token }).body.after_checkin, null, 'answered: no more after-class card');
+  assert.deepEqual(b.call('GET', '/home', { token: s.token }).body.after_checkin.said,
+    { mood: null, items: [{ item: 'vajrasana', reaction: 3, pain: 0, note: null }] }, 'what was said, to change it');
   assert.equal(practice(b, t.token, id, []).body.detail, 'checkin_closed');
 });
 

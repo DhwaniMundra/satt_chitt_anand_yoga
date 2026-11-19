@@ -227,7 +227,7 @@ Keywords: philosophy, eight limbs, ashtanga, patanjali, yama, niyama, samadhi, �
 - Posture is only one part; the classes also train breath, attention and rest.
 
 ## Sat Chit Ananda
-Keywords: sat chit ananda, satt chitt anand, meaning, name, सत् चित् आनंद, सच्चिदानंद, अर्थ
+Keywords: sat chit ananda, satt chitt anand, meaning, name, सत्·चित्·आनन्द, सत् चित् आनंद, सच्चिदानंद, अर्थ
 
 - Sat-Chit-Ananda (सच्चिदानंद) is a Sanskrit description of the true Self: Sat (truth, being), Chit (consciousness,
   awareness) and Ananda (bliss, joy).

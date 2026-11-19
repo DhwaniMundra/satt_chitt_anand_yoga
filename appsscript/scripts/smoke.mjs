@@ -39,7 +39,7 @@ const CHECKS = [
   ['GET (no envelope)', get, (r) => assert.deepEqual(r, { status: 200, body: { ok: true, assistant: 'off', model: null } })],
   ['/health', () => call('GET', '/health'), (r) => assert.equal(r.body.ok, true)],
   ['/studio en', () => call('GET', '/studio'), (r) => assert.equal(r.body.name, 'Satt Chitt Anand Yoga')],
-  ['/studio hi', () => call('GET', '/studio', { query: { lang: 'hi' } }), (r) => assert.equal(r.body.name, 'सत् चित् आनंद योग')],
+  ['/studio hi', () => call('GET', '/studio', { query: { lang: 'hi' } }), (r) => assert.equal(r.body.name, 'सत्·चित्·आनन्द योग')],
   ['/studio mr', () => call('GET', '/studio?lang=mr'), (r) => assert.equal(r.body.weekly[0].class.name, 'हठयोग')],
   ['/studio bad lang', () => call('GET', '/studio', { query: { lang: 'fr' } }), (r) => assert.equal(r.status, 422)],
   ['bad envelope', () => post('not json'), (r) => assert.deepEqual([r.status, r.body.detail], [400, 'bad_envelope'])],

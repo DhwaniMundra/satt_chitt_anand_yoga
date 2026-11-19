@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Satt Chitt Anand</string>
-    <string name="brand_devanagari" translatable="false">सत् · चित् · आनंद</string>
+    <string name="brand_devanagari" translatable="false">सत्·चित्·आनन्द</string>
     <string name="brand_latin" translatable="false">Satt Chitt Anand</string>
 
     <!-- Welcome and sign in -->
@@ -64,6 +64,9 @@
     <string name="how_feel_after">Class done! How do you feel now?</string>
     <string name="how_did_it_go">How did it go?</string>
     <string name="tell_teacher">Tell %1$s</string>
+    <string name="told_teacher">You told %1$s how it went</string>
+    <string name="change_until">you can change it until %1$s</string>
+    <string name="change">Change</string>
     <string name="after_class_help">One tap each; skip any.</string>
     <string name="reaction_1">Not yet</string>
     <string name="reaction_2">With effort</string>
@@ -130,7 +133,10 @@
     <string name="share_whatsapp">Share on WhatsApp</string>
     <string name="uses_standing_link">Using your everyday link</string>
     <string name="no_link_yet">No link yet</string>
-    <string name="joined_count">%1$d joined</string>
+    <plurals name="joined_count">
+        <item quantity="one">%d joined</item>
+        <item quantity="other">%d joined</item>
+    </plurals>
     <string name="settings_title">Class links and group</string>
     <string name="standing_link">Everyday Meet link</string>
     <string name="standing_link_help">Used for every class that has no link of its own.</string>
@@ -150,7 +156,10 @@
     <string name="no_students">No students yet. Share the invite on WhatsApp.</string>
     <string name="insights_title">How classes are going</string>
     <string name="avg_lift">Average mood lift</string>
-    <string name="pairs">from %1$d before-and-after check-ins</string>
+    <plurals name="pairs">
+        <item quantity="one">from %d before-and-after check-in</item>
+        <item quantity="other">from %d before-and-after check-ins</item>
+    </plurals>
     <string name="last_two_weeks">Last two weeks</string>
     <string name="before">Before</string>
     <string name="after">After</string>
@@ -163,6 +172,9 @@
     <string name="review_empty">No one has said how it went yet.</string>
     <string name="each_item">How each item has gone</string>
     <string name="no_items">After class, say how each item went; it shows here.</string>
+    <string name="loading">Loading…</string>
+    <string name="not_loaded">This could not be loaded.</string>
+    <string name="no_items_teacher">Nothing said about any item yet.</string>
     <string name="trend_line">At first: %1$s · lately: %2$s</string>
     <string name="teacher_wrote">%1$s wrote</string>
     <string name="you_wrote">You wrote</string>
