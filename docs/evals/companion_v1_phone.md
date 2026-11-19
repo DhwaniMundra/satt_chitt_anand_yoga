@@ -265,7 +265,7 @@ in Latin letters, it gives the teacher's words but not how the pose has felt, an
 
 ## Held-out questions
 
-Written after the prompt was last changed, and asked once; none was used to change it. Passed the automatic checks: 5/5.
+Written after the prompt's last change, and asked once; the prompt was not changed for them. Passed the automatic checks: 5/5.
 
 | id | lang | tools | language | includes | excludes | no loop | time |
 |---|---|---|---|---|---|---|---|

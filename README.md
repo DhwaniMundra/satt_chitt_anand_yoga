@@ -1,89 +1,98 @@
 # Satt Chitt Anand
 
-An Android app for an online yoga studio, its teacher and its students.
+A practice tracker for an online yoga studio: students say how each asana went, in class and on their own, and the
+teacher reads it to guide them.
 
-![The app: the teacher's classes, a student's Today screen, and the assistant](docs/media/figures/hero.png)
+<!-- Dhwani: your own sentences go here. -->
 
-**[▶ Watch the three-minute tour](docs/media/video/satt_chitt_anand_tour_720p.mp4)** (narrated, with captions) ·
-[What it does](#what-it-does) · [How it was made](#how-it-was-made) · [Try it](#try-it)
+## The studio
 
-## The brief
-
-A teacher runs a live class every morning on Google Meet for a class of about ten students, who keep in touch in one
-WhatsApp group. The app had to fit around that, not replace it:
-
-- the day's class and its link one tap away, without scrolling back through the group;
-- the teacher shares the link once, in the group where the class already talks;
-- everyday questions about practice and health answered in the student's own language, without the app ever acting
-  as a doctor.
+The teacher teaches live on Google Meet, in four batches (Beginner, Intermediate, Advanced and Pain management), each
+with its own days, time and link. The class keeps in touch in one WhatsApp group. The app fits around that: the
+teacher shares each class's link into the group from the app, and the app keeps what WhatsApp cannot, a record of each
+student's practice.
 
 ## What it does
 
-![For students: join with a one-tap check-in, breathe, ask, in Hindi or Marathi](docs/media/gifs/students.gif)
+<p>
+  <img src="docs/media/v1/today.png" width="24%" alt="A student's Today: her batch and its next class">
+  <img src="docs/media/v1/after_class.png" width="24%" alt="After class: a reaction for each item, strain or pain, a note">
+  <img src="docs/media/v1/item_history.png" width="24%" alt="One asana's history, with the teacher's feedback">
+  <img src="docs/media/v1/ask.png" width="24%" alt="Ask: Gemma on the phone answers about the student's own asana">
+</p>
 
-- **Ask knows your practice.** "How was my practice this week?" gets the student's own classes and moods; "Which
-  class suits me tomorrow?" checks the schedule; "Remember that my knee hurts" is kept for later.
+**For a student**
+- **Joining.** Sign up with the group code from the WhatsApp invite, then tell the teacher about yourself: age, height,
+  weight, food habits, any pain, and how six poses feel today. The teacher places you in a batch.
+- **Today.** Your batch's next class, its sequence, and the Meet link. After class, one tap per item: not yet, with
+  effort, steady or at ease, "felt strain or pain", and a note if you like.
+- **Practice.** How each asana has gone, in class and on your own, and what the teacher wrote about it. Practise on
+  your own with a stopwatch per item.
+- **Ask.** Gemma 4, running on the phone, answers from your own practice and the studio's notes, in English, Hindi or
+  Marathi: "How is my Setu Bandhasana going?", "When is my next class?".
 
-![For the teacher: share the class link, approve students, see how classes went](docs/media/gifs/teacher.gif)
+<p>
+  <img src="docs/media/v1/students.png" width="24%" alt="Students: a new student's answers and the batch they point to">
+  <img src="docs/media/v1/feedback.png" width="24%" alt="The teacher's feedback on a student's asana">
+  <img src="docs/media/v1/review.png" width="24%" alt="How a class went: strain or pain first">
+  <img src="docs/media/v1/insights.png" width="24%" alt="Insights: mood before and after each class">
+</p>
 
-![Two phones, one server: the teacher shares the link, a student joins and checks in](docs/media/gifs/two_phones.gif)
-
-## A morning with the app
-
-![A morning with the app: what the teacher and a student do, and what happens behind the scenes](docs/media/diagrams/journey.png)
-
-## Design choices
-
-- **Keep WhatsApp where it is.** The app does not read the group. The teacher shares into it from the app, and a group
-  code posted there lets students in.
-- **One tap, no reading.** Five faces before and after class; a breathing circle that grows and shrinks.
-- **The students' own languages.** Screens, class names and answers in English, Hindi and Marathi.
-- **Careful with health.** The assistant answers only from notes the studio can read and correct. It never diagnoses or
-  touches medicines, and emergency signs get a fixed reply pointing to 112, with no AI involved.
-- **Code does the sums.** The assistant looks up only the signed-in student's own data, through tools that hand it
-  totals and averages worked out in code, so a small model never has to add up rows.
-- **Ask before sharing anything.** A student's chat and what the assistant remembers are theirs: the teacher cannot
-  see them and they are not in the studio's backup. The studio sees the words of a question only if they agree.
-
-Each choice, with the alternatives considered: [`docs/decisions.md`](docs/decisions.md).
+**For the teacher**
+- **Today.** One card per batch: the class's sequence and its link, shared to WhatsApp in one tap.
+- **Students.** A new student's answers and the batch they point to; approve into it, or move a student later with a
+  note. Each student's asanas, and feedback on any of them.
+- **Insights.** Mood before and after each class, and how each class went item by item, strain or pain first.
 
 ## How it works
 
-![How it works: the phone app, and the studio's laptop with the server, the notes and Gemma](docs/media/diagrams/how_it_works.png)
+```mermaid
+flowchart LR
+    S[Student's phone<br/>the app + Gemma 4] -- "classes, check-ins,<br/>how each item went" --> B[Apps Script web app<br/>over a Google Sheet]
+    T[Teacher's phone<br/>the app] -- "batches, links,<br/>feedback" --> B
+    B --> O[The studio's Sheet<br/>tabs + a Dashboard]
+    T -- "the class link" --> W[WhatsApp group]
+    W --> S
+```
 
-An Android app, and a small server on the studio's laptop. The assistant is **Gemma 4**, an open model that runs on the
-laptop's graphics card, so questions do not go to an outside AI service.
+- **The backend** is a Google Apps Script web app over a Google Sheet in the studio's Drive: free, with nothing to run,
+  and every table a tab the studio can read. ([`appsscript/`](appsscript/README.md))
+- **Gemma 4 E2B runs on the phone**, an opt-in download of 2.6 GB. A student's questions and the health notes they keep
+  stay on the phone. Its tools hand it only that student's data, with the sums done in code and every average in
+  words. A phone with too little memory is told so.
+
+## Careful with health
+
+- Gemma never diagnoses, promises a cure or touches a medicine. Emergency signs get a fixed reply with 112 and
+  Tele-MANAS (14416), before any model runs.
+- Only the student and the teacher see what a student says about themselves; the Sheet's Dashboard shows it only as
+  counts.
+- Every answer Gemma gave in the evaluation was read against the data
+  ([`companion_v1_phone`](docs/evals/companion_v1_phone.md)). Its Marathi is the weak spot; a Marathi reader checks it.
 
 ## How it was made
 
-![Made in small rounds: build, tour, ask, read, fix](docs/media/diagrams/rounds.png)
+In rounds, from v0.1 to v1.0. Each round, a script walks through the app on an Android emulator, and the companion is
+asked the same questions in three languages. Then every screen and every answer is read, and what reading finds is
+fixed, with a test where one fits. One finding of v1.0: Gemma reported an average reaction of 2.0 ("with effort") as "not yet",
+so the tools now hand it the words, worked out in code.
 
-Five rounds so far. Each round, a script walks through every screen on an Android emulator, and the assistant is asked
-the same questions in three languages. Then every screen and every answer is read, as a student would. Two things the
-first tour caught:
-
-![Before and after: finding 'Log in', and a Hindi question the assistant missed](docs/media/figures/before_after.png)
-
-The hardest finding came from reading, not scoring: Marathi answers passed every automatic check, yet some changed
-the facts, such as "avoid lying on the belly" where the notes say "on the back". Giving the assistant notes written in
-Marathi, instead of letting it translate, brought those errors from seven to none.
-
-The full record: [iteration log](docs/iterations/README.md) · [assistant evaluations, every answer](docs/evals/) ·
-[design decisions](docs/decisions.md).
+The record: [iteration log](docs/iterations/README.md) · [evaluations, every answer](docs/evals/) ·
+[decisions](docs/decisions.md) · [development](docs/DEVELOPMENT.md).
 
 ## Try it
 
 On the laptop that holds the toolchain:
 
 ```bash
-scripts/demo.sh two     # the server, two phones, and the app; scripts/demo.sh stop to finish
+scripts/demo.sh         # the dev backend on demo data, the 6 GB emulator with Gemma, and the app; demo.sh stop ends it
 ```
 
-Password `demo123`: teacher `9800000001`, students `9800000002` to `9800000006`. Setup, tests, tours and the video:
-[`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md).
+Password `demo123`: the teacher `9800000001`; students `9800000002` to `9800000006` and `9800000008`; `9800000007` is
+waiting to be placed. The demo's people and practice are synthetic.
 
 ## Credits
 
 Designed and directed by **Dhwani Mundra**: the brief, the product decisions, and every round of critique and changes.
 The code, tours and evaluations were written with **Claude Code**, an AI coding agent, working from her direction.
-Studio content: Satt Chitt Anand Yoga Classes, Ramit M Tippannavar.
+Studio content: Satt Chitt Anand Yoga Classes.

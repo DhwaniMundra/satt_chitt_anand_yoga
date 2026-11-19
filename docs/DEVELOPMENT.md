@@ -4,89 +4,106 @@ Everything needed to run, test and change the app. The README is the overview; t
 
 ## Requirements
 
-Linux with an NVIDIA GPU. The toolchain (JDK 21, Android SDK, emulator image) and the Gemma model live in `tools/` and
-`models/`, which git ignores (see [a fresh machine](#a-fresh-machine)).
+Linux. The toolchain (JDK 21, Android SDK and emulator images, Node 22) and the Gemma model live in `tools/` and
+`models/`, which git ignores (see [a fresh machine](#a-fresh-machine)). Gemma runs on the phone, so the laptop needs no
+GPU.
 
 ## Run it
 
 **A demo, in one command**
 ```bash
-scripts/demo.sh          # server with Gemma on demo data, an emulator, the app open
-scripts/demo.sh two      # a second phone: teacher on one, student on the other
+scripts/demo.sh          # the dev backend on demo data, the 6 GB emulator, the app open
+scripts/demo.sh two      # two 2 GB phones: the teacher on one, a student on the other
 scripts/demo.sh stop
 ```
-Logins, password `demo123`: teacher `9800000001`; students `9800000002` to `9800000006`; `9800000007` is waiting for
-approval.
+Logins, password `demo123`: the teacher `9800000001`; students `9800000002` to `9800000006` and `9800000008` (Asha
+is in the Intermediate batch, Kavita in Pain management); `9800000007` (Neha) is waiting to be placed, with her answers
+given.
+For Ask, download Gemma once in the app (2.6 GB, kept on the emulator).
 
 **Step by step**
 ```bash
-source scripts/env.sh                  # points java, adb and the emulator at tools/
-scripts/run_backend.sh                 # API on :8000, Gemma loads in the background (SCA_GEMMA=off to skip)
-scripts/build_app.sh                   # android/app/build/outputs/apk/debug/app-debug.apk
-scripts/run_emulator.sh                # boots tools/avd/sca_phone
+source scripts/env.sh                                   # java, node, adb and the emulator from tools/
+node scripts/seed_demo.mjs data/demo.json               # the synthetic demo (or skip it: an empty Sheet)
+node scripts/dev_backend.mjs data/demo.json             # port 8000; SCA_DELAY_MS=1500 to feel the live speed
+scripts/build_app.sh                                    # android/app/build/outputs/apk/debug/app-debug.apk
+SCA_AVD=sca_phone_big scripts/run_emulator.sh           # the 6 GB phone, which runs Gemma (sca_phone has 2 GB)
 adb install -r android/app/build/outputs/apk/debug/app-debug.apk
 ```
-The server prints the teacher sign-up code when it starts (or set `SCA_TEACHER_CODE`). The emulator reaches the laptop
-at `http://10.0.2.2:8000`. A phone on the same Wi-Fi needs the laptop's address: build with
-`scripts/build_app.sh -PscaServer=http://<laptop IP>:8000`, or change **Server address** on the first screen.
+The dev backend is the live backend's own `appsscript/dist/Code.gs`, run in Node on the test fakes, with its Sheet in
+a JSON file. On an empty Sheet it prints the teacher sign-up code (or set `SCA_TEACHER_CODE`). The emulator reaches
+the laptop at `http://10.0.2.2:8000`; for a phone on the same Wi-Fi, build with
+`scripts/build_app.sh -PscaServer=http://<laptop IP>:8000`.
 
-**Backups** (optional): a private GitHub repository and a fine-grained token with read and write access to its
-contents; set `SCA_BACKUP_REPO=owner/name` and `SCA_GITHUB_TOKEN=…` before starting the server. An empty server
-restores from the last backup.
+**The release**
+```bash
+scripts/build_app.sh --release              # signed, arm64-v8a, for the live web app: .local/release/
+scripts/build_app.sh --release -Pabi=x86_64 # the same app for the emulator, to test the shrunk build there
+```
+It reads the live web app's URL from `.local/live_backend_url.txt` and signs with the key in `.local/release/`, made
+by the first release build; both stay out of git, and every later release needs the same key. Setting up and updating
+the live backend: [`appsscript/README.md`](../appsscript/README.md).
+
+To try the shrunk app against the dev backend, Gemma and its tools included (R8 must keep what LiteRT-LM reads by
+reflection), build the release for the emulator with the dev backend's address and the debug key, so it installs over
+the debug app and keeps the downloaded model:
+```bash
+cd android && ./gradlew assembleRelease -Pabi=x86_64 -PscaServer=http://10.0.2.2:8000 -Psigning=<debug key's properties>
+```
+The properties file names `~/.android/debug.keystore` (`storePassword`, `keyPassword`: `android`; `keyAlias`:
+`androiddebugkey`). A release allows plain HTTP only when built against such an `http://` address.
 
 ## Test
 
 ```bash
-cd backend && .venv/bin/python -m pytest -q                        # 95 tests: API, retrieval, safety path, backup, companion
-.venv/bin/python -m scripts.eval_assistant ../docs/evals/next.md   # the assistant's question set; stop the server first
-.venv/bin/python -m scripts.eval_companion ../data/demo.sqlite3 ../docs/evals/next_companion.md  # the companion's conversations
+node --test 'appsscript/test/*.test.mjs'                                 # the backend: every route, on fakes of the Sheet
+SCA_TEST_NOW=2026-11-22T18:31:00Z node --test 'appsscript/test/*.test.mjs'  # the same at another moment
+node appsscript/scripts/build.mjs --check                                # dist/Code.gs is the build of src/ and content/
+cd android && ./gradlew testDebugUnitTest                                # the app's JVM tests: the companion, notes, solo
+python3 scripts/eval_phone.py docs/evals/next_phone.md                   # Gemma in the app on the 6 GB emulator
+SCA_WEBAPP_URL=<url> node appsscript/scripts/smoke.mjs 5                 # the live web app, with requests that write no row
 ```
-The companion's evaluation runs on a copy of the demo database; `SCA_MODEL=<path to a .litertlm>` picks the model
-(E4B by default; the reports compare E2B and E4B). Run one evaluation at a time, with the server stopped. The checks
-are coarse; read every answer in the report before trusting a pass.
+The backend's tests run at a frozen moment; `SCA_TEST_NOW` runs them at another ([how](../appsscript/README.md#tests)). The phone evaluation needs the dev backend on the demo data and Gemma
+downloaded; it asks each question in a fresh chat, reads the reply from the screen and writes every answer out. Its
+checks are coarse: read every answer before trusting a pass.
 
 ## Tour it and make the media
 
-Raw screenshots and recordings stay in `.local/visualization/` (git ignores it): files worth watching on top, raw
-screenshots in `tours/`, build files in `work/`. Only what the README and the iteration log show goes in `docs/media/`.
+Raw screenshots and recordings stay in `.local/visualization/` (git ignores it): `viz_<major>/` holds the videos on
+top and each version's screenshots in `screens/<version>/`. Only what the README and the iteration log show goes in
+`docs/media/`.
 
 ```bash
-cd backend && .venv/bin/python -m scripts.seed_demo ../data/demo.sqlite3 && cd ..
-SCA_DB=$PWD/data/demo.sqlite3 scripts/run_backend.sh
-python3 scripts/capture_tour.py v0.5 data/demo.sqlite3                   # one version's screenshots and recordings
-python3 scripts/two_phone_test.py v0.5-two-phones http://10.0.2.2:8000 data/two_phones.sqlite3 <teacher code>
-scripts/setup_media.sh                                                   # once: tools/media-venv
-tools/media-venv/bin/python scripts/make_figures.py                      # hero, GIF strips, contact sheets
-tools/media-venv/bin/python scripts/make_diagrams.py                     # the three diagrams
-tools/media-venv/bin/python scripts/make_video.py                        # the narrated tour (Kokoro-82M voice)
-python3 scripts/preview_readme.py                                        # the README as GitHub renders it
+python3 scripts/capture_tour.py v1.0                       # one version's screenshots and recordings (6 GB emulator)
+python3 scripts/two_phone_test.py v1.0-two-phones PILOT1   # two 2 GB emulators, one dev backend, an empty Sheet
+scripts/setup_media.sh                                     # once: tools/media-venv
+tools/media-venv/bin/python scripts/make_figures.py        # hero, GIF strips, contact sheets
+tools/media-venv/bin/python scripts/make_diagrams.py       # the diagrams
+tools/media-venv/bin/python scripts/make_video.py          # the narrated tour (Kokoro-82M voice)
+python3 scripts/preview_readme.py                          # the README as GitHub renders it
 ```
-The two-phone test needs a second emulator: `SCA_AVD=sca_phone_2 SCA_PORT=5556 scripts/run_emulator.sh`, and a server
-on a fresh database started with `SCA_TEACHER_CODE`.
+Both start their own dev backend, so stop any other first (`scripts/demo.sh stop`). The two-phone test needs a second
+emulator: `SCA_AVD=sca_phone_2 SCA_PORT=5556 scripts/run_emulator.sh`.
 
 ## Where things are
 
 | Path | What it is |
 |---|---|
-| `android/` | The app: `Data.kt` (HTTP and models), `AppViewModel.kt`, `ui/` (one file per screen), text in `res/values{,-hi,-mr}` |
-| `backend/sca/` | The server: `app.py` (API), `db.py`, `auth.py`, `studio.py`, `whatsapp.py`, `assistant.py` (notes and Gemma), `companion.py` (the chat and its tools), `backup.py` |
-| `backend/knowledge/` | The assistant's notes, in English and Marathi |
-| `backend/content/studio.json` | Classes, weekly rhythm and teacher, in three languages |
-| `backend/tests/`, `backend/evals/` | Tests; the assistant's question set (the companion's conversations are in `backend/scripts/eval_companion.py`) |
-| `scripts/` | Run it (`demo.sh`, `run_backend.sh`, `build_app.sh`, `run_emulator.sh`), tour it (`capture_tour.py`, `two_phone_test.py`, `phone.py`), make media (`make_figures.py`, `make_diagrams.py`, `make_video.py`, `preview_readme.py`) |
+| `android/` | The app: `Data.kt` (the envelope client and models), `AppViewModel.kt`, `ui/` (one file per screen), `companion/` (Gemma on the phone, its tools and the notes' search), text in `res/values{,-hi,-mr}` |
+| `appsscript/` | The live backend: `src/` (one file per part), `dist/Code.gs` (the file to paste), `test/` (every route, on fakes of the Sheet) |
+| `content/` | The studio in three languages (`studio.json`: name, teacher, batches, the intake's poses), the curriculum and asana library (`curriculum.json`), and the companion's notes (`knowledge/`) |
+| `scripts/` | Run it (`demo.sh`, `dev_backend.mjs`, `seed_demo.mjs`, `build_app.sh`, `run_emulator.sh`), test it on phones (`eval_phone.py`, `capture_tour.py`, `two_phone_test.py`, `phone.py`), make media (`make_figures.py`, `make_diagrams.py`, `make_video.py`, `preview_readme.py`) |
 | `docs/` | `decisions.md`, `iterations/` (the log), `evals/` (every answer), `media/` (what the README shows) |
-| `.local/visualization/` | *Not committed.* Recordings on top; raw screenshots in `tours/`; build files in `work/` |
-| `data/`, `tools/`, `models/` | *Not committed.* Databases; toolchain; the Gemma model |
+| `.local/` | *Not committed.* The live URL and the release key; recordings and raw screenshots in `visualization/` |
+| `data/`, `tools/`, `models/` | *Not committed.* The dev backend's Sheets; the toolchain; the Gemma model |
 
 ## A fresh machine
 
 `tools/` and `models/` were copied from an existing setup. On a new machine (not yet scripted):
-1. JDK 21 (for example Eclipse Temurin) into `tools/jdk`.
+1. JDK 21 (for example Eclipse Temurin) into `tools/jdk`, and Node 22 into `tools/node`.
 2. Android command-line tools into `tools/android-sdk/cmdline-tools/latest`, then
    `sdkmanager "platform-tools" "emulator" "platforms;android-36" "build-tools;36.0.0" "system-images;android-36;google_apis_playstore;x86_64"`.
-3. `avdmanager create avd -n sca_phone -k "system-images;android-36;google_apis_playstore;x86_64" -d pixel_6` with
-   `ANDROID_AVD_HOME=tools/avd`.
-4. `gemma-4-E4B-it.litertlm` from Hugging Face (`litert-community/gemma-4-E4B-it-litert-lm`) into
-   `models/gemma-4-E4B-it/`; for the companion's E2B evaluation, the E2B file (`gemma-4-E2B-it.litertlm`) into
-   `models/gemma-4-E2B-it/`.
-5. `cd backend && uv venv .venv && uv pip install -e ".[dev]"`.
+3. With `ANDROID_AVD_HOME=tools/avd`: `avdmanager create avd -n sca_phone -k "system-images;android-36;google_apis_playstore;x86_64" -d pixel_6`,
+   the same for `sca_phone_2`, and `sca_phone_big` with `hw.ramSize=6144` in its `config.ini`, for Gemma.
+4. Gemma itself is downloaded by the app, in Ask. For the evaluations on the laptop in `docs/evals/` before v1.0,
+   `gemma-4-E2B-it.litertlm` and `gemma-4-E4B-it.litertlm` from Hugging Face (`litert-community`) go in `models/`.

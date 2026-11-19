@@ -230,7 +230,7 @@ def run(version: str, teacher_code: str) -> None:
     time.sleep(2)
     on(STUDENT)
     come_back()
-    check_gone("approved student is no longer waiting, after returning to the app", "Waiting for")
+    check_gone("the placed student leaves the waiting card, after returning to the app", "Waiting for")
     shot("12_student_placed")
 
     stop_recording()
