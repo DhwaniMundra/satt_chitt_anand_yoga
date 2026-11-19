@@ -103,7 +103,7 @@
     <string name="mood_lift">मूड में सुधार</string>
     <string name="mood_lift_help">कक्षा के बाद आप औसतन कितना बेहतर महसूस करते हैं (−4 से +4)।</string>
     <string name="memory_title">मेरे स्वास्थ्य नोट्स</string>
-    <string name="privacy">%1$s आपका नाम और नंबर और आपका अभ्यास देखते हैं: चेक-इन, मूड, कक्षा का हर आसन कैसा रहा और उस पर आपके नोट्स, और आपके सुझाव। आपकी Gemma चैट और स्वास्थ्य नोट्स इसी फ़ोन पर रहते हैं, जब तक आप कोई नोट साझा न करें।</string>
+    <string name="privacy">%1$s आपका नाम और नंबर और आपका अभ्यास देखते हैं: चेक-इन, मूड, कक्षा में और स्वयं अभ्यास में हर आसन कैसा रहा और उस पर आपके नोट्स, और आपके सुझाव। आपकी Gemma चैट और स्वास्थ्य नोट्स इसी फ़ोन पर रहते हैं, जब तक आप कोई नोट साझा न करें।</string>
     <string name="memory_empty">अभी कोई नोट नहीं। नीचे लिखें, जैसे कोई पुरानी चोट जिसके बारे में %1$s को पता होना चाहिए।</string>
     <string name="note_hint">जैसे: वज्रासन में मेरे बाएँ घुटने में दर्द होता है</string>
     <string name="forget_note">भूल जाएँ</string>
@@ -157,10 +157,36 @@
     <string name="trend_line">शुरू में: %1$s · हाल में: %2$s</string>
     <string name="teacher_wrote">%1$s ने लिखा</string>
     <string name="you_wrote">आपने लिखा</string>
-    <string name="feedback_for">इस पर %1$s के लिए आपका सुझाव</string>
+    <string name="feedback_for">%2$s के बारे में %1$s को लिखें</string>
     <string name="feedback_sent">भेज दिया</string>
     <string name="since">%1$s से</string>
     <string name="each_time">हर बार</string>
+    <string name="practise_alone">स्वयं अभ्यास करें</string>
+    <string name="solo_help">क्या अभ्यास करना है चुनें, फिर एक-एक करके करें: स्टॉपवॉच से समय देखें और बताएँ कि कैसा रहा। पूरा करने पर यह सहेजा जाता है।</string>
+    <string name="repeat_last">अपनी पिछली कक्षा दोहराएँ: %1$s</string>
+    <string name="repeat_sequence">या पूरा क्रम</string>
+    <string name="choose_items">या आसन चुनें</string>
+    <string name="search_library">नाम से खोजें</string>
+    <string name="type_asana">आसन</string>
+    <string name="type_pranayama">प्राणायाम</string>
+    <string name="type_meditation">ध्यान</string>
+    <string name="start_count">शुरू करें (%1$d)</string>
+    <string name="your_list">आपकी सूची</string>
+    <string name="item_of">%2$d में से %1$d</string>
+    <string name="watch_start">स्टॉपवॉच शुरू करें</string>
+    <string name="watch_stop">रोकें</string>
+    <string name="next">आगे</string>
+    <string name="finish">पूरा करें</string>
+    <string name="finish_here">यहीं पूरा करें</string>
+    <string name="leave_title">यह अभ्यास छोड़ें?</string>
+    <string name="leave_body">यह पूरा करने पर ही सहेजा जाता है।</string>
+    <string name="leave">छोड़ें</string>
+    <string name="keep_going">अभ्यास जारी रखें</string>
+    <string name="solo_saved">आपके अभ्यास में जुड़ गया</string>
+    <string name="solo_row">स्वयं अभ्यास · %1$s</string>
+    <string name="solo">स्वयं अभ्यास</string>
+    <string name="solo_held">स्वयं अभ्यास · %1$s तक</string>
+    <string name="holds_line">सबसे लंबा %1$s · पिछली बार %2$s</string>
     <!-- Gemma on the phone -->
     <string name="ask_thinking_phone">आपके फ़ोन पर सोच रहे हैं…</string>
     <string name="gemma_title">आपके फ़ोन पर Gemma</string>
@@ -234,5 +260,9 @@
     <plurals name="pain_times">
         <item quantity="one">खिंचाव या दर्द: %d बार</item>
         <item quantity="other">खिंचाव या दर्द: %d बार</item>
+    </plurals>
+    <plurals name="times_solo">
+        <item quantity="one">स्वयं %d बार</item>
+        <item quantity="other">स्वयं %d बार</item>
     </plurals>
 </resources>
