@@ -43,7 +43,10 @@ class CompanionTest {
             return linkedMapOf("period_days" to days, "classes_joined" to 3, "average_mood_before" to 3.0, "average_mood_after" to 4.0,
                 "classes" to listOf(linkedMapOf("date" to "2026-11-16", "class" to "Intermediate", "mood_before" to 3, "mood_after" to 4)),
                 "solo" to listOf(linkedMapOf("date" to "2026-11-17", "minutes" to 20, "items" to listOf("Vajrasana"))),
-                "top_items" to listOf(linkedMapOf("asana" to "Vajrasana", "times" to 4, "average_reaction" to 2.5, "pain_times" to 1)))
+                "by_class" to linkedMapOf("Intermediate" to linkedMapOf("times" to 1, "average_mood_before" to 3.0, "average_mood_after" to 4.0)),
+                "items_in_class" to listOf(linkedMapOf("asana" to "Setu Bandhasana", "times" to 2, "average_reaction" to 2.0, "pain_times" to 1),
+                    linkedMapOf("asana" to "Vajrasana", "times" to 1, "average_reaction" to 3.0, "pain_times" to 0)),
+                "items_on_own" to listOf(linkedMapOf("asana" to "Vajrasana", "times" to 4, "average_reaction" to 2.5, "pain_times" to 1)))
         }
         override fun upcoming(lang: String): List<UpcomingClass> = if (reachable) classes else error("no network")
         override fun saveNote(text: String) { saved += text }
@@ -102,7 +105,8 @@ class CompanionTest {
         val t = tools()
         val system = companion.system("Asha", "How was my practice this week?", "hi", t)
         assertFalse("Today is" in system)
-        assertTrue(system.endsWith("6. Reply only in Hindi (हिन्दी, Devanagari script)."))
+        assertTrue(system.endsWith("6. Reply only in Hindi (हिन्दी, Devanagari script). Write every word in Devanagari, the names of asanas, " +
+            "batches and the teacher too. Add no English words, and no English in brackets after a word."))
         assertEquals(emptyList<String>(), t.used)
     }
 
@@ -120,10 +124,15 @@ class CompanionTest {
         val t = tools(server, "mr")
         val week = t.getMyPractice(7)
         assertEquals(3, week["classes_joined"])
-        assertEquals(listOf(3.0, 4.0, null), listOf(week["average_class_mood_before"], week["average_class_mood_after"], week["average_mood_after"]))
-        assertEquals(listOf("Monday 16 November"), (week["classes"] as List<*>).map { (it as Map<*, *>)["date"] }) // the weekday written out
+        // Moods and reactions in words alone, the moods named as the classes'.
+        assertEquals(listOf("okay", "good", null), listOf(week["average_class_mood_before"], week["average_class_mood_after"], week["average_mood_after"]))
+        assertEquals(mapOf("times" to 1, "average_mood_before" to "okay", "average_mood_after" to "good"), (week["by_class"] as Map<*, *>)["Intermediate"])
+        assertEquals(mapOf("date" to "Monday 16 November", "class" to "Intermediate", "mood_before" to "okay", "mood_after" to "good"),
+            (week["classes"] as List<*>).single()) // the weekday written out
         assertEquals(listOf("Tuesday 17 November"), (week["solo"] as List<*>).map { (it as Map<*, *>)["date"] })
-        assertEquals(listOf("2.5, between with effort and steady"), (week["top_items"] as List<*>).map { (it as Map<*, *>)["average_reaction"] })
+        assertEquals(listOf("between with effort and steady"), (week["items_on_own"] as List<*>).map { (it as Map<*, *>)["average_reaction"] })
+        assertEquals(listOf("with effort", "steady"), (week["items_in_class"] as List<*>).map { (it as Map<*, *>)["average_reaction"] })
+        assertFalse("no number on a scale to quote", Regex("\\d\\.\\d").containsMatchIn(week.toString()))
         assertEquals(7 to "mr", server.practiceAsked)
         t.getMyPractice(400)
         assertEquals(90 to "mr", server.practiceAsked) // at most 90 days
@@ -175,8 +184,9 @@ class CompanionTest {
         assertEquals("Vajrasana (वज्रासन, Thunderbolt pose)", p["asana"])
         assertEquals(listOf(9, 5), listOf(p["times_in_class"], p["times_on_own"]))
         assertEquals("Friday 30 October", p["first"])
-        assertEquals(mapOf("first 3 times" to "2.0, with effort", "last 3 times" to "3.7, between steady and at ease"), p["how_it_felt"])
-        assertEquals(listOf("1.0, not yet", "2.5, between with effort and steady", "4.0, at ease"), listOf(1, 2.5, 4.0).map(::reactionWords))
+        assertEquals(mapOf("first 3 times" to "with effort", "last 3 times" to "between steady and at ease"), p["how_it_felt"])
+        assertEquals(listOf("not yet", "between with effort and steady", "at ease"), listOf(1, 2.5, 4.0).map(::reactionWords))
+        assertEquals(listOf("very low", "between low and okay", "great"), listOf(1, 2.4, 5).map(::moodWords))
         assertEquals(mapOf("date" to "Monday 16 November", "text" to "Much steadier this week."), p["teacher_said"])
         assertEquals(mapOf("times" to 6, "last" to "Tuesday 10 November"), p["strain_or_pain"])
         assertEquals(listOf("asana_progress"), t.used)
@@ -202,7 +212,25 @@ class CompanionTest {
     }
 
     @Test fun theSystemMessageNamesTheStudentsBatch() {
-        assertTrue("Asha practises in the Intermediate batch" in companion.system("Asha", "Hello", "en", tools(), "Intermediate"))
+        val placed = companion.system("Asha", "Hello", "en", tools(), "Intermediate")
+        assertTrue("Asha practises in the Intermediate batch" in placed)
+        assertTrue("A move to another batch is Teacher One's to decide, and Asha can ask Teacher One about one." in placed)
         assertFalse("batch;" in companion.system("Neha", "Hello", "en", tools()))
+    }
+
+    /** A class-only item never reaches Gemma as practice on one's own: the two lists stay apart, as the server sends them. */
+    @Test fun itemsPractisedInClassAreNeverGivenAsPractiseAlone() {
+        val week = tools().getMyPractice(7)
+        val alone = (week["items_on_own"] as List<*>).map { (it as Map<*, *>)["asana"] } +
+            (week["solo"] as List<*>).flatMap { (it as Map<*, *>)["items"] as List<*> }
+        assertFalse("Setu Bandhasana" in alone)
+        assertTrue("Setu Bandhasana" in (week["items_in_class"] as List<*>).map { (it as Map<*, *>)["asana"] })
+        assertFalse("one list for both", "top_items" in week)
+    }
+
+    @Test fun hindiAndMarathiRepliesAreAllDevanagari() {
+        for (lang in listOf("hi", "mr")) assertTrue(lang, "Add no English words" in companion.system("Asha", "Hello", lang, tools(lang = lang)))
+        assertFalse("Add no English words" in companion.system("Asha", "Hello", "en", tools()))
+        assertTrue("If something hurts in practice, say to stop and to tell Teacher One." in companion.system("Asha", "Hello", "en", tools()))
     }
 }
