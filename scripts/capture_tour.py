@@ -45,8 +45,7 @@ def main(version: str) -> None:
 
 
 def tour(version: str) -> None:
-    out = viz.screens(version)
-    out.mkdir(parents=True, exist_ok=True)
+    out = viz.fresh_screens(version)  # swapped in for screens/<version>/ at the end of a run that succeeds
 
     def shot(name: str) -> None:
         p.screenshot(out / f"{name}.png")  # at the phone's own size, for the film's close-ups
@@ -280,7 +279,8 @@ def tour(version: str) -> None:
 
     for name in ("student_tour", "teacher_tour"):
         make_small(viz.tours(version) / f"{name}_{version}.mp4", viz.tours(version) / f"{name}_{version}_small.mp4")
-    print(f"saved to {out}")
+    viz.keep_screens(version)
+    print(f"saved to {viz.screens(version)}")
 
 
 def todays_class() -> str:
