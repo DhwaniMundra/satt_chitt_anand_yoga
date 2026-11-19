@@ -3,7 +3,7 @@
 A practice tracker for an online yoga studio: students say how each asana went, in class and on their own, and the
 teacher reads it to guide them.
 
-**[Watch the 2:43 film of how it works](https://github.com/DhwaniMundra/satt_chitt_anand_yoga/releases/download/v1.0/release_v1_720p.mp4)**
+**[Watch the 2:43 film of how it works](https://github.com/DhwaniMundra/satt_chitt_anand_yoga/releases/download/v0.9/release_v1_720p.mp4)**
 
 <!-- Dhwani: your own sentences go here. -->
 
@@ -17,7 +17,7 @@ student's practice.
 ## What it does
 
 <p>
-  <img src="docs/media/v1/today.png" width="24%" alt="A student's Today: her batch and its next class">
+  <img src="docs/media/v1/today.png" width="24%" alt="A student's Today tab: her batch and its next class">
   <img src="docs/media/v1/after_class.png" width="24%" alt="After class: a reaction for each item, strain or pain, a note">
   <img src="docs/media/v1/item_history.png" width="24%" alt="One asana's history, with the teacher's feedback">
   <img src="docs/media/v1/ask.png" width="24%" alt="Ask: Gemma on the phone answers about the student's own asana">
@@ -26,13 +26,13 @@ student's practice.
 **For a student**
 - **Joining** takes the group code from the WhatsApp invite. The student signs up, then answers a few questions for
   the teacher: age, height, weight, food habits, any pain, and how six poses feel. The teacher places them in a batch.
-- **Today** shows the batch's next class in the student's own time zone, with its sequence and the Meet link. After
-  class, the student gives each item one tap (not yet, with effort, steady or at ease), can flag strain or pain, and can
-  add a note.
-- **Practice** shows how each asana has gone, in class and alone, and what the teacher wrote about it. Solo practice
-  has a stopwatch for each item.
-- **Ask** is Gemma 4, running on the phone. It answers from the student's own practice and the studio's notes, in
-  English, Hindi or Marathi: "How is my Setu Bandhasana going?", "When is my next class?"
+- **The Today tab** shows the batch's next class in the student's own time zone, with its sequence and the Meet link.
+  After class, the student gives each item one tap (not yet, with effort, steady or at ease), can flag strain or pain,
+  and can add a note.
+- **The Practice tab** shows how each asana has gone, in class and alone, and what the teacher wrote about it. Solo
+  practice has a stopwatch for each item.
+- **The Ask tab** is Gemma 4, running on the phone. It answers from the student's own practice and the studio's notes,
+  in English, Hindi or Marathi: "How is my Setu Bandhasana going?", "When is my next class?"
 
 <p>
   <img src="docs/media/v1/students.png" width="24%" alt="Students: a new student's answers and the batch they point to">
@@ -42,10 +42,11 @@ student's practice.
 </p>
 
 **For the teacher**
-- **Today** shows one card per batch, with the class's sequence and its Meet link, shared to WhatsApp in one tap.
-- **Students** shows a new student's answers and the batch they point to. The teacher approves them into a batch, or
-  moves a student later with a note, and can write feedback on any of a student's asanas.
-- **Insights** shows mood before and after each class, and how each class went item by item, with strain or pain
+- **The Today tab** shows one card per batch, with the class's sequence and its Meet link, shared to WhatsApp in one
+  tap.
+- **The Students tab** shows a new student's answers and the batch they point to. The teacher approves them into a
+  batch, or moves a student later with a note, and can write feedback on any of a student's asanas.
+- **The Insights tab** shows mood before and after each class, and how each class went item by item, with strain or pain
   first.
 
 ## How it works
@@ -76,10 +77,10 @@ flowchart LR
 
 ## How it was made
 
-In rounds, from v0.1 to v1.0. Each round, a script walks through the app on an Android emulator, and the companion is
-asked the same questions in three languages. Then every screen and every answer is read, and what reading finds is
-fixed, with a test where one fits. One finding of v1.0: Gemma reported an average reaction of 2.0 ("with effort") as "not yet",
-so the tools now hand it the words, worked out in code.
+In rounds, from v0.1 to v1.0, which is out for testing as v0.9. Each round, a script walks through the app on an Android
+emulator, and the companion is asked the same questions in three languages. Then every screen and every answer is read,
+and what reading finds is fixed, with a test where one fits. One finding of v1.0: Gemma reported an average reaction of
+2.0 ("with effort") as "not yet", so the tools now hand it the words, worked out in code.
 
 The record: [iteration log](docs/iterations/README.md) · [evaluations, every answer](docs/evals/) ·
 [decisions](docs/decisions.md) · [development](docs/DEVELOPMENT.md).
