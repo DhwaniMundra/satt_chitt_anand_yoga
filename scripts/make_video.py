@@ -7,9 +7,9 @@ streamed to ffmpeg; a quiet synthesised pad sits under the voice (nothing to lic
 with one fixed gain from a measuring pass. Captions follow the voice word by word, so the video also works muted, as
 most videos shared on WhatsApp are first watched.
 
-Everything shown is the real app: v0.4's tour screenshots and screen recordings (.local/visualization/tours/,
-gitignored), on synthetic demo data. Writes the 720p video, its captions and a thumbnail to docs/media/video/, and a
-1080p copy to .local/visualization/.
+Everything shown is the real app: v0.4's tour screenshots and screen recordings (.local/visualization/viz_v0/,
+gitignored; see scripts/viz.py), on synthetic demo data. Writes the 720p video, its captions and a thumbnail to
+docs/media/video/, and a 1080p copy to .local/visualization/viz_v0/.
 
     scripts/setup_media.sh                                       # once: tools/media-venv
     tools/media-venv/bin/python scripts/make_video.py --stills   # one frame per shot, to check the layout
@@ -32,9 +32,9 @@ from PIL import Image, ImageDraw, ImageFilter, ImageFont
 from scipy.io import wavfile
 from scipy.signal import butter, resample_poly, sosfilt
 
+from viz import LOCAL, folder, screens, shot
+
 ROOT = Path(__file__).resolve().parents[1]
-LOCAL = ROOT / ".local" / "visualization"  # gitignored
-MEDIA = LOCAL / "tours"  # the tours' screenshots and recordings
 OUT = ROOT / "docs" / "media" / "video"
 WORK = LOCAL / "work" / "video"  # the build's intermediate files: voice clips, clip frames, the silent picture, stills
 FONTS = ROOT / "tools" / "fonts"
@@ -58,9 +58,9 @@ MARATHI = "[Marathi](/məɹˈɑti/)"
 
 # Clips: source video (committed small copies), start and length in seconds, and speed.
 CLIPS = {
-    "breathe": (MEDIA / "v0.4" / "student_tour_small.mp4", 43.4, 10.2, 1.0),
-    "ask": (MEDIA / "v0.4" / "student_tour_small.mp4", 57.4, 8.6, 1.0),
-    "two": (LOCAL / "two_phones_v0.4.mp4", 44.0, 94.0, 5.0),  # to the teacher's Insights showing the check-in
+    "breathe": (screens("v0.4") / "student_tour_small.mp4", 43.4, 10.2, 1.0),
+    "ask": (screens("v0.4") / "student_tour_small.mp4", 57.4, 8.6, 1.0),
+    "two": (folder("v0") / "two_phones_v0.4.mp4", 44.0, 94.0, 5.0),  # to the teacher's Insights showing the check-in
 }
 
 
@@ -220,17 +220,20 @@ class Placed:
     words: tuple  # per line: ((word, start), ...)
 
 
-def timeline() -> list[Placed]:
+def timeline(scenes=SCENES, lead=LEAD, gap=GAP, tail=TAIL) -> list[Placed]:
+    """Each scene placed after the one before, its lines `gap` apart, longer after a line its `pauses` name (pairs of
+    line index and seconds, if the scene has them)."""
     placed, t = [], 0.0
-    for scene in SCENES:
-        at, starts, lengths, words = LEAD, [], [], []
-        for line in scene.lines:
+    for scene in scenes:
+        at, starts, lengths, words = lead, [], [], []
+        pauses = dict(getattr(scene, "pauses", ()))
+        for i, line in enumerate(scene.lines):
             audio, spoken = voice(line)
             starts.append(at)
             lengths.append(len(audio) / RATE)
             words.append(tuple(spoken))
-            at += len(audio) / RATE + GAP
-        seconds = max(at - GAP + TAIL, scene.least + 0.6)
+            at += len(audio) / RATE + gap + pauses.get(i, 0.0)
+        seconds = max(at - gap + tail, scene.least + 0.6)
         placed.append(Placed(scene, t, seconds, tuple(starts), tuple(lengths), tuple(words)))
         t += seconds
     return placed
@@ -270,7 +273,7 @@ def framed(screen: Image.Image, height: int = PHONE_H) -> Image.Image:
 
 @functools.lru_cache(maxsize=32)
 def screenshot(path: str) -> Image.Image:
-    return framed(Image.open(MEDIA / path))
+    return framed(Image.open(shot(path)))
 
 
 def clip_frame(name: str, t: float) -> Image.Image:
@@ -281,18 +284,19 @@ def clip_frame(name: str, t: float) -> Image.Image:
     return framed(image, PHONE_H) if name != "two" else image
 
 
-@functools.lru_cache(maxsize=1)
-def shadow_for(size: tuple[int, int]) -> Image.Image:
-    pad = 60
+@functools.lru_cache(maxsize=4)
+def shadow_for(size: tuple[int, int], pad: int = 60) -> Image.Image:
+    """A soft shadow under a phone of `size`, `pad` wider on each side."""
     shadow = Image.new("RGBA", (size[0] + 2 * pad, size[1] + 2 * pad), (0, 0, 0, 0))
     ImageDraw.Draw(shadow).rounded_rectangle([pad, pad + 18, pad + size[0], pad + size[1] + 18], 60, fill=(0, 0, 0, 70))
     return shadow.filter(ImageFilter.GaussianBlur(26))
 
 
-def place_phone(canvas: Image.Image, phone: Image.Image, cx: int = PHONE_X, top: int = PHONE_TOP) -> tuple[int, int]:
+def place_phone(canvas: Image.Image, phone: Image.Image, cx: int = PHONE_X, top: int = PHONE_TOP,
+                pad: int = 60) -> tuple[int, int]:
     x = cx - phone.width // 2
-    shadow = shadow_for(phone.size)
-    canvas.alpha_composite(shadow, (x - 60, top - 60))
+    shadow = shadow_for(phone.size, pad)
+    canvas.alpha_composite(shadow, (x - pad, top - pad))
     canvas.alpha_composite(phone, (x, top))
     return x, top
 
@@ -308,6 +312,11 @@ def said_at(placed: Placed, line: int, word: str) -> float:
 def ease(x: float) -> float:
     x = min(max(x, 0.0), 1.0)
     return x * x * (3 - 2 * x)
+
+
+def tint(color: tuple, amount: float, base: tuple = CREAM) -> tuple:
+    """`color` faded towards `base`, from 0 (gone) to 1."""
+    return tuple(int(base[k] + (color[k] - base[k]) * amount) for k in range(3))
 
 
 def focus_ring(canvas: Image.Image, origin: tuple[int, int], phone: Image.Image, box: tuple, amount: float) -> None:
@@ -362,25 +371,29 @@ def wrap(text_words: list[str], face: ImageFont.FreeTypeFont, width: int) -> lis
     return lines + [line] if line else lines
 
 
-def karaoke(draw: ImageDraw.ImageDraw, placed: Placed, t: float, x: int, y: int, width: int, size: int = 40, color=INK) -> None:
-    """The line being spoken, each word darkening as it is said."""
+def spoken(placed: Placed, t: float, gaps: bool = False) -> tuple[list, float]:
+    """The line being said at scene time t, as (word, said) pairs, and how far it has faded in. With `gaps`, nothing
+    between lines (the scene's last line stays until the scene ends)."""
     started = [i for i, s in enumerate(placed.line_starts) if s - 0.1 <= t]
     if not started:
-        return
+        return [], 0.0
     index = started[-1]
-    words = placed.words[index]
     local = t - placed.line_starts[index]
+    if gaps and local > placed.line_seconds[index] + 0.5 and index < len(placed.line_starts) - 1:
+        return [], 0.0
+    return [(word, local >= start - 0.05) for word, start in placed.words[index]], ease((local + 0.1) / 0.25)
+
+
+def karaoke(draw: ImageDraw.ImageDraw, placed: Placed, t: float, x: int, y: int, width: int, size: int = 40, color=INK) -> None:
+    """The line being spoken, each word darkening as it is said."""
+    words, fade_in = spoken(placed, t)
     face = font(size, 500)
     space = face.getlength(" ")
-    fade_in = ease((t - placed.line_starts[index] + 0.1) / 0.25)
     for row, members in enumerate(wrap([w for w, _ in words], face, width)):
         cx = x
         for i in members:
-            word, start = words[i]
-            said = local >= start - 0.05
-            fill = color if said else FAINT
-            fill = tuple(int(CREAM[k] + (fill[k] - CREAM[k]) * fade_in) for k in range(3))
-            draw.text((cx, y + row * int(size * 1.42)), word, font=face, fill=fill)
+            word, said = words[i]
+            draw.text((cx, y + row * int(size * 1.42)), word, font=face, fill=tint(color if said else FAINT, fade_in))
             cx += face.getlength(word) + space
 
 
@@ -388,10 +401,8 @@ def text_column(canvas: Image.Image, placed: Placed, t: float) -> None:
     scene = placed.scene
     draw = ImageDraw.Draw(canvas)
     appear = ease(t / 0.5)
-    tag_color = tuple(int(CREAM[k] + (SAFFRON[k] - CREAM[k]) * appear) for k in range(3))
-    draw.text((TEXT_X, 250), scene.tag.upper(), font=font(26, 700), fill=tag_color)
-    title_color = tuple(int(CREAM[k] + (MOSS[k] - CREAM[k]) * appear) for k in range(3))
-    draw.text((TEXT_X - 3, 292), scene.title, font=font(64, serif=True), fill=title_color)
+    draw.text((TEXT_X, 250), scene.tag.upper(), font=font(26, 700), fill=tint(SAFFRON, appear))
+    draw.text((TEXT_X - 3, 292), scene.title, font=font(64, serif=True), fill=tint(MOSS, appear))
     karaoke(draw, placed, t, TEXT_X, 420, TEXT_W)
 
 
@@ -411,8 +422,8 @@ def draw_title(canvas: Image.Image, placed: Placed, t: float) -> None:
     place_phone(canvas, picture)
     draw = ImageDraw.Draw(canvas)
     appear = ease(t / 0.8)
-    moss = tuple(int(CREAM[k] + (MOSS[k] - CREAM[k]) * appear) for k in range(3))
-    saffron = tuple(int(CREAM[k] + (SAFFRON[k] - CREAM[k]) * appear) for k in range(3))
+    moss = tint(MOSS, appear)
+    saffron = tint(SAFFRON, appear)
     draw.text((TEXT_X - 4, 170), "Satt Chitt Anand", font=font(84, serif=True), fill=moss)
     draw.text((TEXT_X, 285), "TRUTH · CONSCIOUSNESS · BLISS", font=font(28, 700), fill=saffron)
     draw.text((TEXT_X, 330), placed.scene.tag, font=font(26, 500), fill=moss)
@@ -435,7 +446,7 @@ def draw_wide(canvas: Image.Image, placed: Placed, t: float) -> None:
 
 def box(draw, xy, title, lines=(), fill=PAPER, outline=LINE, title_color=MOSS, amount=1.0):
     def fade(c):
-        return tuple(int(CREAM[k] + (c[k] - CREAM[k]) * amount) for k in range(3))
+        return tint(c, amount)
 
     draw.rounded_rectangle(xy, 22, fill=fade(fill), outline=fade(outline), width=3)
     draw.text((xy[0] + 26, xy[1] + 22), title, font=font(30, 700), fill=fade(title_color))
@@ -446,7 +457,7 @@ def box(draw, xy, title, lines=(), fill=PAPER, outline=LINE, title_color=MOSS, a
 def arrow(draw, start, end, amount, label=""):
     if amount <= 0:
         return
-    color = tuple(int(CREAM[k] + (MUTED[k] - CREAM[k]) * amount) for k in range(3))
+    color = tint(MUTED, amount)
     draw.line([start, end], fill=color, width=4)
     dx, dy = end[0] - start[0], end[1] - start[1]
     n = max((dx * dx + dy * dy) ** 0.5, 1)
@@ -475,7 +486,7 @@ def draw_diagram(canvas: Image.Image, placed: Placed, t: float) -> None:
         title_color=SAFFRON, amount=third)
     arrow(draw, (420, 425), (514, 425), second)
     if fourth > 0:
-        color = tuple(int(CREAM[k] + (MOSS[k] - CREAM[k]) * fourth) for k in range(3))
+        color = tint(MOSS, fourth)
         draw.text((550, 690), "Data lives here; backup optional.", font=font(24, 600), fill=color)
         draw.text((550, 722), "Questions kept only with consent.", font=font(24, 600), fill=color)
     text_column(canvas, placed, t)
@@ -506,18 +517,18 @@ def draw_numbers(canvas: Image.Image, placed: Placed, t: float) -> None:
         x, y = 100 + (i % 2) * 440, 170 + (i // 2) * 330
         box(draw, (x, y, x + 400, y + 290), "", (), fill=MOSS_LIGHT if i < 3 else SAFFRON_LIGHT,
             outline=MOSS if i < 3 else SAFFRON, amount=amount)
-        color = tuple(int(CREAM[k] + ((MOSS if i < 3 else SAFFRON)[k] - CREAM[k]) * amount) for k in range(3))
+        color = tint(MOSS if i < 3 else SAFFRON, amount)
         big_text(draw, (x + 34, y + 40), big, color)
         for row, members in enumerate(wrap(small.split(), font(28, 500), 330)):
             draw.text((x + 36, y + 180 + row * 38), " ".join(small.split()[i] for i in members), font=font(28, 500),
-                      fill=tuple(int(CREAM[k] + (INK[k] - CREAM[k]) * amount) for k in range(3)))
+                      fill=tint(INK, amount))
     text_column(canvas, placed, t)
 
 
 def draw_end(canvas: Image.Image, placed: Placed, t: float) -> None:
     draw = ImageDraw.Draw(canvas)
     appear = ease(t / 0.6)
-    moss = tuple(int(CREAM[k] + (MOSS[k] - CREAM[k]) * appear) for k in range(3))
+    moss = tint(MOSS, appear)
     draw.text((W // 2, 170), "We would love your feedback", font=font(72, serif=True), fill=moss, anchor="mm")
     cues = (said_at(placed, 0, "Would"), said_at(placed, 0, "confusing") - 0.4, said_at(placed, 0, "missing") - 0.4)
     for i, question in enumerate(QUESTIONS):
@@ -525,15 +536,15 @@ def draw_end(canvas: Image.Image, placed: Placed, t: float) -> None:
         if amount <= 0:
             continue
         y = 300 + i * 120
-        fill = tuple(int(CREAM[k] + (PAPER[k] - CREAM[k]) * amount) for k in range(3))
-        edge = tuple(int(CREAM[k] + (SAFFRON[k] - CREAM[k]) * amount) for k in range(3))
+        fill = tint(PAPER, amount)
+        edge = tint(SAFFRON, amount)
         draw.rounded_rectangle([W // 2 - 520, y, W // 2 + 520, y + 92], 46, fill=fill, outline=edge, width=3)
-        draw.text((W // 2, y + 46), question, font=font(40, 600), fill=tuple(int(CREAM[k] + (INK[k] - CREAM[k]) * amount) for k in range(3)),
+        draw.text((W // 2, y + 46), question, font=font(40, 600), fill=tint(INK, amount),
                   anchor="mm")
     last = ease((t - placed.line_starts[1]) / 0.5)
     if last > 0:
         draw.text((W // 2, 700), "Satt Chitt Anand · a prototype · synthetic demo data", font=font(24, 500),
-                  fill=tuple(int(CREAM[k] + (MUTED[k] - CREAM[k]) * last) for k in range(3)), anchor="mm")
+                  fill=tint(MUTED, last), anchor="mm")
     karaoke(draw, placed, t, W // 2 - 600, 790, 1200, size=38, color=SAFFRON)
 
 
@@ -584,8 +595,8 @@ def frame(index: int) -> bytes:
 # ---------- clips, sound, output ----------
 
 
-def extract_clips() -> None:
-    for name, (source, start, seconds, speed) in CLIPS.items():
+def extract_clips(clips=CLIPS) -> None:
+    for name, (source, start, seconds, speed) in clips.items():
         folder = WORK / "clips" / name
         if folder.exists() and any(folder.iterdir()):
             continue
@@ -623,10 +634,11 @@ def pad(seconds: float) -> np.ndarray:
     return np.stack([left, right], axis=1) / max(np.abs(out).max(), 1e-9)
 
 
-def soundtrack(path: Path, total: float) -> None:
+def soundtrack(path: Path, total: float, plan=PLAN, music=pad, volume=0.075) -> None:
+    """The voice over `music` (a function of the length in seconds, giving stereo at RATE), which dips under it."""
     n = int((total + 0.5) * RATE)
     speech = np.zeros(n, dtype=np.float64)
-    for placed in PLAN:
+    for placed in plan:
         for line, start in zip(placed.scene.lines, placed.line_starts, strict=True):
             audio, _ = voice(line)
             at = int((placed.start + start) * RATE)
@@ -638,7 +650,7 @@ def soundtrack(path: Path, total: float) -> None:
     level[: n - window] = (sums[window:n] - sums[: n - window]) / window
     level[n - window :] = level[n - window - 1]
     duck = 1 - 0.45 * np.clip(level / (level.max() * 0.15 + 1e-9), 0, 1)
-    bed = pad(n / RATE)[:n] * 0.075 * duck[:, None]
+    bed = music(n / RATE)[:n] * volume * duck[:, None]
     t = np.arange(n) / RATE
     fade = np.clip(t / 1.5, 0, 1) * np.clip((total + 0.3 - t) / 2.0, 0, 1)
     stereo = (bed + np.stack([speech * 0.9] * 2, axis=1)) * fade[:, None]
@@ -663,7 +675,7 @@ def loudness(sound: Path) -> str:
     return f"{EVEN},volume={gain:.2f}dB,alimiter=limit=0.84:attack=2:release=60:level=false,aresample=48000"
 
 
-def subtitles(path: Path) -> None:
+def subtitles(path: Path, plan=PLAN) -> None:
     """An .srt file with every spoken line, for players and sites that show captions."""
 
     def stamp(seconds: float) -> str:
@@ -671,7 +683,7 @@ def subtitles(path: Path) -> None:
         return f"{ms // 3600000:02d}:{ms // 60000 % 60:02d}:{ms // 1000 % 60:02d},{ms % 1000:03d}"
 
     rows, k = [], 1
-    for placed in PLAN:
+    for placed in plan:
         for line, start, seconds in zip(placed.scene.lines, placed.line_starts, placed.line_seconds, strict=True):
             begin = placed.start + start
             rows.append(f"{k}\n{stamp(begin)} --> {stamp(begin + seconds + 0.2)}\n{caption(line)}\n")
@@ -687,12 +699,27 @@ def encode() -> None:
     finish(picture, total)
 
 
-def render_picture(picture: Path, frames: int) -> None:
+WORKER_GB = 0.6  # what one drawing process holds, screens and caches included
+MOST_WORKERS = 6  # so a render can run beside the emulator
+
+
+def workers() -> int:
+    """How many processes draw frames: at most MOST_WORKERS, and only as many as the memory free now holds with 2 GB
+    to spare, so the machine never runs short (an emulator and a model may be running beside it)."""
+    with open("/proc/meminfo") as meminfo:
+        free = next(int(line.split()[1]) for line in meminfo if line.startswith("MemAvailable")) / 2**20
+    return max(1, min(MOST_WORKERS, os.cpu_count() - 4, int((free - 2) / WORKER_GB)))
+
+
+def render_picture(picture: Path, frames: int, draw=frame) -> None:
+    """Draws frames 0 to `frames` with `draw` (index to RGB bytes), on `workers()` processes, into a silent mp4,
+    encoded on the graphics card."""
     command = ["ffmpeg", "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{W}x{H}", "-r", str(FPS),
-               "-i", "-", "-c:v", "libx264", "-preset", "slow", "-crf", "18", "-pix_fmt", "yuv420p", str(picture)]
+               "-i", "-", "-c:v", "h264_nvenc", "-preset", "slow", "-rc", "vbr", "-cq", "18", "-b:v", "0", "-g", "60",
+               "-pix_fmt", "yuv420p", str(picture)]  # a keyframe every 2 s: flat colour never drifts between scenes
     encoder = subprocess.Popen(command, stdin=subprocess.PIPE)
-    with multiprocessing.Pool(max(2, os.cpu_count() - 4)) as pool:
-        for raw in pool.imap(frame, range(frames), chunksize=8):
+    with multiprocessing.Pool(workers()) as pool:
+        for raw in pool.imap(draw, range(frames), chunksize=8):
             encoder.stdin.write(raw)
     encoder.stdin.close()
     encoder.wait()
@@ -703,16 +730,23 @@ def finish(picture: Path, total: float) -> None:
     sound = WORK / "sound.wav"
     soundtrack(sound, total)
     OUT.mkdir(parents=True, exist_ok=True)
-    audio = ["-i", str(sound), "-af", loudness(sound), "-c:a", "aac", "-b:a", "160k", "-ac", "2"]
-    base = ["ffmpeg", "-y", "-loglevel", "error", "-i", str(picture), *audio, "-t", f"{total:.2f}", "-movflags", "+faststart"]
-    subprocess.run([*base, "-c:v", "libx264", "-preset", "slow", "-crf", "24", "-pix_fmt", "yuv420p",
-                    str(LOCAL / "satt_chitt_anand_tour_1080p.mp4")], check=True)
-    # Small enough to send on WhatsApp.
-    subprocess.run([*base, "-vf", "scale=1280:720:flags=lanczos", "-c:v", "libx264", "-preset", "slow", "-crf", "28",
-                    "-pix_fmt", "yuv420p", str(OUT / "satt_chitt_anand_tour_720p.mp4")], check=True)
+    mux(picture, sound, total, folder("v0") / "satt_chitt_anand_tour_1080p.mp4", OUT / "satt_chitt_anand_tour_720p.mp4")
     Image.frombytes("RGB", (W, H), frame(int(PLAN[0].seconds * 0.8 * FPS))).save(OUT / "satt_chitt_anand_tour_thumbnail.png", optimize=True)
     subtitles(OUT / "satt_chitt_anand_tour.srt")
     print(f"wrote {OUT / 'satt_chitt_anand_tour_720p.mp4'}: {total:.1f} s", flush=True)
+
+
+def mux(picture: Path, sound: Path, total: float, full: Path, small: Path | None = None) -> None:
+    """The 1080p mp4 from the silent picture and the sound at -16 LUFS, and, if `small` is given, a 720p copy under
+    30 MB, small enough to send as a file (2.2 Mbit/s at most on average)."""
+    base = ["ffmpeg", "-y", "-loglevel", "error", "-i", str(picture), "-i", str(sound), "-af", loudness(sound), "-ac", "2",
+            "-t", f"{total:.2f}", "-movflags", "+faststart"]
+    full.parent.mkdir(parents=True, exist_ok=True)
+    subprocess.run([*base, "-c:v", "copy", "-c:a", "aac", "-b:a", "160k", str(full)], check=True)
+    if small:
+        subprocess.run([*base, "-vf", "scale=1280:720:flags=lanczos", "-c:v", "h264_nvenc", "-preset", "slow", "-b:v", "2200k",
+                        "-maxrate", "3000k", "-bufsize", "6000k", "-g", "60", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "128k",
+                        str(small)], check=True)
 
 
 def stills() -> None:

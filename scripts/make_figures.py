@@ -1,4 +1,4 @@
-"""Makes the README's pictures in docs/media/ from the local tours in .local/visualization/ (gitignored):
+"""Makes the README's pictures in docs/media/ from the local tours in .local/visualization/viz_v0/ (gitignored):
 
 - figures/hero.png and figures/before_after.png
 - gifs/students.gif, gifs/teacher.gif, gifs/two_phones.gif: landscape strips of phones, each playing its own real clip
@@ -14,18 +14,17 @@ from pathlib import Path
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 from make_diagrams import sora
+from viz import WORK as LOCAL_WORK, folder, screens
 
 ROOT = Path(__file__).resolve().parents[1]
-LOCAL = ROOT / ".local" / "visualization"
-TOURS = LOCAL / "tours"
-WORK = LOCAL / "work" / "figures"
+WORK = LOCAL_WORK / "figures"
 OUT = ROOT / "docs" / "media"
 CREAM, PAPER, MOSS, SAFFRON, INK, MUTED = "#F6F1E7", "#FFFCF6", "#3F5B45", "#C26A2D", "#2B2A26", "#6E6A60"
 SERIF = "/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf"
 FPS = 8
-STUDENT_TOUR = TOURS / "v0.4" / "student_tour_small.mp4"
-COMPANION_TOUR = TOURS / "v0.5" / "student_tour_small.mp4"  # Ask became the practice companion in v0.5
-TEACHER_TOUR = TOURS / "v0.4" / "teacher_tour_small.mp4"
+STUDENT_TOUR = screens("v0.4") / "student_tour_small.mp4"
+COMPANION_TOUR = screens("v0.5") / "student_tour_small.mp4"  # Ask became the practice companion in v0.5
+TEACHER_TOUR = screens("v0.4") / "teacher_tour_small.mp4"
 
 
 def face(size: int, weight: int = 400) -> ImageFont.FreeTypeFont:
@@ -128,7 +127,7 @@ def strip(name: str, title: str, panels: list[tuple], seconds: float = 10.0) -> 
 def two_phones() -> None:
     """The two-phone recording beside the story it tells."""
     width, phone_h, top = 1500, 680, 70
-    clip = frames("two_phones", LOCAL / "two_phones_v0.4.mp4", 44.0, 94.0, 5.0)  # to the teacher's Insights
+    clip = frames("two_phones", folder("v0") / "two_phones_v0.4.mp4", 44.0, 94.0, 5.0)  # to the teacher's Insights
     base = Image.new("RGBA", (width, phone_h + 2 * top), CREAM)
     draw = ImageDraw.Draw(base)
     draw.text((60, 90), "Two phones,", font=serif(50), fill=MOSS)
@@ -169,7 +168,7 @@ def two_phones() -> None:
 def hero() -> None:
     """The README's first image. hero_teacher and hero_today were taken at a quiet hour, so they show the regular
     8:00 AM class rather than the tour's extra class 20 minutes ahead."""
-    shots = TOURS / "v0.4"
+    shots = screens("v0.4")
     canvas = Image.new("RGBA", (2400, 1350), CREAM)
     draw = ImageDraw.Draw(canvas)
     draw.text((120, 250), "Satt Chitt Anand", font=serif(104), fill=MOSS)
@@ -189,9 +188,9 @@ def hero() -> None:
 def before_after() -> None:
     """Two findings from the first tour, each as a before and after pair, side by side."""
     pairs = (
-        ("Finding 'Log in'", TOURS / "v0.1" / "02_signup_login_hidden.png", TOURS / "v0.2" / "02_signup.png",
+        ("Finding 'Log in'", screens("v0.1") / "02_signup_login_hidden.png", screens("v0.2") / "02_signup.png",
          "Below the whole form", "Side by side, on top"),
-        ("A Hindi question", TOURS / "v0.1" / "10_ask_hindi_food_miss.png", TOURS / "v0.2" / "11_ask_hindi.png",
+        ("A Hindi question", screens("v0.1") / "10_ask_hindi_food_miss.png", screens("v0.2") / "11_ask_hindi.png",
          "No notes found", "The right notes"),
     )
     phone_h, top = 900, 150
@@ -211,7 +210,7 @@ def before_after() -> None:
 
 def sheet(version: str, caption: str) -> None:
     """Every numbered screenshot of one tour in a grid, as a JPEG small enough to commit."""
-    files = sorted((TOURS / version).glob("[0-9]*.png"))
+    files = sorted(screens(version).glob("[0-9]*.png"))
     cols, width = 8, 260
     tiles = [Image.open(f).convert("RGB") for f in files]
     tiles = [t.resize((width, round(t.height * width / t.width)), Image.LANCZOS) for t in tiles]
@@ -228,8 +227,8 @@ def sheet(version: str, caption: str) -> None:
 
 
 def main() -> None:
-    if not TOURS.is_dir():
-        raise SystemExit(f"{TOURS} is missing: run scripts/capture_tour.py first")
+    if not screens("v0.4").is_dir():
+        raise SystemExit(f"{screens('v0.4')} is missing: the tours' screenshots are needed")
     for folder in ("figures", "gifs", "iterations"):
         (OUT / folder).mkdir(parents=True, exist_ok=True)
     hero()
@@ -242,8 +241,8 @@ def main() -> None:
     ])
     strip("teacher", "For the teacher", [
         ("Share the class link", "straight to WhatsApp", ("share", TEACHER_TOUR, 26.5, 9.5)),
-        ("Approve students", "or let the group code do it", ("students", TOURS / "v0.4" / "15_students.png")),
-        ("See how classes went", "demo data", ("insights", TOURS / "v0.4" / "16_insights_demo_data.png")),
+        ("Approve students", "or let the group code do it", ("students", screens("v0.4") / "15_students.png")),
+        ("See how classes went", "demo data", ("insights", screens("v0.4") / "16_insights_demo_data.png")),
     ])
     two_phones()
     for version, caption in (("v0.1", "v0.1, first tour: the findings are in docs/iterations/v0.1.md"),
