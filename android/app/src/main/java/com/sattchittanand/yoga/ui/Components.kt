@@ -83,6 +83,9 @@ fun Pill(text: String, background: Color = Palette.mossLight, color: Color = Pal
     }
 }
 
+/** A stopwatch's time: "1:05". */
+fun stopwatch(seconds: Int): String = "%d:%02d".format(seconds / 60, seconds % 60)
+
 /** Options side by side in one row, equal widths, at most one selected: the reactions after class, the curricula. */
 @Composable
 fun Choices(labels: List<String>, selected: Int?, enabled: Boolean = true, onPick: (Int) -> Unit) {

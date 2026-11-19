@@ -111,7 +111,7 @@
     <string name="mood_lift">Mood lift</string>
     <string name="mood_lift_help">How much better you feel after class, on average (−4 to +4).</string>
     <string name="memory_title">My health notes</string>
-    <string name="privacy">%1$s sees your name and number and your practice: check-ins, moods, how each item of a class went and your notes on it, and your feedback. Your Gemma chat and health notes stay on this phone unless you share one.</string>
+    <string name="privacy">%1$s sees your name and number and your practice: check-ins, moods, how each item went in class and on your own, your notes on them, and your feedback. Your Gemma chat and health notes stay on this phone unless you share one.</string>
     <string name="memory_empty">No notes yet. Write one below, such as an old injury %1$s should know about.</string>
     <string name="note_hint">For example: my left knee hurts in Vajrasana</string>
     <string name="forget_note">Forget</string>
@@ -166,10 +166,36 @@
     <string name="trend_line">At first: %1$s · lately: %2$s</string>
     <string name="teacher_wrote">%1$s wrote</string>
     <string name="you_wrote">You wrote</string>
-    <string name="feedback_for">Your feedback for %1$s on this</string>
+    <string name="feedback_for">Write to %1$s about %2$s</string>
     <string name="feedback_sent">Sent</string>
     <string name="since">since %1$s</string>
     <string name="each_time">Each time</string>
+    <string name="practise_alone">Practise on your own</string>
+    <string name="solo_help">Choose what to practise, then take one at a time: time it with the stopwatch and say how it went. It is saved when you finish.</string>
+    <string name="repeat_last">Repeat your last class: %1$s</string>
+    <string name="repeat_sequence">Or a whole sequence</string>
+    <string name="choose_items">Or choose items</string>
+    <string name="search_library">Search by name</string>
+    <string name="type_asana">Asanas</string>
+    <string name="type_pranayama">Pranayama</string>
+    <string name="type_meditation">Meditation</string>
+    <string name="start_count">Start (%1$d)</string>
+    <string name="your_list">Your list</string>
+    <string name="item_of">%1$d of %2$d</string>
+    <string name="watch_start">Start the stopwatch</string>
+    <string name="watch_stop">Stop</string>
+    <string name="next">Next</string>
+    <string name="finish">Finish</string>
+    <string name="finish_here">Finish here</string>
+    <string name="leave_title">Leave this practice?</string>
+    <string name="leave_body">It is saved only when you finish.</string>
+    <string name="leave">Leave</string>
+    <string name="keep_going">Keep practising</string>
+    <string name="solo_saved">Saved to your practice</string>
+    <string name="solo_row">Solo practice · %1$s</string>
+    <string name="solo">Solo</string>
+    <string name="solo_held">Solo · held %1$s</string>
+    <string name="holds_line">Longest hold %1$s · latest %2$s</string>
     <!-- Gemma on the phone -->
     <string name="ask_thinking_phone">Thinking on your phone…</string>
     <string name="gemma_title">Gemma on your phone</string>
@@ -243,5 +269,9 @@
     <plurals name="pain_times">
         <item quantity="one">Strain or pain: %d time</item>
         <item quantity="other">Strain or pain: %d times</item>
+    </plurals>
+    <plurals name="times_solo">
+        <item quantity="one">%d solo</item>
+        <item quantity="other">%d solo</item>
     </plurals>
 </resources>

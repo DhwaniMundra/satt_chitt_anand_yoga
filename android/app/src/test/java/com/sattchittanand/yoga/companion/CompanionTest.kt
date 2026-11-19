@@ -21,7 +21,8 @@ class CompanionTest {
             if (!reachable) error("no network")
             practiceAsked = days to lang
             return linkedMapOf("period_days" to days, "classes_joined" to 3,
-                "classes" to listOf(linkedMapOf("date" to "2026-11-16", "class" to "Hatha Yoga", "mood_before" to 3, "mood_after" to 4)))
+                "classes" to listOf(linkedMapOf("date" to "2026-11-16", "class" to "Hatha Yoga", "mood_before" to 3, "mood_after" to 4)),
+                "solo" to listOf(linkedMapOf("date" to "2026-11-17", "minutes" to 20, "items" to listOf("Vajrasana"))))
         }
         override fun upcoming(lang: String): List<UpcomingClass> = if (reachable) classes else error("no network")
         override fun saveNote(text: String) { saved += text }
@@ -96,6 +97,7 @@ class CompanionTest {
         val week = t.getMyPractice(7)
         assertEquals(3, week["classes_joined"])
         assertEquals(listOf("Monday 16 November"), (week["classes"] as List<*>).map { (it as Map<*, *>)["date"] }) // the weekday written out
+        assertEquals(listOf("Tuesday 17 November"), (week["solo"] as List<*>).map { (it as Map<*, *>)["date"] })
         assertEquals(7 to "mr", server.practiceAsked)
         t.getMyPractice(400)
         assertEquals(90 to "mr", server.practiceAsked) // at most 90 days
