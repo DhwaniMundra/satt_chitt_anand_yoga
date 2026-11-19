@@ -90,7 +90,7 @@ class NotesTest {
             "What should I eat before class?" to "Food and water around practice",
             "कक्षा से पहले क्या खाएँ?" to "Food and water around practice",
             "वर्गापूर्वी काय खावे?" to "Food and water around practice",
-            "What does Sat Chit Ananda mean?" to "Sat Chit Ananda",
+            "What does Satt Chitt Anand mean?" to "Sat Chit Ananda",
             "सत्·चित्·आनन्द का अर्थ क्या है?" to "Sat Chit Ananda",
             "सत्·चित्·आनन्द म्हणजे काय?" to "Sat Chit Ananda",
         )

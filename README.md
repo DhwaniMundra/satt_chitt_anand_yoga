@@ -63,7 +63,7 @@ flowchart LR
 
 ## Careful with health
 
-- Gemma never diagnoses, promises a cure or touches a medicine. Emergency signs get a fixed reply with 112 and
+- Gemma never diagnoses, promises a cure or advises on medicine. Emergency signs get a fixed reply with 112 and
   Tele-MANAS (14416), before any model runs.
 - Only the student and the teacher see what a student says about themselves; the Sheet's Dashboard shows it only as
   counts.

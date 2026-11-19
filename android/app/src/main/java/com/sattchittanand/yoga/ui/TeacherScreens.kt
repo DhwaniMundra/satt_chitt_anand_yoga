@@ -324,7 +324,8 @@ private fun BatchPicker(vm: AppViewModel, student: User, preselect: String?, act
     var chosen by rememberSaveable(student.id) { mutableStateOf(preselect) }
     var note by rememberSaveable(student.id) { mutableStateOf("") }
     Choices(batches.map { it.info.name }, batches.indexOfFirst { it.info.key == chosen }.takeIf { it >= 0 }, perRow = 2) { chosen = batches[it].info.key }
-    OutlinedTextField(note, { note = it }, placeholder = { Text(stringResource(R.string.batch_note)) }, singleLine = true, modifier = Modifier.fillMaxWidth())
+    OutlinedTextField(note, { note = it }, placeholder = { Text(stringResource(R.string.batch_note)) }, minLines = 2, maxLines = 3,
+        modifier = Modifier.fillMaxWidth())
     val name = batches.firstOrNull { it.info.key == chosen }?.info?.name
     Button(onClick = { chosen?.let { vm.placeStudent(student.id, it, note); done() } }, enabled = name != null && !vm.busy, modifier = Modifier.fillMaxWidth()) {
         Text(stringResource(action, name.orEmpty()))
