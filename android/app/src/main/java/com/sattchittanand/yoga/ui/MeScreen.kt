@@ -10,7 +10,13 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
@@ -19,12 +25,12 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -32,6 +38,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.sattchittanand.yoga.AppViewModel
+import com.sattchittanand.yoga.Note
 import com.sattchittanand.yoga.R
 import java.util.Locale
 
@@ -41,7 +48,24 @@ fun MeScreen(vm: AppViewModel, onLanguage: (String) -> Unit) {
     var feedback by rememberSaveable { mutableStateOf("") }
     var server by rememberSaveable { mutableStateOf(vm.prefs.server) }
     val thanks = stringResource(R.string.feedback_thanks)
+    val sharedDone = stringResource(R.string.shared_note)
+    // The note waiting for "Share" in the dialog. Not saveable: a note is not, and the dialog can simply be asked again.
+    var sharing by remember { mutableStateOf<Note?>(null) }
     LaunchedEffect(user.isTeacher) { if (!user.isTeacher) vm.loadNotes() }
+    sharing?.let { note ->
+        AlertDialog(
+            onDismissRequest = { sharing = null },
+            title = { Text(stringResource(R.string.share_confirm_title)) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("“${note.text}”", style = MaterialTheme.typography.bodyLarge)
+                    Text(stringResource(R.string.share_confirm_body), style = MaterialTheme.typography.bodyMedium, color = Palette.muted)
+                }
+            },
+            confirmButton = { TextButton(onClick = { vm.shareNote(note, sharedDone); sharing = null }) { Text(stringResource(R.string.share)) } },
+            dismissButton = { TextButton(onClick = { sharing = null }) { Text(stringResource(R.string.cancel)) } },
+        )
+    }
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text(user.name, style = MaterialTheme.typography.headlineSmall)
@@ -63,15 +87,25 @@ fun MeScreen(vm: AppViewModel, onLanguage: (String) -> Unit) {
         if (!user.isTeacher) {
             Label(stringResource(R.string.memory_title))
             SectionCard {
+                Text(stringResource(R.string.memory_private), style = MaterialTheme.typography.bodyMedium, color = Palette.moss)
                 if (vm.notes.isEmpty()) Text(stringResource(R.string.memory_empty), style = MaterialTheme.typography.bodyMedium, color = Palette.muted)
-                vm.notes.forEachIndexed { i, note ->
-                    if (i > 0) HorizontalDivider(color = Palette.line)
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f)) {
+                vm.notes.forEach { note ->
+                    HorizontalDivider(color = Palette.line)
+                    Row(verticalAlignment = Alignment.Top) {
+                        Column(Modifier.weight(1f).padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             Text(note.text, style = MaterialTheme.typography.bodyLarge)
                             Text(dayLabel(note.savedAt), style = MaterialTheme.typography.labelMedium, color = Palette.muted)
+                            if (note.sharedId != null) {
+                                Pill("✓ " + stringResource(R.string.shared_note))
+                            } else {
+                                TextButton(onClick = { sharing = note }, contentPadding = PaddingValues(horizontal = 0.dp)) {
+                                    Icon(Icons.AutoMirrored.Filled.Send, null, Modifier.size(16.dp))
+                                    Spacer(Modifier.width(6.dp))
+                                    Text(stringResource(R.string.share_note))
+                                }
+                            }
                         }
-                        IconButton(onClick = { vm.forgetNote(note.id) }) {
+                        IconButton(onClick = { vm.forgetNote(note) }) {
                             Icon(Icons.Filled.Close, stringResource(R.string.forget_note), tint = Palette.muted)
                         }
                     }
@@ -81,13 +115,6 @@ fun MeScreen(vm: AppViewModel, onLanguage: (String) -> Unit) {
 
         Label(stringResource(R.string.language))
         LanguageChips(vm.prefs.lang, onLanguage)
-
-        if (!user.isTeacher) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(stringResource(R.string.research), Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
-                Switch(user.researchConsent, { vm.setConsent(it) })
-            }
-        }
 
         SectionCard {
             Text(stringResource(R.string.feedback_title), style = MaterialTheme.typography.titleMedium)

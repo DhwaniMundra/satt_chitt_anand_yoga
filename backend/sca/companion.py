@@ -60,9 +60,10 @@ class Reply:
     latency_s: float
 
 
-def practice_summary(conn: sqlite3.Connection, studio: dict, user_id: int, days: int) -> dict:
+def practice_summary(conn: sqlite3.Connection, studio: dict, user_id: int, days: int, lang: str = "en") -> dict:
     """The student's classes over the last `days` days, with the sums done: classes joined, average mood before and
-    after, and the same per class."""
+    after, and the same per class. Class names in `lang`: with only the English names, Hindi and Marathi answers named
+    the classes in English (docs/iterations/v0.5.md)."""
     days = max(1, min(int(days), 90))
     rows = conn.execute(
         "SELECT s.starts_at, s.class_key, b.mood AS before, a.mood AS after FROM checkins b "
@@ -77,7 +78,7 @@ def practice_summary(conn: sqlite3.Connection, studio: dict, user_id: int, days:
 
     classes, by_class = [], {}
     for r in rows:
-        name = studio_mod.class_info(studio, r["class_key"], "en")["name"]
+        name = studio_mod.class_info(studio, r["class_key"], lang)["name"]
         when = db.parse_iso(r["starts_at"]).astimezone(studio_mod.IST)
         classes.append({"date": when.strftime("%a %d %b"), "class": name, "mood_before": r["before"], "mood_after": r["after"]})
         entry = by_class.setdefault(name, {"times": 0, "before": [], "after": []})
@@ -97,12 +98,13 @@ def practice_summary(conn: sqlite3.Connection, studio: dict, user_id: int, days:
     }
 
 
-def upcoming_classes(conn: sqlite3.Connection, studio: dict, limit: int = 5) -> dict:
-    """The next classes, each with an unambiguous day: "tomorrow, Friday 20 November"."""
+def upcoming_classes(conn: sqlite3.Connection, studio: dict, limit: int = 5, lang: str = "en") -> dict:
+    """The next classes, each with an unambiguous day: "tomorrow, Friday 20 November"; class names, levels and
+    descriptions in `lang`."""
     out = []
     today = db.now().astimezone(studio_mod.IST).date()
     for r in studio_mod.upcoming(conn, studio, db.now(), limit):
-        info = studio_mod.class_info(studio, r["class_key"], "en")
+        info = studio_mod.class_info(studio, r["class_key"], lang)
         start = db.parse_iso(r["starts_at"]).astimezone(studio_mod.IST)
         date = start.strftime("%A %-d %B")
         day = {0: f"today, {date}", 1: f"tomorrow, {date}"}.get((start.date() - today).days, date)
@@ -126,7 +128,7 @@ def tools_for(db_path: Path, studio: dict, assistant: Assistant, user_id: int, l
         used.append("get_my_practice")
         c = conn()
         try:
-            return practice_summary(c, studio, user_id, days)
+            return practice_summary(c, studio, user_id, days, lang)
         finally:
             c.close()
 
@@ -135,7 +137,7 @@ def tools_for(db_path: Path, studio: dict, assistant: Assistant, user_id: int, l
         used.append("get_upcoming_classes")
         c = conn()
         try:
-            return upcoming_classes(c, studio)
+            return upcoming_classes(c, studio, lang=lang)
         finally:
             c.close()
 
@@ -184,7 +186,7 @@ class Companion:
         One place, so the evaluation (scripts/eval_companion.py) sends exactly what the app sends."""
         system = SYSTEM.format(studio=self.studio["name"]["en"], name=user["name"].split()[0],
                                teacher=self.studio["teacher"]["short"], language=LANGUAGE_NAMES[lang])
-        schedule = preloaded_schedule(self.db_path, self.studio, message, used)
+        schedule = preloaded_schedule(self.db_path, self.studio, message, used, lang)
         system += schedule + preloaded_notes(self.assistant, message, lang, used, schedule=bool(schedule))
         preface = [{"role": "user" if role == "student" else "assistant", "content": text}
                    for role, text in history[-HISTORY_TURNS:]]
@@ -241,14 +243,14 @@ def save_if_asked(db_path: Path, user_id: int, message: str, used: list[str]) ->
     return True
 
 
-def preloaded_schedule(conn_path: Path, studio: dict, message: str, used: list[str]) -> str:
+def preloaded_schedule(conn_path: Path, studio: dict, message: str, used: list[str], lang: str = "en") -> str:
     """The coming classes as text for the system message when `message` is about the schedule (or "")."""
     lowered = f"{message.lower()} "
     if not any(word in lowered for word in SCHEDULE_WORDS):
         return ""
     conn = db.connect(conn_path)
     try:
-        schedule = upcoming_classes(conn, studio)
+        schedule = upcoming_classes(conn, studio, lang=lang)
     finally:
         conn.close()
     used.append("get_upcoming_classes")

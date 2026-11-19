@@ -15,7 +15,6 @@
     <string name="group_code">ग्रुप कोड (व्हाट्सऐप ग्रुप से)</string>
     <string name="group_code_help">कोड नहीं है? फिर भी साइन अप करें, रमित जी आपको मंज़ूरी देंगे।</string>
     <string name="teacher_code">शिक्षक कोड</string>
-    <string name="consent">ऐप बेहतर बनाने में मदद करें: स्टूडियो सहायक से पूछे गए मेरे प्रश्न पढ़ सकता है। ये कभी साझा नहीं होते।</string>
     <string name="back">वापस</string>
     <string name="role_student">विद्यार्थी</string>
     <string name="role_teacher">शिक्षक</string>
@@ -98,7 +97,7 @@
     <string name="ask_hint">अपना प्रश्न लिखें…</string>
     <string name="ask_send">भेजें</string>
     <string name="ask_disclaimer">इसे आपकी कक्षाएँ और आपका मूड पता है, और वह भी जो आप इसे याद रखने को कहें। स्टूडियो के नोट्स से सामान्य जानकारी, चिकित्सा सलाह नहीं।</string>
-    <string name="ask_thinking">सोच रहे हैं…</string>
+    <string name="ask_disclaimer_notes">स्टूडियो के नोट्स से सामान्य जानकारी, चिकित्सा सलाह नहीं।</string>
     <string name="sugg_1">इस हफ्ते मेरी प्रैक्टिस कैसी रही?</string>
     <string name="sugg_2">कमर दर्द के लिए योग?</string>
     <string name="sugg_3">कल कौन सी कक्षा मेरे लिए ठीक रहेगी?</string>
@@ -119,7 +118,6 @@
     <string name="memory_title">जो मुझे याद है</string>
     <string name="memory_empty">अभी कुछ नहीं। ‘पूछें’ में कहें: \"याद रखना कि…\"</string>
     <string name="forget_note">भूल जाएँ</string>
-    <string name="research">स्टूडियो मेरे सहायक-प्रश्न पढ़ सकता है</string>
     <string name="feedback_title">हम क्या बेहतर करें?</string>
     <string name="feedback_hint">क्या अच्छा लगा? क्या मुश्किल था?</string>
     <string name="send">भेजें</string>
@@ -155,10 +153,52 @@
     <string name="insights_title">कक्षाएँ कैसी चल रही हैं</string>
     <string name="avg_lift">औसत मूड सुधार</string>
     <string name="pairs">%1$d पहले-और-बाद के चेक-इन से</string>
-    <string name="questions_asked">पूछे गए प्रश्न</string>
     <string name="last_two_weeks">पिछले दो सप्ताह</string>
     <string name="before">पहले</string>
     <string name="after">बाद में</string>
     <string name="what_students_said">विद्यार्थियों ने क्या कहा</string>
     <string name="no_data">अभी कोई चेक-इन नहीं।</string>
+    <!-- Gemma on the phone -->
+    <string name="ask_privacy">जवाब आपके फ़ोन पर ही बनता है। रमित जी तक सिर्फ़ वही पहुँचता है जो आप साझा करें।</string>
+    <string name="ask_thinking_phone">आपके फ़ोन पर सोच रहे हैं…</string>
+    <string name="gemma_title">आपके फ़ोन पर Gemma</string>
+    <string name="gemma_offer">2.6 GB का एक बार का डाउनलोड, और फिर Gemma यहीं आपके फ़ोन पर, आपकी कक्षाओं और मूड को देखकर जवाब देगा। वाई-फ़ाई पर करें: ऐप बंद करने पर भी डाउनलोड चलता रहता है। तब तक जवाब सीधे स्टूडियो के नोट्स से आएँगे।</string>
+    <string name="gemma_download">वाई-फ़ाई पर डाउनलोड करें (2.6 GB)</string>
+    <string name="gemma_downloading">Gemma डाउनलोड हो रहा है: %2$s में से %1$s</string>
+    <string name="gemma_keeps_going">ऐप बंद करने पर भी यह चलता रहेगा।</string>
+    <string name="gemma_waiting_wifi">वाई-फ़ाई का इंतज़ार है।</string>
+    <string name="gemma_waiting_network">इंटरनेट का इंतज़ार है।</string>
+    <string name="gemma_use_mobile">मोबाइल डेटा से करें</string>
+    <string name="cancel">रद्द करें</string>
+    <string name="gemma_checking">डाउनलोड की जाँच हो रही है…</string>
+    <string name="gemma_loading">आपके फ़ोन पर Gemma शुरू हो रहा है… पहली बार में एक-दो मिनट लगते हैं।</string>
+    <string name="gemma_too_little_memory">इस फ़ोन में %1$s मेमोरी है और Gemma को 6 GB वाला फ़ोन चाहिए, इसलिए जवाब स्टूडियो के नोट्स से आएँगे।</string>
+    <string name="gemma_no_space">जगह कम है: Gemma को लगभग 3.6 GB खाली जगह चाहिए।</string>
+    <string name="gemma_wrong_file">जो फ़ाइल आई वह Gemma नहीं थी। कृपया बाद में फिर कोशिश करें।</string>
+    <string name="gemma_download_failed">डाउनलोड रुक गया। इंटरनेट देखें और फिर कोशिश करें।</string>
+    <string name="gemma_start_failed">Gemma इस फ़ोन पर शुरू नहीं हो सका, इसलिए जवाब स्टूडियो के नोट्स से आएँगे।</string>
+    <string name="try_again">फिर कोशिश करें</string>
+    <string name="gemma_download_title">सत् चित् आनंद के लिए Gemma</string>
+    <string name="gemma_download_note">आपके फ़ोन के लिए अभ्यास साथी (एक बार)</string>
+    <string name="memory_private">यह इसी फ़ोन पर रहता है। रमित जी तक सिर्फ़ वही पहुँचता है जो आप साझा करें।</string>
+    <string name="share_note">रमित जी से साझा करें</string>
+    <string name="shared_note">रमित जी से साझा किया</string>
+    <string name="share_confirm_title">रमित जी से साझा करें?</string>
+    <string name="share_confirm_body">रमित जी यह नोट अपनी ‘विद्यार्थी’ स्क्रीन पर देखेंगे। आपकी बातचीत से और कुछ नहीं भेजा जाता, और बाद में यहाँ नोट भूल जाने से वह वापस नहीं आता।</string>
+    <string name="share">साझा करें</string>
+    <string name="shared_title">आपसे साझा किए गए</string>
+    <string name="shared_help">विद्यार्थियों ने अपने अभ्यास साथी से जो नोट्स साझा करना चुना।</string>
+    <string name="notes_shared">साझा नोट्स</string>
+    <plurals name="until_days">
+        <item quantity="one">%d दिन</item>
+        <item quantity="other">%d दिन</item>
+    </plurals>
+    <plurals name="until_hours">
+        <item quantity="one">%d घंटा</item>
+        <item quantity="other">%d घंटे</item>
+    </plurals>
+    <plurals name="until_minutes">
+        <item quantity="one">%d मिनट</item>
+        <item quantity="other">%d मिनट</item>
+    </plurals>
 </resources>

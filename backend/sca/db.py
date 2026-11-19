@@ -70,11 +70,19 @@ CREATE TABLE IF NOT EXISTS companion_notes (
   text TEXT NOT NULL,
   created_at TEXT NOT NULL
 );
+-- A note the companion keeps on a student's phone that the student chose to share with the teacher, one at a time.
+CREATE TABLE IF NOT EXISTS shared_notes (
+  id INTEGER PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id),
+  text TEXT NOT NULL,
+  created_at TEXT NOT NULL  -- when it was shared
+);
 """
 
 # Tables copied to the backup, in an order that respects foreign keys. Left out on purpose: login tokens, and each
-# student's chat with the companion and the notes it keeps for them, which are theirs alone.
-BACKUP_TABLES = ["users", "class_sessions", "checkins", "feedback", "questions", "settings"]
+# student's chat with the companion and the notes it keeps for them (on the server, for the laptop's companion), which
+# are theirs alone. A note a student shared with the teacher is the studio's, and is backed up.
+BACKUP_TABLES = ["users", "class_sessions", "checkins", "feedback", "questions", "settings", "shared_notes"]
 
 
 def now() -> datetime:

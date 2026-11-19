@@ -18,11 +18,15 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.PhoneAndroid
+import androidx.compose.material3.Button
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Surface
@@ -30,6 +34,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -48,6 +53,11 @@ import androidx.compose.ui.unit.dp
 import com.sattchittanand.yoga.AppViewModel
 import com.sattchittanand.yoga.ChatLine
 import com.sattchittanand.yoga.R
+import com.sattchittanand.yoga.companion.GemmaFile
+import com.sattchittanand.yoga.companion.GemmaState
+import com.sattchittanand.yoga.companion.Problem
+import com.sattchittanand.yoga.companion.Waiting
+import java.util.Locale
 
 /** What a reply says it did, for each tool the companion used. */
 private val TOOL_LABELS = mapOf(
@@ -58,7 +68,8 @@ private val TOOL_LABELS = mapOf(
     "memory" to R.string.tool_memory,
 )
 
-/** The chat with the practice companion. The server keeps the conversation; it loads each time the tab opens. */
+/** The chat with the practice companion, answered on this phone: by Gemma once downloaded, before that (or on a phone
+ *  with too little memory) from the studio's notes. The conversation is kept on the phone. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun AskScreen(vm: AppViewModel) {
@@ -66,14 +77,15 @@ fun AskScreen(vm: AppViewModel) {
     val list = rememberLazyListState()
     val open = vm.user?.let { it.isTeacher || it.isApproved } ?: false
     var scrolled by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) { vm.loadChat() }
+    val gemma by vm.gemma.state.collectAsState()
+    LaunchedEffect(Unit) { vm.openAsk() }
     // The newest message at the top of the view: a long reply is read from its start. No animation on opening.
     LaunchedEffect(vm.chat.size, vm.asking) {
         if (vm.chat.isEmpty()) return@LaunchedEffect
         if (scrolled) list.animateScrollToItem(vm.chat.size) else list.scrollToItem(vm.chat.size)
         scrolled = true
     }
-    val send = { text: String -> vm.ask(text) { question = it } } // a failed send puts the words back in the box
+    val send = { text: String -> vm.ask(text) }
 
     Column(Modifier.fillMaxSize()) {
         // The title stays put above the conversation, so Clear is always at hand.
@@ -93,10 +105,23 @@ fun AskScreen(vm: AppViewModel) {
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Surface(color = Palette.saffronLight, shape = MaterialTheme.shapes.small) {
-                        Text(stringResource(R.string.ask_disclaimer), Modifier.padding(12.dp), style = MaterialTheme.typography.bodyMedium)
+                        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Filled.PhoneAndroid, null, Modifier.size(18.dp), tint = Palette.moss)
+                                Text(stringResource(R.string.ask_privacy), style = MaterialTheme.typography.titleSmall, color = Palette.moss)
+                            }
+                            // "Knows your classes…" only once Gemma can look them up
+                            Text(stringResource(if (gemma is GemmaState.Ready) R.string.ask_disclaimer else R.string.ask_disclaimer_notes),
+                                style = MaterialTheme.typography.bodyMedium)
+                        }
                     }
+                    if (open) GemmaCard(gemma, vm)
                     if (open && vm.chat.isEmpty()) {
-                        val suggestions = listOf(R.string.sugg_1, R.string.sugg_2, R.string.sugg_3, R.string.sugg_4).map { stringResource(it) }
+                        // About the student's own practice and the schedule only once Gemma can look them up: the notes alone
+                        // answered "How was my practice this week?" with the notes for beginners.
+                        val ids = if (gemma is GemmaState.Ready) listOf(R.string.sugg_1, R.string.sugg_2, R.string.sugg_3, R.string.sugg_4)
+                        else listOf(R.string.sugg_2, R.string.sugg_4)
+                        val suggestions = ids.map { stringResource(it) }
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             suggestions.forEach { s -> SuggestionChip(onClick = { send(s) }, label = { Text(s) }) }
                         }
@@ -108,7 +133,7 @@ fun AskScreen(vm: AppViewModel) {
                 item {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
-                        Text(stringResource(R.string.ask_thinking), color = Palette.muted)
+                        Text(stringResource(R.string.ask_thinking_phone), color = Palette.muted)
                     }
                 }
             }
@@ -130,6 +155,70 @@ fun AskScreen(vm: AppViewModel) {
             ) { Icon(Icons.AutoMirrored.Filled.Send, stringResource(R.string.ask_send)) }
         }
     }
+}
+
+/** Where Gemma on this phone stands: the offer to download it, the download, the check, the start, or why answers
+ *  come from the notes. Nothing once Gemma is ready. */
+@Composable
+private fun GemmaCard(state: GemmaState, vm: AppViewModel) {
+    val gb = { bytes: Long -> String.format(Locale.US, "%.1f GB", bytes / 1e9) }
+    when (state) {
+        is GemmaState.Ready -> Unit
+        is GemmaState.TooLittleMemory -> QuietLine(stringResource(R.string.gemma_too_little_memory, gb(state.totalBytes)))
+        is GemmaState.Failed -> SectionCard {
+            Text(stringResource(R.string.gemma_title), style = MaterialTheme.typography.titleMedium)
+            Text(
+                stringResource(
+                    when (state.problem) {
+                        Problem.NO_SPACE -> R.string.gemma_no_space
+                        Problem.WRONG_FILE -> R.string.gemma_wrong_file
+                        Problem.DOWNLOAD -> R.string.gemma_download_failed
+                        Problem.START -> R.string.gemma_start_failed
+                    },
+                ),
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            if (state.problem != Problem.START) OutlinedButton(onClick = vm::downloadGemma) { Text(stringResource(R.string.try_again)) }
+        }
+        GemmaState.NotDownloaded -> SectionCard {
+            Text(stringResource(R.string.gemma_title), style = MaterialTheme.typography.titleMedium)
+            Text(stringResource(R.string.gemma_offer), style = MaterialTheme.typography.bodyMedium)
+            Button(onClick = vm::downloadGemma) { Text(stringResource(R.string.gemma_download)) }
+        }
+        is GemmaState.Downloading -> SectionCard {
+            Text(stringResource(R.string.gemma_downloading, gb(state.done), gb(state.total)), style = MaterialTheme.typography.titleSmall)
+            LinearProgressIndicator(progress = { (state.done.toFloat() / state.total).coerceIn(0f, 1f) }, Modifier.fillMaxWidth(), color = Palette.moss)
+            Text(
+                stringResource(
+                    when (state.waiting) {
+                        Waiting.WIFI -> R.string.gemma_waiting_wifi
+                        Waiting.NETWORK -> R.string.gemma_waiting_network
+                        null -> R.string.gemma_keeps_going
+                    },
+                ),
+                style = MaterialTheme.typography.bodyMedium, color = Palette.muted,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (state.waiting == Waiting.WIFI) OutlinedButton(onClick = vm::useMobileData) { Text(stringResource(R.string.gemma_use_mobile)) }
+                TextButton(onClick = vm::cancelDownload) { Text(stringResource(R.string.cancel)) }
+            }
+        }
+        is GemmaState.Checking -> SectionCard {
+            Text(stringResource(R.string.gemma_checking), style = MaterialTheme.typography.titleSmall)
+            LinearProgressIndicator(progress = { (state.done.toFloat() / GemmaFile.SIZE).coerceIn(0f, 1f) }, Modifier.fillMaxWidth(), color = Palette.moss)
+        }
+        GemmaState.Loading -> SectionCard {
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+                Text(stringResource(R.string.gemma_loading), style = MaterialTheme.typography.bodyMedium)
+            }
+        }
+    }
+}
+
+@Composable
+private fun QuietLine(text: String) {
+    Text(text, style = MaterialTheme.typography.bodyMedium, color = Palette.muted)
 }
 
 @OptIn(ExperimentalLayoutApi::class)
