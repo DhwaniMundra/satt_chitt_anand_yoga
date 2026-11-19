@@ -19,8 +19,8 @@ const STUDIO = {
   },
   "tagline": {
     "en": "Truth · Consciousness · Bliss",
-    "hi": "सत्य · चेतना · आनंद",
-    "mr": "सत्य · चैतन्य · आनंद"
+    "hi": "सत्य · चेतना · आनन्द",
+    "mr": "सत्य · चैतन्य · आनन्द"
   },
   "since": 1994,
   "teacher": {
@@ -225,8 +225,8 @@ const STUDIO = {
           "name": "Anand",
           "meaning": {
             "en": "Bliss · Joy",
-            "hi": "आनंद · प्रसन्नता",
-            "mr": "आनंद · प्रसन्नता"
+            "hi": "आनन्द · प्रसन्नता",
+            "mr": "आनन्द · प्रसन्नता"
           }
         }
       ]
@@ -2372,9 +2372,9 @@ function normalizePhone_(raw) {
   return '+' + digits;
 }
 
-// After ATTEMPT_LIMIT_ failures for one key (a phone number, the teacher code, a user entering a group code) within
-// the window, that key is refused until the window has passed. Kept in CacheService: an eviction only forgets recent
-// failures. Callers hold the script lock.
+// After ATTEMPT_LIMIT_ failures for one key (a phone number logging in, the teacher code, a number signing up with a
+// group code) within the window, that key is refused until the window has passed. Kept in CacheService: an eviction
+// only forgets recent failures. Callers hold the script lock.
 
 function attempts_(key) {
   const raw = cache_().get('fail:' + key);
@@ -2446,7 +2446,6 @@ function userJson_(u) {
 const IST_OFFSET_MS_ = 330 * 60000; // India is UTC+5:30 all year
 const DAY_MS_ = 86400000;
 const DAYS_ = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
-const WEEKDAY_NAMES_ = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const MONTH_NAMES_ = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const CHECKIN_BEFORE_MIN_ = 60; // how early before class the "before" check-in opens
 const MEET_LINK_ = /^https:\/\/(meet\.google\.com\/[a-z]{3}-[a-z]{4}-[a-z]{3}|([\w-]+\.)?zoom\.us\/j\/\d+(\?pwd=[\w.-]+)?)$/;
@@ -2732,7 +2731,8 @@ function practiceSummary_(ctx, userId, days, lang) {
   const plan = sessionCurricula_(ctx);
   rows.forEach((r) => {
     const name = batchJson_(batches[r.session.batch], r.session.batch, lang).name;
-    classes.push({ date: istDate_(r.session.starts_at), class: name, curriculum: plan[r.session.id], mood_before: r.before, mood_after: r.after });
+    classes.push({ date: istDate_(r.session.starts_at), at: isoTime_(r.session.starts_at), class: name, curriculum: plan[r.session.id],
+      mood_before: r.before, mood_after: r.after });
     const entry = byClass[name] || (byClass[name] = { times: 0, before: [], after: [] });
     entry.times += 1;
     entry.before.push(r.before);
@@ -2752,7 +2752,7 @@ function practiceSummary_(ctx, userId, days, lang) {
   const solo = mySolo
     .filter((s) => s.started_at >= from && s.started_at <= ctx.now)
     .sort((a, b) => a.started_at - b.started_at)
-    .map((s) => ({ date: istDate_(s.started_at), minutes: Math.round((s.ended_at - s.started_at) / 60000),
+    .map((s) => ({ date: istDate_(s.started_at), at: isoTime_(s.started_at), minutes: Math.round((s.ended_at - s.started_at) / 60000),
       items: (itemsBySolo[s.id] || []).sort((a, b) => a.id - b.id).map((p) => itemTitle_(library[p.item], p.item, lang)) }));
   // The items practised most in the period, in class and on one's own apart, so neither is taken for the other: how
   // often, the average reaction, strain or pain.
@@ -2795,14 +2795,13 @@ function itemTitle_(entry, key, lang) {
   return lang === 'en' ? entry.name : entry.sanskrit;
 }
 
-/** The WhatsApp message for one session, its wa.me link, and the group to post it in. */
+/** The WhatsApp message for one session. */
 function shareFor_(ctx, row, lang) {
   const batch = batches_(ctx)[row.batch];
   const link = row.meet_link || (batch && batch.meet_link);
   if (!link) throw new HttpError_(400, 'no_link');
   const name = batchJson_(batch, row.batch, lang).name;
-  const text = classMessage_(name, row.starts_at, row.duration_min, link, lang);
-  return { text: text, url: shareUrl_(text), group_link: ctx.db.setting('group_link') };
+  return { text: classMessage_(name, row.starts_at, row.duration_min, link, lang) };
 }
 
 // ---------- WhatsApp messages ----------
@@ -2839,14 +2838,6 @@ function classMessage_(className, startsAt, minutes, link, lang) {
 
 function inviteMessage_(code, lang) {
   return fill_(pick_(TEXT_.invite, lang), { studio: pick_(STUDIO.name, lang), code: code });
-}
-
-/** A wa.me link that opens WhatsApp with `text` ready to send: every character but letters, digits and _.-~/ escaped. */
-function shareUrl_(text) {
-  const quoted = encodeURIComponent(text)
-    .replace(/[!'()*]/g, (c) => '%' + c.charCodeAt(0).toString(16).toUpperCase())
-    .replace(/%2F/g, '/');
-  return 'https://wa.me/?text=' + quoted;
 }
 
 // ---------- Practice: the curriculum, each class's plan, how each item went, and each student's history ----------
@@ -3038,9 +3029,9 @@ function itemProgress_(item, rows, feedback, when) {
     strain_or_pain: { times: pains.length, last: pains.length ? istDate_(pains[pains.length - 1].at) : null },
     teacher_said: latest ? { date: istDate_(latest.created_at), text: latest.text } : null,
     your_notes: entries.filter((e) => e.note).slice(-5).map((e) => ({ date: istDate_(e.at), text: e.note })),
-    entries: entries.slice().reverse().map((e) => ({ date: istDate_(e.at), kind: e.solo ? 'solo' : 'class', hold_s: e.hold,
+    entries: entries.slice().reverse().map((e) => ({ date: istDate_(e.at), at: isoTime_(e.at), kind: e.solo ? 'solo' : 'class', hold_s: e.hold,
       reaction: e.reaction, pain: e.pain ? 1 : 0, note: e.note })),
-    feedback: said.slice().reverse().map((f) => ({ date: istDate_(f.created_at), text: f.text })),
+    feedback: said.slice().reverse().map((f) => ({ date: istDate_(f.created_at), at: isoTime_(f.created_at), text: f.text })),
   };
 }
 
@@ -3152,15 +3143,13 @@ function painAreas_(text) {
   return String(text || '').split(',').map((a) => a.trim().toLowerCase()).filter((a) => a);
 }
 
-/** The batch the answers point to, for the teacher to confirm: any pain, Pain management; most of the
- * self-assessment steady or at ease (four or more answered), Intermediate; else Beginner. Never Advanced, which is
- * the teacher's call. The first batch when the owner has renamed these. */
+/** The batch the answers point to, for the teacher to confirm: any pain, Pain management; four or more poses of the
+ * self-assessment steady or at ease, Intermediate; else Beginner. Never Advanced, which is the teacher's call. The
+ * first batch when the owner has renamed these. */
 function suggestedBatch_(ctx, pain, ratings) {
   const batches = batches_(ctx);
-  const said = ratings.filter((r) => r.reaction !== null);
-  const easy = said.filter((r) => r.reaction >= 3).length;
-  const key = pain.length || ratings.some((r) => r.pain === 1) ? 'pain_management'
-    : said.length >= 4 && easy * 2 > said.length ? 'intermediate' : 'beginner';
+  const easy = ratings.filter((r) => r.reaction !== null && r.reaction >= 3).length;
+  const key = pain.length || ratings.some((r) => r.pain === 1) ? 'pain_management' : easy >= 4 ? 'intermediate' : 'beginner';
   return batches[key] ? key : Object.keys(batches)[0] || null;
 }
 
@@ -3203,8 +3192,7 @@ function saveIntake_(ctx) {
 // ---------- public ----------
 
 function health_() {
-  // The assistant runs on the phone; this server has none.
-  return { ok: true, assistant: 'off', model: null };
+  return { ok: true };
 }
 
 function studio_(ctx) {
@@ -3233,11 +3221,13 @@ function signup_(ctx) {
     // The group code, from the class's WhatsApp invite, keeps sign-ups to the class; the teacher then places each
     // student in a batch.
     const key = 'group-code:' + phone;
-    if (attemptsBlocked_(key)) throw new HttpError_(429, 'too_many_attempts');
-    if (!codeMatches_(ctx, code, 'group_code')) {
-      attemptsFail_(key);
-      throw new HttpError_(400, 'bad_group_code');
-    }
+    ctx.lock(() => {
+      if (attemptsBlocked_(key)) throw new HttpError_(429, 'too_many_attempts');
+      if (!codeMatches_(ctx, code, 'group_code')) {
+        attemptsFail_(key);
+        throw new HttpError_(400, 'bad_group_code');
+      }
+    }, true);
     status = 'pending';
   }
   if (ctx.db.t('users').rows.some((u) => u.phone === phone)) throw new HttpError_(409, 'phone_taken');
@@ -3254,7 +3244,7 @@ function signup_(ctx) {
   });
 }
 
-/** Teacher and group codes are compared in capitals, so "ramit2024" and "RAMIT2024" are the same code. */
+/** Teacher and group codes are compared in capitals, so "yoga2024" and "YOGA2024" are the same code. */
 function codeMatches_(ctx, code, key) {
   const want = (ctx.db.setting(key) || '').trim().toUpperCase();
   return want !== '' && code === want;
@@ -3310,7 +3300,6 @@ function updateMe_(ctx) {
   return { user: userJson_(user) };
 }
 
-/** A pending student who later gets the group code from the WhatsApp group is approved at once. */
 /** What the get_my_practice tool on the phone hands Gemma: this student's classes over the last `days` days. */
 function myPractice_(ctx) {
   const user = member_(ctx);
@@ -3374,12 +3363,13 @@ function home_(ctx) {
         .map((p) => ({ item: p.item, reaction: p.reaction, pain: p.pain, note: p.note })),
     };
   }
+  // Classes are for approved students only: one waiting or removed gets none, nor a class to say how it went.
   return {
     user: userJson_(user),
-    batch: user.batch ? batchJson_(batches[user.batch], user.batch, lang) : null,
+    batch: member && user.batch ? batchJson_(batches[user.batch], user.batch, lang) : null,
     studio: studioJson_(ctx, lang),
     sessions: sessions,
-    after_checkin: after,
+    after_checkin: member ? after : null,
     group_link: member ? ctx.db.setting('group_link') : null,
   };
 }
@@ -3389,7 +3379,8 @@ function checkin_(ctx) {
   const { path, body } = ctx.check({ path: PATH_SESSION_, body: BODY_.checkin });
   if (user.status !== 'approved') throw new HttpError_(403, 'pending');
   const row = sessionRow_(ctx, path.session_id);
-  if (user.role === 'student' && row.batch !== user.batch) throw new HttpError_(403, 'other_batch');
+  // Joining is for one's own batch's classes; a class joined before a move can still be answered after it.
+  if (body.phase === 'before' && user.role === 'student' && row.batch !== user.batch) throw new HttpError_(403, 'other_batch');
   const start = row.starts_at;
   const end = start + row.duration_min * 60000;
   const now = ctx.now;
@@ -3478,7 +3469,6 @@ function share_(ctx) {
 function updateSettings_(ctx) {
   teacher_(ctx);
   const { body } = ctx.check({ body: BODY_.settings });
-  // Check both before saving either, so a bad link never leaves the other half-saved.
   if (body.group_link !== null) ctx.db.setSetting('group_link', cleanGroupLink_(body.group_link));
   return { group_link: ctx.db.setting('group_link'), group_code: ctx.db.setting('group_code') };
 }
@@ -3492,8 +3482,7 @@ function rotateGroupCode_(ctx) {
 function invite_(ctx) {
   teacher_(ctx);
   const { query } = ctx.check({ query: QUERY_LANG_ });
-  const text = inviteMessage_(ctx.db.setting('group_code'), query.lang);
-  return { text: text, url: shareUrl_(text), group_link: ctx.db.setting('group_link') };
+  return { text: inviteMessage_(ctx.db.setting('group_code'), query.lang) };
 }
 
 function students_(ctx) {
@@ -3505,8 +3494,7 @@ function students_(ctx) {
   const rows = ctx.db.t('users').rows
     .filter((u) => u.role === 'student')
     .sort((a, b) => (b.status === 'pending') - (a.status === 'pending') || b.created_at - a.created_at || a.id - b.id);
-  return { students: rows.map((u) => Object.assign(userJson_(u), { joined: joined[u.id] || 0, created_at: isoTime_(u.created_at),
-    intake: intakeOf_(ctx, u.id) })) };
+  return { students: rows.map((u) => Object.assign(userJson_(u), { joined: joined[u.id] || 0, intake: intakeOf_(ctx, u.id) })) };
 }
 
 /** Removes a student, or takes a removed one back into their batch; placing a new student is placeInBatch_. */
@@ -3574,7 +3562,7 @@ function insights_(ctx) {
       const before = list.filter((c) => c.phase === 'before').map((c) => c.mood);
       const after = list.filter((c) => c.phase === 'after').map((c) => c.mood);
       return { id: s.id, starts_at: isoTime_(s.starts_at), class: batchJson_(batches[s.batch], s.batch, query.lang).name, joined: before.length,
-        mood_before: mean(before), mood_after: mean(after), answered_after: after.length };
+        mood_before: mean(before), mood_after: mean(after) };
     });
   const [change, pairs] = moodChange_(checkins);
   const users = ctx.db.t('users').rows;
@@ -3589,11 +3577,10 @@ function insights_(ctx) {
     .slice(0, 20)
     .map((f) => ({ screen: f.screen, text: f.text, created_at: isoTime_(f.created_at), name: names[f.user_id] }));
   return {
-    students: { approved: count('approved'), pending: count('pending') },
+    students: { approved: count('approved') },
     mood_change: change,
     mood_pairs: pairs,
     sessions: sessions,
-    questions: { count: 0, gemma_latency_s: null }, // the assistant runs on the phone; questions never reach the server
     feedback: feedback,
   };
 }
@@ -3605,12 +3592,13 @@ function sharedNotes_(ctx) {
   ctx.db.t('users').rows.forEach((u) => {
     names[u.id] = u.name;
   });
-  const shared = ctx.db.t('shared_notes').rows
+  const all = ctx.db.t('shared_notes').rows
     .filter((n) => Object.prototype.hasOwnProperty.call(names, n.user_id))
-    .sort((a, b) => b.created_at - a.created_at || b.id - a.id)
-    .slice(0, 50)
+    .sort((a, b) => b.created_at - a.created_at || b.id - a.id);
+  // The newest 50 to read; the count is of them all.
+  const shared = all.slice(0, 50)
     .map((n) => ({ id: n.id, user_id: n.user_id, name: names[n.user_id], text: n.text, created_at: isoTime_(n.created_at) }));
-  return { shared: shared };
+  return { shared: shared, count: all.length };
 }
 
 // ---------- Setup: the tabs, the codes and the Dashboard ----------

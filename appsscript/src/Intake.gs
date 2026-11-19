@@ -22,15 +22,13 @@ function painAreas_(text) {
   return String(text || '').split(',').map((a) => a.trim().toLowerCase()).filter((a) => a);
 }
 
-/** The batch the answers point to, for the teacher to confirm: any pain, Pain management; most of the
- * self-assessment steady or at ease (four or more answered), Intermediate; else Beginner. Never Advanced, which is
- * the teacher's call. The first batch when the owner has renamed these. */
+/** The batch the answers point to, for the teacher to confirm: any pain, Pain management; four or more poses of the
+ * self-assessment steady or at ease, Intermediate; else Beginner. Never Advanced, which is the teacher's call. The
+ * first batch when the owner has renamed these. */
 function suggestedBatch_(ctx, pain, ratings) {
   const batches = batches_(ctx);
-  const said = ratings.filter((r) => r.reaction !== null);
-  const easy = said.filter((r) => r.reaction >= 3).length;
-  const key = pain.length || ratings.some((r) => r.pain === 1) ? 'pain_management'
-    : said.length >= 4 && easy * 2 > said.length ? 'intermediate' : 'beginner';
+  const easy = ratings.filter((r) => r.reaction !== null && r.reaction >= 3).length;
+  const key = pain.length || ratings.some((r) => r.pain === 1) ? 'pain_management' : easy >= 4 ? 'intermediate' : 'beginner';
   return batches[key] ? key : Object.keys(batches)[0] || null;
 }
 

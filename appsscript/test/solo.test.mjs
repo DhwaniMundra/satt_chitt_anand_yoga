@@ -25,7 +25,8 @@ test('a session on one\'s own keeps each item timed or said, dated by the server
   assert.equal(session[3].getTime() - session[2].getTime(), 25 * 60000, 'it ended now and began 25 minutes ago');
   const v = b.call('GET', '/me/asanas/bhujangasana', { token: s.token }).body;
   assert.deepEqual([v.in_class, v.solo, v.holds, v.strain_or_pain.times], [0, 1, { recent_seconds: 30, longest_seconds: 30 }, 1]);
-  assert.deepEqual(v.entries, [{ date: v.first, kind: 'solo', hold_s: 30, reaction: null, pain: 1, note: 'Low back tight' }]);
+  assert.deepEqual(v.entries, [{ date: v.first, at: v.entries[0].at, kind: 'solo', hold_s: 30, reaction: null, pain: 1, note: 'Low back tight' }]);
+  assert.equal(Date.parse(v.entries[0].at), b.clock() - 25 * 60000, 'the moment, for the phone to name the day in its own time zone');
 });
 
 test('the holds: the latest and the longest', () => {
@@ -68,7 +69,8 @@ test('the practice summary lists the sessions on one\'s own, with the item names
   }
   solo(b, s.token, 20, [{ item: 'vajrasana', hold_s: 60 }, { item: 'bhujangasana', reaction: 3 }]);
   const en = b.call('GET', '/me/practice', { token: s.token, query: { days: 7 } }).body;
-  assert.deepEqual(en.solo, [{ date: en.solo[0].date, minutes: 20, items: ['Vajrasana', 'Bhujangasana'] }]);
+  assert.deepEqual(en.solo, [{ date: en.solo[0].date, at: en.solo[0].at, minutes: 20, items: ['Vajrasana', 'Bhujangasana'] }]);
+  assert.match(en.solo[0].at, /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/);
   assert.match(en.solo[0].date, /^\d{4}-\d\d-\d\d$/);
   assert.equal(en.classes_joined, 1, 'practice on one\'s own is not a class');
   assert.deepEqual(en.items_on_own, [{ asana: 'Bhujangasana', times: 1, average_reaction: 3, pain_times: 0 },

@@ -1,12 +1,12 @@
-// A regression snapshot of the API: 101 requests (parity/scenario.json) at a frozen moment, and the answers recorded for
-// them (parity/recorded.json). Every status and every JSON body must match. Login tokens and the two random values a
-// step names (a reset password, a new group code) are left out; validation errors are compared by (type, location).
-// A deliberate change to the answers is re-recorded with parity/record.mjs.
+// A regression snapshot of the API: the requests in snapshot/scenario.json at a frozen moment, and the answers recorded
+// for them (snapshot/recorded.json). Every status and every JSON body must match. Login tokens and the two random values
+// a step names (a reset password, a new group code) are left out; validation errors are compared by (type, location).
+// A deliberate change to the answers is re-recorded with snapshot/record.mjs.
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import test from 'node:test';
-import { answers, HERE } from './parity/run.mjs';
+import { answers, HERE } from './snapshot/run.mjs';
 
 const recorded = JSON.parse(readFileSync(join(HERE, 'recorded.json'), 'utf8'));
 

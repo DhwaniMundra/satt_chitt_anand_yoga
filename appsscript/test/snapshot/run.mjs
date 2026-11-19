@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { loadBackend, ROOT } from '../fakes.mjs';
 import { attend, classStarted, setSetting } from '../helpers.mjs';
 
-export const HERE = join(ROOT, 'test', 'parity');
+export const HERE = join(ROOT, 'test', 'snapshot');
 
 /** [{call: "METHOD /path", answer: {status, body}, skip: [keys]}], in order. */
 export function answers() {

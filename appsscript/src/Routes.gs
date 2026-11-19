@@ -6,8 +6,7 @@
 // ---------- public ----------
 
 function health_() {
-  // The assistant runs on the phone; this server has none.
-  return { ok: true, assistant: 'off', model: null };
+  return { ok: true };
 }
 
 function studio_(ctx) {
@@ -36,11 +35,13 @@ function signup_(ctx) {
     // The group code, from the class's WhatsApp invite, keeps sign-ups to the class; the teacher then places each
     // student in a batch.
     const key = 'group-code:' + phone;
-    if (attemptsBlocked_(key)) throw new HttpError_(429, 'too_many_attempts');
-    if (!codeMatches_(ctx, code, 'group_code')) {
-      attemptsFail_(key);
-      throw new HttpError_(400, 'bad_group_code');
-    }
+    ctx.lock(() => {
+      if (attemptsBlocked_(key)) throw new HttpError_(429, 'too_many_attempts');
+      if (!codeMatches_(ctx, code, 'group_code')) {
+        attemptsFail_(key);
+        throw new HttpError_(400, 'bad_group_code');
+      }
+    }, true);
     status = 'pending';
   }
   if (ctx.db.t('users').rows.some((u) => u.phone === phone)) throw new HttpError_(409, 'phone_taken');
@@ -57,7 +58,7 @@ function signup_(ctx) {
   });
 }
 
-/** Teacher and group codes are compared in capitals, so "ramit2024" and "RAMIT2024" are the same code. */
+/** Teacher and group codes are compared in capitals, so "yoga2024" and "YOGA2024" are the same code. */
 function codeMatches_(ctx, code, key) {
   const want = (ctx.db.setting(key) || '').trim().toUpperCase();
   return want !== '' && code === want;
@@ -113,7 +114,6 @@ function updateMe_(ctx) {
   return { user: userJson_(user) };
 }
 
-/** A pending student who later gets the group code from the WhatsApp group is approved at once. */
 /** What the get_my_practice tool on the phone hands Gemma: this student's classes over the last `days` days. */
 function myPractice_(ctx) {
   const user = member_(ctx);
@@ -177,12 +177,13 @@ function home_(ctx) {
         .map((p) => ({ item: p.item, reaction: p.reaction, pain: p.pain, note: p.note })),
     };
   }
+  // Classes are for approved students only: one waiting or removed gets none, nor a class to say how it went.
   return {
     user: userJson_(user),
-    batch: user.batch ? batchJson_(batches[user.batch], user.batch, lang) : null,
+    batch: member && user.batch ? batchJson_(batches[user.batch], user.batch, lang) : null,
     studio: studioJson_(ctx, lang),
     sessions: sessions,
-    after_checkin: after,
+    after_checkin: member ? after : null,
     group_link: member ? ctx.db.setting('group_link') : null,
   };
 }
@@ -192,7 +193,8 @@ function checkin_(ctx) {
   const { path, body } = ctx.check({ path: PATH_SESSION_, body: BODY_.checkin });
   if (user.status !== 'approved') throw new HttpError_(403, 'pending');
   const row = sessionRow_(ctx, path.session_id);
-  if (user.role === 'student' && row.batch !== user.batch) throw new HttpError_(403, 'other_batch');
+  // Joining is for one's own batch's classes; a class joined before a move can still be answered after it.
+  if (body.phase === 'before' && user.role === 'student' && row.batch !== user.batch) throw new HttpError_(403, 'other_batch');
   const start = row.starts_at;
   const end = start + row.duration_min * 60000;
   const now = ctx.now;
@@ -281,7 +283,6 @@ function share_(ctx) {
 function updateSettings_(ctx) {
   teacher_(ctx);
   const { body } = ctx.check({ body: BODY_.settings });
-  // Check both before saving either, so a bad link never leaves the other half-saved.
   if (body.group_link !== null) ctx.db.setSetting('group_link', cleanGroupLink_(body.group_link));
   return { group_link: ctx.db.setting('group_link'), group_code: ctx.db.setting('group_code') };
 }
@@ -295,8 +296,7 @@ function rotateGroupCode_(ctx) {
 function invite_(ctx) {
   teacher_(ctx);
   const { query } = ctx.check({ query: QUERY_LANG_ });
-  const text = inviteMessage_(ctx.db.setting('group_code'), query.lang);
-  return { text: text, url: shareUrl_(text), group_link: ctx.db.setting('group_link') };
+  return { text: inviteMessage_(ctx.db.setting('group_code'), query.lang) };
 }
 
 function students_(ctx) {
@@ -308,8 +308,7 @@ function students_(ctx) {
   const rows = ctx.db.t('users').rows
     .filter((u) => u.role === 'student')
     .sort((a, b) => (b.status === 'pending') - (a.status === 'pending') || b.created_at - a.created_at || a.id - b.id);
-  return { students: rows.map((u) => Object.assign(userJson_(u), { joined: joined[u.id] || 0, created_at: isoTime_(u.created_at),
-    intake: intakeOf_(ctx, u.id) })) };
+  return { students: rows.map((u) => Object.assign(userJson_(u), { joined: joined[u.id] || 0, intake: intakeOf_(ctx, u.id) })) };
 }
 
 /** Removes a student, or takes a removed one back into their batch; placing a new student is placeInBatch_. */
@@ -377,7 +376,7 @@ function insights_(ctx) {
       const before = list.filter((c) => c.phase === 'before').map((c) => c.mood);
       const after = list.filter((c) => c.phase === 'after').map((c) => c.mood);
       return { id: s.id, starts_at: isoTime_(s.starts_at), class: batchJson_(batches[s.batch], s.batch, query.lang).name, joined: before.length,
-        mood_before: mean(before), mood_after: mean(after), answered_after: after.length };
+        mood_before: mean(before), mood_after: mean(after) };
     });
   const [change, pairs] = moodChange_(checkins);
   const users = ctx.db.t('users').rows;
@@ -392,11 +391,10 @@ function insights_(ctx) {
     .slice(0, 20)
     .map((f) => ({ screen: f.screen, text: f.text, created_at: isoTime_(f.created_at), name: names[f.user_id] }));
   return {
-    students: { approved: count('approved'), pending: count('pending') },
+    students: { approved: count('approved') },
     mood_change: change,
     mood_pairs: pairs,
     sessions: sessions,
-    questions: { count: 0, gemma_latency_s: null }, // the assistant runs on the phone; questions never reach the server
     feedback: feedback,
   };
 }
@@ -408,10 +406,11 @@ function sharedNotes_(ctx) {
   ctx.db.t('users').rows.forEach((u) => {
     names[u.id] = u.name;
   });
-  const shared = ctx.db.t('shared_notes').rows
+  const all = ctx.db.t('shared_notes').rows
     .filter((n) => Object.prototype.hasOwnProperty.call(names, n.user_id))
-    .sort((a, b) => b.created_at - a.created_at || b.id - a.id)
-    .slice(0, 50)
+    .sort((a, b) => b.created_at - a.created_at || b.id - a.id);
+  // The newest 50 to read; the count is of them all.
+  const shared = all.slice(0, 50)
     .map((n) => ({ id: n.id, user_id: n.user_id, name: names[n.user_id], text: n.text, created_at: isoTime_(n.created_at) }));
-  return { shared: shared };
+  return { shared: shared, count: all.length };
 }
