@@ -46,7 +46,7 @@ function signup_(ctx) {
     if (users.rows.some((u) => u.phone === phone)) throw new HttpError_(409, 'phone_taken');
     const user = users.insert([{
       id: users.nextId(), name: body.name.trim(), phone: phone, role: body.role, status: status, pw_hash: pwHash,
-      lang: body.lang, research_consent: body.research_consent, created_at: ctx.now,
+      lang: body.lang, created_at: ctx.now,
     }])[0];
     return signIn_(ctx, user);
   });
@@ -104,8 +104,6 @@ function updateMe_(ctx) {
   const changes = {};
   if (body.name !== null) changes.name = body.name.trim();
   if (body.lang !== null) changes.lang = body.lang;
-  if (body.research_consent !== null) changes.research_consent = body.research_consent;
-  // Withdrawing consent removes what it allowed: here nothing, as questions never reach this server.
   ctx.db.t('users').update(user, changes);
   return { user: userJson_(user) };
 }
@@ -277,7 +275,7 @@ function rotateGroupCode_(ctx) {
 function invite_(ctx) {
   teacher_(ctx);
   const { query } = ctx.check({ query: QUERY_LANG_ });
-  const text = inviteMessage_(ctx.db.setting('group_code'), query.lang, ctx.db.setting('public_url'));
+  const text = inviteMessage_(ctx.db.setting('group_code'), query.lang);
   return { text: text, url: shareUrl_(text), group_link: ctx.db.setting('group_link') };
 }
 

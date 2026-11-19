@@ -4,8 +4,8 @@ plugins {
 }
 
 /**
- * The studio's notes (English and Marathi) and its classes, copied from backend/ into the app's assets at build time,
- * so the companion on the phone answers from the same files as the server, never a copy kept by hand.
+ * The studio's notes (English and Marathi) and its classes, copied from content/ into the app's assets at build time,
+ * so the companion on the phone reads the same files the backend is built from.
  */
 abstract class CopyStudioContent : DefaultTask() {
     @get:InputFiles
@@ -24,9 +24,9 @@ abstract class CopyStudioContent : DefaultTask() {
     }
 }
 
-val backend = rootDir.resolve("../backend")
+val content = rootDir.resolve("../content")
 val copyStudioContent = tasks.register<CopyStudioContent>("copyStudioContent") {
-    files.from(backend.resolve("knowledge/yoga_health.md"), backend.resolve("knowledge/yoga_health.mr.md"), backend.resolve("content/studio.json"))
+    files.from(content.resolve("knowledge/yoga_health.md"), content.resolve("knowledge/yoga_health.mr.md"), content.resolve("studio.json"))
 }
 
 android {

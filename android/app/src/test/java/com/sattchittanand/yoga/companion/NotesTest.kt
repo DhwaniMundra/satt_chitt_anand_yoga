@@ -6,14 +6,11 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
 
-/** The studio's notes in the backend, read as the app reads them from its assets (Gradle copies these same files). */
-val BACKEND = File("../../backend").let { if (it.isDirectory) it else File("../backend") }
-val NOTES = StudioNotes(File(BACKEND, "knowledge/yoga_health.md").readText(), File(BACKEND, "knowledge/yoga_health.mr.md").readText())
+/** The studio's notes in content/knowledge (tests run in android/app), the files Gradle copies into the app's assets. */
+val KNOWLEDGE = File("../../content/knowledge")
+val NOTES = StudioNotes(File(KNOWLEDGE, "yoga_health.md").readText(), File(KNOWLEDGE, "yoga_health.mr.md").readText())
 
-/**
- * The retrieval port and the emergency check: the same questions and expected sections as backend/tests/test_assistant.py,
- * so the phone finds what the server finds.
- */
+/** The search over the notes, and the emergency check. */
 class NotesTest {
     @Test fun devanagariWordsStayWhole() {
         assertEquals(listOf("कमर", "दर्द", "पाठदुखी"), tokenize("कमर दर्द, पाठदुखी!"))
@@ -41,7 +38,7 @@ class NotesTest {
     @Test fun suggestedQuestionsFindTheirSection() = check(*SUGGESTIONS.toTypedArray())
 
     /** The Ask screen's suggestions 2 and 4 are answered from the notes and must be among the questions tested above
-     *  (1 and 3 ask about the student's own practice), as backend/tests/test_assistant.py checks. */
+     *  (1 and 3 ask about the student's own practice). */
     @Test fun noteSuggestionsInTheAppAreTested() {
         val res = File("src/main/res")
         val shown = listOf("values", "values-hi", "values-mr").flatMap { folder ->

@@ -1,15 +1,14 @@
 // ---------- Validate: request checks ----------
 //
-// A failed check is a 422 whose detail is a list of problems, [{"type", "loc", "msg", "input"}], in the shape of
-// FastAPI's validation errors. The app shows any list as a generic error; the other errors carry a code it translates.
-// Text is not coerced: a number where text is expected is an error. Integers may come as "3", booleans as "yes".
+// A failed check is a 422 whose detail is a list of problems, [{"type", "loc", "msg", "input"}]. The app shows any
+// list as a generic error; the other errors carry a code it translates. Text is not coerced: a number where text is
+// expected is an error. Integers may come as "3".
 
 const LANGS_ = ['en', 'hi', 'mr'];
 
 const F_ = {
   str: (opts) => Object.assign({ type: 'str' }, opts || {}),
   int: (opts) => Object.assign({ type: 'int' }, opts || {}),
-  bool: (opts) => Object.assign({ type: 'bool' }, opts || {}),
   oneOf: (values, opts) => Object.assign({ type: 'enum', values: values }, opts || {}),
 };
 const REQUIRED_ = { required: true };
@@ -22,13 +21,11 @@ const BODY_ = {
     role: F_.oneOf(['student', 'teacher'], { def: 'student' }),
     code: F_.str({ def: '' }),
     lang: F_.oneOf(LANGS_, { def: 'en' }),
-    research_consent: F_.bool({ def: false }),
   },
   login: { phone: F_.str(REQUIRED_), password: F_.str(REQUIRED_) },
   me: {
     name: F_.str({ min: 1, max: 80, nullable: true, def: null }),
     lang: F_.oneOf(LANGS_, { nullable: true, def: null }),
-    research_consent: F_.bool({ nullable: true, def: null }),
   },
   code: { code: F_.str(REQUIRED_) },
   checkin: { phase: F_.oneOf(['before', 'after'], REQUIRED_), mood: F_.int({ required: true, ge: 1, le: 5 }) },
@@ -122,17 +119,6 @@ function coerce_(field, value, fromText) {
       return { error: { type: 'less_than_equal', msg: 'Input should be less than or equal to ' + field.le, ctx: { le: field.le } } };
     }
     return { value: number };
-  }
-  if (field.type === 'bool') {
-    if (typeof value === 'boolean') return { value: value };
-    if (typeof value === 'number' && (value === 0 || value === 1)) return { value: value === 1 };
-    if (typeof value === 'string') {
-      const word = value.trim().toLowerCase();
-      if (['1', 'on', 't', 'true', 'y', 'yes'].indexOf(word) >= 0) return { value: true };
-      if (['0', 'off', 'f', 'false', 'n', 'no'].indexOf(word) >= 0) return { value: false };
-      return { error: { type: 'bool_parsing', msg: 'Input should be a valid boolean, unable to interpret input' } };
-    }
-    return { error: { type: 'bool_type', msg: 'Input should be a valid boolean' } };
   }
   throw new Error('unknown field type ' + field.type);
 }

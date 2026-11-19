@@ -1,7 +1,7 @@
 // The API end to end through the envelope, route by route: sign-up and login, links, check-ins, the teacher's routes.
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { attend, classStarted, DAY, freshBackend, MIN, setSetting, setting, signup, teacherAndCode } from './helpers.mjs';
+import { attend, classStarted, DAY, freshBackend, MIN, setting, signup, teacherAndCode } from './helpers.mjs';
 
 test('the teacher needs the teacher code, in any case', () => {
   const b = freshBackend();
@@ -251,12 +251,10 @@ test('the streak counts consecutive days with a class', () => {
   assert.equal(b.call('GET', '/me', { token: s.token }).body.stats.streak_days, 4);
 });
 
-test('research consent is kept, and withdrawing it is harmless: questions never reach this server', () => {
+test('the chat and the health notes have no routes: they stay on the phone', () => {
   const b = freshBackend();
   const { code } = teacherAndCode(b);
-  const s = signup(b, '9000000002', { code, consent: true });
-  assert.equal(s.user.research_consent, true);
-  assert.equal(b.call('POST', '/me', { token: s.token, body: { research_consent: false } }).body.user.research_consent, false);
+  const s = signup(b, '9000000002', { code });
   for (const [method, path] of [['POST', '/ask'], ['GET', '/chat'], ['POST', '/chat'], ['DELETE', '/chat'], ['GET', '/me/notes'], ['DELETE', '/me/notes/1']]) {
     assert.deepEqual(b.call(method, path, { token: s.token, body: { question: 'hello' } }), { status: 404, body: { detail: 'Not Found' } }, path);
   }
@@ -284,9 +282,7 @@ test('a pending student can enter the group code later', () => {
   const s = signup(b, '9000000002');
   assert.equal(b.call('POST', '/me/group_code', { token: s.token, body: { code: 'WRONG1' } }).body.detail, 'bad_group_code');
   assert.equal(b.call('POST', '/me/group_code', { token: s.token, body: { code: ' ' + code.toLowerCase() } }).body.user.status, 'approved');
-  const me = b.call('POST', '/me', { token: s.token, body: { lang: 'mr', research_consent: true } }).body.user;
-  assert.equal(me.lang, 'mr');
-  assert.equal(me.research_consent, true);
+  assert.equal(b.call('POST', '/me', { token: s.token, body: { lang: 'mr' } }).body.user.lang, 'mr');
 });
 
 test('guessing the group code is limited per student; a rejected student stays rejected', () => {
@@ -312,7 +308,7 @@ test('the teacher sees students, pending first, then the newest', () => {
   const list = b.call('GET', '/teacher/students', { token: t.token }).body.students;
   assert.deepEqual(list.map((x) => x.id), [p.user.id, c.user.id, a.user.id]);
   assert.deepEqual(list.map((x) => x.joined), [0, 0, 1]);
-  assert.deepEqual(Object.keys(list[0]), ['id', 'name', 'phone', 'role', 'status', 'lang', 'research_consent', 'joined', 'created_at']);
+  assert.deepEqual(Object.keys(list[0]), ['id', 'name', 'phone', 'role', 'status', 'lang', 'joined', 'created_at']);
   assert.match(list[0].created_at, /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/);
   assert.equal(b.call('GET', '/teacher/home', { token: t.token }).body.pending_students, 1);
   assert.deepEqual(b.call('POST', '/teacher/students/' + t.user.id + '/status', { token: t.token, body: { status: 'approved' } }),
@@ -349,16 +345,13 @@ test('the insights cover the last two weeks of classes', () => {
   assert.equal(insights.mood_pairs, 2);
 });
 
-test('the invite carries the group code, and the server address when the owner sets one', () => {
+test('the invite carries the group code', () => {
   const b = freshBackend();
   const { t, code } = teacherAndCode(b);
   const invite = b.call('GET', '/teacher/invite', { token: t.token, query: { lang: 'hi' } }).body;
   assert.ok(invite.text.includes('*' + code + '*'));
   assert.ok(invite.text.startsWith('🙏 ऐप में सत् चित् आनंद योग से जुड़ें।'));
-  assert.ok(!invite.text.includes('सर्वर'));
   assert.equal(invite.group_link, null);
-  setSetting(b, 'public_url', 'https://example.org/app');
-  assert.ok(b.call('GET', '/teacher/invite', { token: t.token }).body.text.endsWith('In the app, under Server address, enter: https://example.org/app'));
 });
 
 test('a new group code works and the old one does not', () => {
