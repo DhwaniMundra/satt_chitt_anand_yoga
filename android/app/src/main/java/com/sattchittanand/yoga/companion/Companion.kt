@@ -122,7 +122,18 @@ private val IST: ZoneId = ZoneId.of("Asia/Kolkata")
 private val DATE = DateTimeFormatter.ofPattern("EEEE d MMMM", Locale.ENGLISH)
 private val TIME = DateTimeFormatter.ofPattern("h:mm a", Locale.ENGLISH)
 
-/** An item's progress as Gemma reads it ([Tools.asanaProgress]): the server's sums, each date with its weekday. */
+private val REACTIONS = listOf("not yet", "with effort", "steady", "at ease")
+
+/** An average of the four reactions (1 to 4) in words: "2.0, with effort", "3.7, between steady and at ease". */
+fun reactionWords(average: Number): String {
+    val a = average.toDouble()
+    val low = REACTIONS[(a.toInt() - 1).coerceIn(0, 3)]
+    val words = if (a % 1 < 0.05 || a >= 4) low else "between $low and ${REACTIONS[a.toInt().coerceIn(0, 3)]}"
+    return String.format(Locale.ENGLISH, "%.1f, %s", a, words)
+}
+
+/** An item's progress as Gemma reads it ([Tools.asanaProgress]): the server's sums, each date with its weekday and
+ *  each average reaction in words, so the model has nothing to work out. */
 fun progressSummary(item: ItemName, p: Map<String, Any?>): Map<String, Any?> {
     fun day(value: Any?) = (value as? String)?.let { DATE.format(LocalDate.parse(it)) }
 
@@ -134,14 +145,13 @@ fun progressSummary(item: ItemName, p: Map<String, Any?>): Map<String, Any?> {
     val notes = (p["your_notes"] as? List<Map<String, Any?>>).orEmpty()
     return linkedMapOf(
         "asana" to item.full,
-        "reaction_scale" to "1 not yet, 2 with effort, 3 steady, 4 at ease",
-        "in_class" to p["in_class"],
-        "solo" to p["solo"],
+        "times_in_class" to p["in_class"],
+        "times_on_own" to p["solo"],
         "first" to day(p["first"]),
         "last" to day(p["last"]),
-        "reaction_trend" to trend?.let {
-            linkedMapOf("early_average" to it["early_average"], "recent_average" to it["recent_average"],
-                "early" to times(it["each"], "first"), "recent" to times(it["each"], "last"))
+        "how_it_felt" to trend?.let {
+            linkedMapOf(times(it["each"], "first") to (it["early_average"] as? Number)?.let(::reactionWords),
+                times(it["each"], "last") to (it["recent_average"] as? Number)?.let(::reactionWords))
         },
         "holds" to map("holds"),
         "strain_or_pain" to map("strain_or_pain")?.let { linkedMapOf("times" to it["times"], "last" to day(it["last"])) },
@@ -180,21 +190,29 @@ class Tools(private val data: StudentData, private val notes: StudioNotes, priva
     fun getMyPractice(days: Int): Map<String, Any?> {
         used += "get_my_practice"
         return try {
-            withWeekdays(data.practice(days.coerceIn(1, 90), lang))
+            readable(data.practice(days.coerceIn(1, 90), lang))
         } catch (e: Exception) {
             mapOf("error" to UNREACHABLE)
         }
     }
 
-    /** The summary with the ISO date of each class and each session on one's own written out ("Monday 16 November"), so
-     *  Gemma need not work out weekdays. */
-    private fun withWeekdays(summary: Map<String, Any?>): Map<String, Any?> = summary + listOf("classes", "solo").mapNotNull { key ->
+    /** The summary with the ISO date of each class and each session on one's own written out ("Monday 16 November"),
+     *  each item's average reaction in words, and the moods named as the classes' (practice on one's own asks none), so
+     *  Gemma need not work out weekdays or read a scale. */
+    private fun readable(summary: Map<String, Any?>): Map<String, Any?> = summary.entries.associate { (k, v) ->
+        (if (k == "average_mood_before" || k == "average_mood_after") k.replace("mood", "class_mood") else k) to v
+    } + listOf("classes", "solo").mapNotNull { key ->
         @Suppress("UNCHECKED_CAST")
         (summary[key] as? List<Map<String, Any?>>)?.let { days -> key to days.map { it + ("date" to DATE.format(LocalDate.parse(it["date"] as String))) } }
-    }
+    } + listOfNotNull(
+        @Suppress("UNCHECKED_CAST")
+        (summary["top_items"] as? List<Map<String, Any?>>)?.let { items ->
+            "top_items" to items.map { it + ("average_reaction" to (it["average_reaction"] as? Number)?.let(::reactionWords)) }
+        },
+    )
 
-    /** How this student's practice of one item has gone: the server's sums for it, its dates written out, the reactions'
-     *  scale spelt out; or what the studio's list has closest when [asana] names nothing in it. */
+    /** How this student's practice of one item has gone: the server's sums for it, its dates written out, its average
+     *  reactions in words; or what the studio's list has closest when [asana] names nothing in it. */
     fun asanaProgress(asana: String): Map<String, Any?> {
         used += "asana_progress"
         return try {
@@ -307,6 +325,7 @@ class PracticeCompanion(val notes: StudioNotes, private val studioName: String, 
     /** How the asana a message about the student's own practice names has gone, as text for the system message (or
      *  ""). Recorded as a use of asana_progress. */
     fun preloadedProgress(message: String, tools: Tools): String {
+        if (REMEMBER.containsMatchIn(message)) return "" // something to keep, not a question about the asana
         val key = tools.itemNamedIn(message) ?: return ""
         val progress = tools.asanaProgress(key)
         if ("error" in progress) return "".also { tools.used.removeAt(tools.used.lastIndex) }

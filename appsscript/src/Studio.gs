@@ -338,7 +338,6 @@ function practiceSummary_(ctx, userId, days, lang) {
     by_class: summary,
     classes: classes,
     solo: solo,
-    reaction_scale: '1 not yet, 2 with effort, 3 steady, 4 at ease',
     top_items: topItems,
   };
 }
