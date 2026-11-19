@@ -22,7 +22,7 @@ from pydantic import BaseModel, Field
 
 from sca import auth, db, studio as studio_mod, whatsapp
 from sca.assistant import Assistant, Busy
-from sca.companion import Companion, tools_json
+from sca.companion import Companion, practice_summary, tools_json
 from sca.backup import GitHubBackup
 from sca.studio import IST
 
@@ -108,6 +108,10 @@ class AskIn(BaseModel):
 class ChatIn(BaseModel):
     message: str = Field(min_length=1, max_length=1000)
     lang: Lang = "en"
+
+
+class SharedIn(BaseModel):
+    text: str = Field(min_length=1, max_length=500)
 
 
 class LinkIn(BaseModel):
@@ -509,6 +513,38 @@ def create_app(config: Config) -> FastAPI:
         conn.commit()
         return {"ok": True}
 
+    # ---------- for Gemma on the phone ----------
+    # The companion runs on the student's phone. It asks the server only for the student's own practice summary (the
+    # schedule comes from /home); its chat and notes stay on the phone, and a note reaches the teacher only when the
+    # student shares it, one note at a time.
+
+    def member(user: sqlite3.Row = Depends(current_user)) -> sqlite3.Row:
+        if user["role"] == "student" and user["status"] != "approved":
+            raise HTTPException(403, "pending")
+        return user
+
+    @app.get("/me/practice")
+    def my_practice(days: int = 7, lang: Lang = "en", user: sqlite3.Row = Depends(member),
+                    conn: sqlite3.Connection = Depends(get_db)) -> dict:
+        """This student's classes over the last `days` days (1 to 90) with the sums done: what the get_my_practice tool
+        returns. Class names in `lang`, as on /home."""
+        return practice_summary(conn, studio, user["id"], days, lang)
+
+    @app.post("/me/shared")
+    def share_note(body: SharedIn, user: sqlite3.Row = Depends(member), conn: sqlite3.Connection = Depends(get_db)) -> dict:
+        """One note the student chose to share with the teacher. Sharing the same words again returns the same note."""
+        if user["role"] != "student":
+            raise HTTPException(403, "pending")
+        text = body.text.strip()
+        if not text:
+            raise HTTPException(422, "empty_note")
+        row = conn.execute("SELECT id FROM shared_notes WHERE user_id = ? AND text = ?", (user["id"], text)).fetchone()
+        if row is None:
+            row = {"id": conn.execute("INSERT INTO shared_notes (user_id, text, created_at) VALUES (?, ?, ?)",
+                                      (user["id"], text, db.iso(db.now()))).lastrowid}
+            conn.commit()
+        return {"ok": True, "id": row["id"]}
+
     # ---------- teacher ----------
 
     @app.get("/teacher/home")
@@ -584,6 +620,15 @@ def create_app(config: Config) -> FastAPI:
             "FROM users u WHERE u.role = 'student' ORDER BY u.status = 'pending' DESC, u.created_at DESC"
         )
         return {"students": [{**user_json(r), "joined": r["joined"], "created_at": r["created_at"]} for r in rows]}
+
+    @app.get("/teacher/shared")
+    def shared_notes(_: sqlite3.Row = Depends(teacher), conn: sqlite3.Connection = Depends(get_db)) -> dict:
+        """The notes students chose to share, newest first (the last 50)."""
+        rows = conn.execute(
+            "SELECT n.id, n.user_id, u.name, n.text, n.created_at FROM shared_notes n JOIN users u ON u.id = n.user_id "
+            "ORDER BY n.created_at DESC, n.id DESC LIMIT 50"
+        )
+        return {"shared": [dict(r) for r in rows]}
 
     @app.post("/teacher/students/{user_id}/status")
     def set_status(

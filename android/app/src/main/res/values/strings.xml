@@ -17,7 +17,6 @@
     <string name="group_code">Group code (from the WhatsApp group)</string>
     <string name="group_code_help">No code? Sign up anyway and Ramit ji will approve you.</string>
     <string name="teacher_code">Teacher code</string>
-    <string name="consent">Help improve the app: the studio may read my questions to the assistant. They are never shared.</string>
     <string name="back">Back</string>
     <string name="role_student">Student</string>
     <string name="role_teacher">Teacher</string>
@@ -106,7 +105,7 @@
     <string name="ask_hint">Type your question…</string>
     <string name="ask_send">Send</string>
     <string name="ask_disclaimer">Knows your classes and how you felt, and what you ask it to remember. General guidance from the studio\'s notes, not medical advice.</string>
-    <string name="ask_thinking">Thinking…</string>
+    <string name="ask_disclaimer_notes">General guidance from the studio\'s notes, not medical advice.</string>
     <string name="sugg_1">How was my practice this week?</string>
     <string name="sugg_2">Yoga for back pain?</string>
     <string name="sugg_3">Which class suits me tomorrow?</string>
@@ -128,7 +127,6 @@
     <string name="memory_title">What I remember</string>
     <string name="memory_empty">Nothing yet. In Ask, say \"Remember that…\"</string>
     <string name="forget_note">Forget this</string>
-    <string name="research">Let the studio read my assistant questions</string>
     <string name="feedback_title">What should we improve?</string>
     <string name="feedback_hint">What worked? What was hard?</string>
     <string name="send">Send</string>
@@ -165,10 +163,52 @@
     <string name="insights_title">How classes are going</string>
     <string name="avg_lift">Average mood lift</string>
     <string name="pairs">from %1$d before-and-after check-ins</string>
-    <string name="questions_asked">Questions asked</string>
     <string name="last_two_weeks">Last two weeks</string>
     <string name="before">Before</string>
     <string name="after">After</string>
     <string name="what_students_said">What students said</string>
     <string name="no_data">No check-ins yet.</string>
+    <!-- Gemma on the phone -->
+    <string name="ask_privacy">Answered on your phone. Only what you share reaches Ramit ji.</string>
+    <string name="ask_thinking_phone">Thinking on your phone…</string>
+    <string name="gemma_title">Gemma on your phone</string>
+    <string name="gemma_offer">A one-time download of 2.6 GB, and Gemma answers here on your phone, with your classes and how you felt. Use Wi-Fi: the download goes on if you close the app. Until then, answers come straight from the studio\'s notes.</string>
+    <string name="gemma_download">Download on Wi-Fi (2.6 GB)</string>
+    <string name="gemma_downloading">Downloading Gemma: %1$s of %2$s</string>
+    <string name="gemma_keeps_going">It goes on if you close the app.</string>
+    <string name="gemma_waiting_wifi">Waiting for Wi-Fi.</string>
+    <string name="gemma_waiting_network">Waiting for the internet.</string>
+    <string name="gemma_use_mobile">Use mobile data</string>
+    <string name="cancel">Cancel</string>
+    <string name="gemma_checking">Checking the download…</string>
+    <string name="gemma_loading">Starting Gemma on your phone… The first start takes a minute or two.</string>
+    <string name="gemma_too_little_memory">This phone has %1$s of memory and Gemma needs a 6 GB phone, so answers come from the studio\'s notes.</string>
+    <string name="gemma_no_space">Not enough space: Gemma needs about 3.6 GB free.</string>
+    <string name="gemma_wrong_file">The file that came was not Gemma. Please try again later.</string>
+    <string name="gemma_download_failed">The download stopped. Check the internet and try again.</string>
+    <string name="gemma_start_failed">Gemma could not start on this phone, so answers come from the studio\'s notes.</string>
+    <string name="try_again">Try again</string>
+    <string name="gemma_download_title">Gemma for Satt Chitt Anand</string>
+    <string name="gemma_download_note">The practice companion, for your phone (one time)</string>
+    <string name="memory_private">Kept on this phone. Only what you share reaches Ramit ji.</string>
+    <string name="share_note">Share with Ramit ji</string>
+    <string name="shared_note">Shared with Ramit ji</string>
+    <string name="share_confirm_title">Share with Ramit ji?</string>
+    <string name="share_confirm_body">Ramit ji will see this note on his Students screen. Nothing else from your chat is sent, and forgetting the note here later does not take it back.</string>
+    <string name="share">Share</string>
+    <string name="shared_title">Shared with you</string>
+    <string name="shared_help">Notes students chose to share from their practice companion.</string>
+    <string name="notes_shared">Notes shared</string>
+    <plurals name="until_days">
+        <item quantity="one">%d d</item>
+        <item quantity="other">%d d</item>
+    </plurals>
+    <plurals name="until_hours">
+        <item quantity="one">%d h</item>
+        <item quantity="other">%d h</item>
+    </plurals>
+    <plurals name="until_minutes">
+        <item quantity="one">%d min</item>
+        <item quantity="other">%d min</item>
+    </plurals>
 </resources>

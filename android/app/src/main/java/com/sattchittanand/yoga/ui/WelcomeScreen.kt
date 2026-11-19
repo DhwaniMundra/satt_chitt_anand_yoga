@@ -18,7 +18,6 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.SelfImprovement
 import androidx.compose.material3.Button
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -84,7 +83,6 @@ fun WelcomeScreen(vm: AppViewModel, onLanguage: (String) -> Unit) {
     var phone by rememberSaveable { mutableStateOf("") }
     var password by rememberSaveable { mutableStateOf("") }
     var code by rememberSaveable { mutableStateOf("") }
-    var consent by rememberSaveable { mutableStateOf(false) }
 
     Column(
         Modifier.fillMaxSize().safeDrawingPadding().imePadding().verticalScroll(rememberScrollState()).padding(24.dp),
@@ -153,16 +151,10 @@ fun WelcomeScreen(vm: AppViewModel, onLanguage: (String) -> Unit) {
                 supportingText = if (teacher) null else ({ Text(stringResource(R.string.group_code_help)) }),
                 singleLine = true, modifier = Modifier.fillMaxWidth(),
             )
-            if (!teacher) {
-                Row(verticalAlignment = Alignment.Top) {
-                    Checkbox(consent, { consent = it })
-                    Text(stringResource(R.string.consent), style = MaterialTheme.typography.bodyMedium, color = Palette.muted, modifier = Modifier.padding(top = 12.dp))
-                }
-            }
         }
         vm.error?.let { Text(errorText(it), color = MaterialTheme.colorScheme.error, modifier = Modifier.fillMaxWidth()) }
         Button(
-            onClick = { if (signup) vm.signup(name, phone, password, teacher, code, consent) else vm.login(phone, password) },
+            onClick = { if (signup) vm.signup(name, phone, password, teacher, code) else vm.login(phone, password) },
             enabled = !vm.busy && phone.isNotBlank() && password.isNotBlank() && (!signup || name.isNotBlank()),
             modifier = Modifier.fillMaxWidth().height(56.dp),
         ) { Text(stringResource(if (signup) R.string.signup else R.string.login)) }

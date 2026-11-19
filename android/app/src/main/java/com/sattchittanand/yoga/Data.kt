@@ -44,8 +44,13 @@ class Api(private val prefs: Prefs) {
     suspend fun put(path: String, body: JSONObject) = call("PUT", path, body)
     suspend fun delete(path: String) = call("DELETE", path, null)
 
-    private suspend fun call(method: String, path: String, body: JSONObject?): JSONObject = withContext(Dispatchers.IO) {
-        try {
+    private suspend fun call(method: String, path: String, body: JSONObject?): JSONObject = withContext(Dispatchers.IO) { request(method, path, body) }
+
+    /** A GET on the calling thread, for the companion's tools, which Gemma runs on its own thread. */
+    fun getNow(path: String): JSONObject = request("GET", path, null)
+
+    private fun request(method: String, path: String, body: JSONObject?): JSONObject {
+        return try {
             val conn = URL(prefs.server + path).openConnection() as HttpURLConnection
             conn.requestMethod = method
             conn.connectTimeout = 8_000
@@ -171,7 +176,6 @@ data class Insights(
     val pending: Int,
     val moodChange: Double?,
     val moodPairs: Int,
-    val questions: Int,
     val sessions: List<SessionInsight>,
     val feedback: List<Feedback>,
 ) {
@@ -180,7 +184,6 @@ data class Insights(
             val students = o.getJSONObject("students")
             return Insights(
                 students.getInt("approved"), students.getInt("pending"), o.dbl("mood_change"), o.getInt("mood_pairs"),
-                o.getJSONObject("questions").getInt("count"),
                 o.getJSONArray("sessions").map {
                     SessionInsight(Instant.parse(it.getString("starts_at")), it.getString("class"), it.getInt("joined"), it.dbl("mood_before"), it.dbl("mood_after"))
                 },
@@ -191,22 +194,19 @@ data class Insights(
 }
 
 /**
- * One message in the chat with the practice companion. A reply's `tools` say what it looked at ("practice", "schedule",
- * "notes", "saved", "memory"); its `mode` is "companion", "notes" or "urgent" (an urgent reply stays red after a
- * restart: the server keeps the mode). The student's own messages have neither.
+ * One message in the chat with the practice companion, kept on this phone ([LocalStore]). A reply's `tools` say what it
+ * looked at ("practice", "schedule", "notes", "saved", "memory"); its `mode` is "companion" (Gemma on the phone),
+ * "notes" (the studio's notes, no model) or "urgent" (an urgent reply stays red after a restart). The student's own
+ * messages have neither.
  */
-data class ChatLine(val text: String, val fromStudent: Boolean, val tools: List<String> = emptyList(), val mode: String? = null) {
-    companion object {
-        fun from(o: JSONObject) = ChatLine(
-            o.getString("text"), o.getString("role") == "student", o.getJSONArray("tools").strings(),
-            o.optString("mode").takeIf { it.isNotEmpty() && o.getString("role") == "companion" },
-        )
-    }
-}
+data class ChatLine(val text: String, val fromStudent: Boolean, val tools: List<String> = emptyList(), val mode: String? = null)
 
-/** Something the student asked the companion to remember. */
-data class Note(val id: Int, val text: String, val savedAt: Instant) {
+/** Something the student asked the companion to remember, kept on this phone; [sharedId] once shared with the teacher. */
+data class Note(val id: Int, val text: String, val savedAt: Instant, val sharedId: Int? = null)
+
+/** A note a student shared with the teacher, as the teacher's Students screen shows it (GET /teacher/shared). */
+data class SharedNote(val student: String, val text: String, val sharedAt: Instant) {
     companion object {
-        fun from(o: JSONObject) = Note(o.getInt("id"), o.getString("text"), Instant.parse(o.getString("created_at")))
+        fun from(o: JSONObject) = SharedNote(o.getString("name"), o.getString("text"), Instant.parse(o.getString("created_at")))
     }
 }

@@ -26,6 +26,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -154,14 +155,20 @@ fun timeLabel(at: Instant): String {
     return if (here.rules.getOffset(at) == IST.rules.getOffset(at)) local else "$local · ${format.format(at.atZone(IST))} IST"
 }
 
+/** "2 d 5 h", "3 h 20 min", "18 min"; in Hindi "3 घंटे 20 मिनट", in Marathi "3 तास 20 मिनिटे" (the units come from
+ *  the strings, singular or plural). A zero second part is left out: "2 d", not "2 d 0 h". */
+@Composable
 fun untilLabel(from: Instant, to: Instant): String {
     val d = Duration.between(from, to)
+    @Composable fun unit(id: Int, n: Long) = pluralStringResource(id, n.toInt(), n.toInt())
+    fun pair(big: String, small: String?) = if (small == null) big else "$big $small"
+    val days = d.toDays()
     val hours = d.toHours()
     val minutes = d.toMinutes() % 60
     return when {
-        d.toDays() >= 1 -> "${d.toDays()} d ${hours % 24} h"
-        hours >= 1 -> "$hours h $minutes min"
-        else -> "${d.toMinutes().coerceAtLeast(1)} min"
+        days >= 1 -> pair(unit(R.plurals.until_days, days), (hours % 24).takeIf { it > 0 }?.let { unit(R.plurals.until_hours, it) })
+        hours >= 1 -> pair(unit(R.plurals.until_hours, hours), minutes.takeIf { it > 0 }?.let { unit(R.plurals.until_minutes, it) })
+        else -> unit(R.plurals.until_minutes, d.toMinutes().coerceAtLeast(1))
     }
 }
 
