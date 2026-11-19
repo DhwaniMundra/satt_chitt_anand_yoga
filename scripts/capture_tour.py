@@ -21,8 +21,6 @@ import sys
 import time
 from pathlib import Path
 
-from PIL import Image
-
 import phone as p
 import viz
 
@@ -45,10 +43,7 @@ def tour(version: str) -> None:
     out.mkdir(parents=True, exist_ok=True)
 
     def shot(name: str) -> None:
-        full = out / f"{name}.png"
-        p.screenshot(full)
-        image = Image.open(full).convert("RGB")
-        image.resize((image.width // 2, image.height // 2), Image.LANCZOS).save(full, optimize=True)
+        p.screenshot(out / f"{name}.png")  # at the phone's own size, for the film's close-ups
 
     def log_in(number: str, password: str) -> None:
         p.tap("Log in", exact=True)
@@ -246,6 +241,14 @@ def tour(version: str) -> None:
     time.sleep(2)
     shot("34_class_review")  # strain or pain first
     video.stop()
+
+    # ---- Neha, placed ----
+    p.tap("Today", exact=True)
+    tap_scrolling("Log out")
+    time.sleep(1.5)
+    p.tap("I'm a student")
+    log_in(*WAITING)
+    shot("29b_neha_today")  # her batch now, after the teacher placed her (29)
 
     for name in ("student_tour", "teacher_tour"):
         make_small(viz.folder(version) / f"{name}_{version}.mp4", out / f"{name}_small.mp4")
