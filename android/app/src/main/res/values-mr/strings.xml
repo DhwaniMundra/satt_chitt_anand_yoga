@@ -345,7 +345,6 @@
     <string name="err_no_link">या वर्गाला अजून लिंक नाही. आधी लिंक टाका.</string>
     <string name="err_nothing_said">अजून सेव्ह करण्यासारखे काही नाही: एखाद्या आसनाची वेळ मोजा, किंवा कसे झाले ते सांगा.</string>
     <string name="err_empty_note">नोंद रिकामी आहे.</string>
-    <string name="err_old_server">यासाठी स्टुडिओचा सर्व्हर अपडेट व्हायला हवा. तोपर्यंत नवीन पासवर्डसाठी %1$s यांना विचारा.</string>
     <string name="err_field_too_long">%1$s खूप मोठे आहे: जास्तीत जास्त %2$d अक्षरे.</string>
     <string name="err_field_range">%1$s: कृपया संख्या तपासा.</string>
     <string name="err_field_invalid">कृपया तपासा: %1$s.</string>

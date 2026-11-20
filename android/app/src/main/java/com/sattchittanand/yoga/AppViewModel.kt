@@ -20,7 +20,6 @@ import org.json.JSONArray
 import org.json.JSONException
 import org.json.JSONObject
 import java.time.Instant
-import java.util.UUID
 
 /** All screen state, and every call to the server. Errors land in [error] as the server's code. */
 class AppViewModel(app: Application) : AndroidViewModel(app) {
@@ -140,7 +139,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private val requestIds = mutableMapOf<String, String>()
 
     private suspend fun <T> once(target: String, action: String, send: suspend (String) -> T): T {
-        val reply = send(requestIds.getOrPut("$target|$action") { UUID.randomUUID().toString() })
+        val reply = send(requestIds.getOrPut("$target|$action") { newRequestId() })
         requestIds.keys.removeAll { it.startsWith("$target|") }
         return reply
     }
@@ -243,12 +242,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** A student's own new password, after the current one; this phone stays signed in. [done] runs once it is through. */
     fun changePassword(current: String, new: String, changed: String, done: () -> Unit) = launchCall {
         val body = JSONObject().put("current_password", current).put("new_password", new)
-        try {
-            // Not tried again by itself: a second try overlapping the first would find the current password changed.
-            once("password", (current + "\n" + new).hashCode().toString()) { api.post("/me/password", body, it, retry = false) }
-        } catch (e: ApiError) {
-            throw if (e.code == "Not Found") ApiError("old_server") else e // no /me/password on this server
-        }
+        // Sent once, not tried again by itself; a second tap after no answer came carries the same request id, which the
+        // server answers as it did the first, even when the two arrive together.
+        once("password", (current + "\n" + new).hashCode().toString()) { api.post("/me/password", body, it, retry = false) }
         notice = changed
         done()
     }
@@ -316,7 +312,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      *  the phone, with this sign-in's token, and sent in the background ([sendCheckins]) until the server has it. */
     fun checkIn(sessionId: Int, mood: Int) {
         val token = prefs.token ?: return
-        pending = pending.filter { it.sessionId != sessionId } + PendingCheckin(sessionId, mood, UUID.randomUUID().toString(), token)
+        pending = pending.filter { it.sessionId != sessionId } + PendingCheckin(sessionId, mood, newRequestId(), token)
         home = home?.checkedIn(sessionId, true)
         checkInError = null
         sendCheckins()
@@ -580,8 +576,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         readTeacherHome()
     }
 
-    /** A new password for a student. Not tried again by itself, so two can never overlap; the teacher's own retry after
-     *  a lost reply sends the same request id and gets the same password back. */
+    /** A new password for a student, sent once, not tried again by itself. The teacher's retry after no answer came, or
+     *  a second confirm, carries the same request id, and the server gives it the same password, even when the two
+     *  arrive together; the confirm is off while a call is out. */
     fun resetPassword(userId: Int, show: (String) -> Unit) = launchCall {
         show(once("reset:$userId", "") { api.post("/teacher/students/$userId/password", JSONObject(), it, retry = false) }.getString("password"))
     }

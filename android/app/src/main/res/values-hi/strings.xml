@@ -345,7 +345,6 @@
     <string name="err_no_link">इस कक्षा का अभी कोई लिंक नहीं है। पहले लिंक डालें।</string>
     <string name="err_nothing_said">अभी सेव करने को कुछ नहीं: किसी आसन का समय लें, या बताएँ कि कैसा रहा।</string>
     <string name="err_empty_note">नोट खाली है।</string>
-    <string name="err_old_server">इसके लिए स्टूडियो का सर्वर अपडेट होना ज़रूरी है। तब तक नए पासवर्ड के लिए %1$s से पूछें।</string>
     <string name="err_field_too_long">%1$s बहुत लंबा है: ज़्यादा से ज़्यादा %2$d अक्षर।</string>
     <string name="err_field_range">%1$s: कृपया संख्या जाँचें।</string>
     <string name="err_field_invalid">कृपया जाँचें: %1$s।</string>

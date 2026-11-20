@@ -45,7 +45,7 @@ class ApiTest {
     private val busy = """{"status": 503, "body": {"detail": "busy"}}"""
     private fun lost() = ApiError("network")
     private fun neverSent() = ApiError("network", unsent = true)
-    private fun googleError() = ApiError("server", http = 503)
+    private fun googleError() = ApiError("server")
 
     @Test fun aReadIsTriedThreeTimesInAllWhenNoReplyComes() {
         val backend = Scripted(lost(), lost(), lost(), home)
@@ -110,24 +110,23 @@ class ApiTest {
         assertTrue(e.nothingDone)
     }
 
-    /** {"ok": true} alone is what the redirect's target gives when fetched a second time: the health check's answer. */
-    @Test fun aLoneOkIsTheHealthChecksAnswerUnlessItIsTheCallsOwn() {
-        val lone = """{"status": 200, "body": {"ok": true}}"""
-        val read = Scripted(lone, home)
+    /** The health check's answer is what the redirect's target gives when fetched a second time: for any other call,
+     *  the outcome is unknown, even for the writes whose own answer is {"ok": true}. */
+    @Test fun theHealthChecksAnswerIsNoOtherCallsOwn() {
+        val health = """{"status": 200, "body": {"ok": true, "assistant": "off", "model": null}}"""
+        val plainOk = """{"status": 200, "body": {"ok": true}}"""
+        val read = Scripted(health, home)
         runBlocking { api(read).get("/home") }
         assertEquals("a read is asked again", 2, read.sent.size)
-        val write = Scripted(lone, ok)
+        val write = Scripted(health, ok)
         assertEquals(7, runBlocking { api(write).post("/me/solo", JSONObject(), "solo-2") }.getInt("id"))
         assertEquals("and a write with its request id, the same one", listOf("solo-2", "solo-2"), write.sent.map { it.getString("request_id") })
-        val noId = Scripted(lone, ok)
-        assertEquals("unknown", failing { api(noId).post("/me/shared", JSONObject()) }.code)
-        assertEquals(1, noId.sent.size)
-        for ((method, path) in listOf("POST" to "/feedback", "POST" to "/auth/logout", "POST" to "/me/password", "POST" to "/teacher/students/12/status",
-            "GET" to "/health")) {
-            val own = Scripted(lone)
-            val reply = runBlocking { if (method == "GET") api(own).get(path) else api(own).post(path, JSONObject(), "f-1") }
-            assertEquals(path, true, reply.getBoolean("ok"))
+        for (path in listOf("/feedback", "/auth/logout", "/me/password", "/teacher/students/12/status", "/me/shared")) {
+            val once = Scripted(health, plainOk)
+            assertEquals(path, "unknown", failing { api(once).post(path, JSONObject(), "f-1", retry = false) }.code)
+            assertEquals(path, true, runBlocking { api(Scripted(plainOk)).post(path, JSONObject(), "f-1") }.getBoolean("ok"))
         }
+        assertEquals("off", runBlocking { api(Scripted(health)).get("/health") }.getString("assistant"))
     }
 
     @Test fun theServersOwnErrorsAreNamedAsItNamesThem() {
@@ -142,7 +141,7 @@ class ApiTest {
         val cases = listOf(
             Triple(ApiError("network"), true to false, true), Triple(ApiError("network"), false to false, false),
             Triple(ApiError("network"), false to true, true), Triple(ApiError("network", unsent = true), false to false, true),
-            Triple(ApiError("server", http = 502), true to false, true), Triple(ApiError("server", http = 502), false to false, false),
+            Triple(ApiError("server"), true to false, true), Triple(ApiError("server"), false to false, false),
             Triple(ApiError("busy", 503), false to true, true), Triple(ApiError("unknown"), false to true, true),
             Triple(ApiError("bad_login", 401), false to true, false), Triple(ApiError("phone_taken", 409), true to true, false),
         )
@@ -193,7 +192,7 @@ class ApiTest {
                 } catch (e: ApiError) {
                     e
                 }
-                assertEquals(listOf("server", "$code"), listOf(e.code, e.http.toString()))
+                assertEquals("HTTP $code", "server", e.code)
                 assertFalse(e.unsent)
             } finally {
                 server.stop(0)

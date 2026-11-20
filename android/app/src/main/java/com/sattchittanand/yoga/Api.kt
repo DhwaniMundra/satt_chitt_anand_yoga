@@ -17,11 +17,11 @@ import kotlin.random.Random
 /**
  * Why a call failed. [code] is an error the server named ("bad_login", "pending", …; for a check its validation
  * refused, a [problemCode] naming the field), "network" when no reply came, "server" when what answered is not the
- * studio's server (an HTTP error, [http] its status, or a page that is no reply of its own), or "unknown" when the reply
+ * studio's server (an HTTP error, or a page that is no reply of its own), or "unknown" when the reply
  * cannot be the call's own (see [Api]). [status] is the reply's own status, 0 with none. [unsent]: the call failed
  * before it left the phone, so the server never saw it.
  */
-class ApiError(val code: String, val status: Int = 0, val http: Int = 0, val unsent: Boolean = false) : Exception(code) {
+class ApiError(val code: String, val status: Int = 0, val unsent: Boolean = false) : Exception(code) {
     /** Whether the server surely wrote nothing for the call: it never arrived, was refused, or found the server busy. */
     val nothingDone get() = unsent || status in 400..499 || code == "busy"
 }
@@ -105,7 +105,7 @@ class HttpExchange(private val server: () -> String) : Exchange {
 
     private fun notTheServer(url: URL, code: Int): ApiError {
         Log.w(TAG, "HTTP $code from ${url.host}, not the studio server's reply")
-        return ApiError("server", http = code)
+        return ApiError("server")
     }
 
     private fun open(url: URL) = (url.openConnection() as HttpURLConnection).apply {
@@ -126,9 +126,9 @@ class HttpExchange(private val server: () -> String) : Exchange {
  * and every answer is HTTP 200 with {"status", "body"}: `status` is the call's real status. A write may carry a request
  * id: the server answers a repeat of it as it did the first time.
  *
- * A failed call is tried again as [tryAgain] says, up to [TRIES] times in all, waiting a little longer each time. A
- * reply of {"ok": true} and nothing else is the health check's, the answer the redirect's target gives when fetched a
- * second time; for a call whose own reply is never that, the outcome is "unknown".
+ * A failed call is tried again as [tryAgain] says, up to [TRIES] times in all, waiting a little longer each time. The
+ * health check's answer, the one with "assistant" (no other answer has it), is what the redirect's target gives when
+ * fetched a second time: for any other call, the outcome is "unknown".
  */
 class Api(private val token: () -> String?, private val exchange: Exchange, private val pause: suspend (Long) -> Unit = { delay(it) }) {
 
@@ -171,7 +171,7 @@ class Api(private val token: () -> String?, private val exchange: Exchange, priv
         val envelope = JSONObject().put("method", method).put("path", path).put("token", login).put("body", body ?: JSONObject.NULL)
         if (requestId != null) envelope.put("request_id", requestId)
         val reply = exchange.send(envelope.toString())
-        if (!reply.has("status")) throw ApiError("server", http = HttpURLConnection.HTTP_OK) // JSON, but no reply of the studio's
+        if (!reply.has("status")) throw ApiError("server") // JSON, but no reply of the studio's
         val status = reply.optInt("status")
         val answer = reply.optJSONObject("body") ?: JSONObject()
         if (status !in 200..299) {
@@ -182,7 +182,7 @@ class Api(private val token: () -> String?, private val exchange: Exchange, priv
             }
             throw ApiError(code, status)
         }
-        if (answer.length() == 1 && answer.opt("ok") == true && !OK_ALONE.matches("$method ${path.substringBefore('?')}")) throw ApiError("unknown")
+        if (answer.has("assistant") && "$method ${path.substringBefore('?')}" != "GET /health") throw ApiError("unknown")
         return answer
     }
 
@@ -190,8 +190,6 @@ class Api(private val token: () -> String?, private val exchange: Exchange, priv
         const val TRIES = 3
         private const val FIRST_WAIT_MS = 1_000L // then 2 s, each with up to half again at random
 
-        /** The calls whose own reply is {"ok": true} alone: the health check and these writes. */
-        private val OK_ALONE = Regex("GET /health|POST /auth/logout|POST /me/password|POST /feedback|POST /teacher/students/[^/]+/status")
 
         private val AGAIN = setOf("network", "server", "busy", "unknown")
 

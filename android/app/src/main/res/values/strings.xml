@@ -354,7 +354,6 @@
     <string name="err_no_link">This class has no link yet. Paste one first.</string>
     <string name="err_nothing_said">Nothing to save yet: time an item, or say how it went.</string>
     <string name="err_empty_note">The note is empty.</string>
-    <string name="err_old_server">This needs the studio\'s server to be updated. Until then, ask %1$s for a new password.</string>
     <string name="err_field_too_long">%1$s is too long: %2$d letters at most.</string>
     <string name="err_field_range">%1$s: please check the number.</string>
     <string name="err_field_invalid">Please check: %1$s.</string>

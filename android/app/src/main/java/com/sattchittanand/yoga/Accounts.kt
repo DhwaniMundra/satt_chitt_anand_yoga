@@ -8,12 +8,13 @@ interface SignupMemory {
 }
 
 /**
- * Logging in and signing up. Each tap sends one request id with all its tries, so a server that keeps the answer to a
- * sign-up or a login by its number and request id gives a repeat the first answer. For a server that does not: a
- * sign-up whose answer never came may have made the account, and the next try then hears that the number has one. So
- * such a sign-up is kept for [LOST_MS], and "this number already has an account" for the same number within that time
- * logs in with the same number and password instead, as the sign-up did go through. If that password does not fit, the
- * account is someone else's, and the refusal stands.
+ * Logging in and signing up. Each tap sends one request id with all its tries, and the server answers a repeat with the
+ * same number and request id as it did the first time. A sign-up whose answer never came may still have made the
+ * account when that cannot help: the app was closed meanwhile, losing the id, or the server's kept answer has expired.
+ * The next try then hears that the number has an account. So such a sign-up is kept on the phone for [LOST_MS], and
+ * "this number already has an account" for the same number within that time logs in with the same number and password
+ * instead, as the sign-up did go through. If that password does not fit, the account is someone else's, and the
+ * refusal stands.
  */
 class Accounts(private val api: Api, private val memory: SignupMemory, private val now: () -> Long = System::currentTimeMillis) {
 

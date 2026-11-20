@@ -318,7 +318,7 @@ fun StudentsScreen(vm: AppViewModel) {
             title = { Text(stringResource(R.string.new_password_ask, name)) },
             text = { Text(stringResource(R.string.new_password_why, name.substringBefore(' '))) },
             confirmButton = {
-                TextButton(onClick = { askingPassword = null; vm.resetPassword(student.user.id) { shownPassword = name to it } }) {
+                TextButton(onClick = { askingPassword = null; vm.resetPassword(student.user.id) { shownPassword = name to it } }, enabled = !vm.busy) {
                     Text(stringResource(R.string.new_password))
                 }
             },
