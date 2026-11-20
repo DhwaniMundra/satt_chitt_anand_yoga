@@ -4,8 +4,8 @@
 // written with a leading apostrophe, so Sheets keeps "+919876543210", "2E5K7Q" or "=..." exactly as typed instead of
 // reading a number, a date or a formula. Times are real date cells (shown in India time); the API sends them as
 // UTC ISO-8601 strings. Writes happen under the script lock; ids are the largest id + 1, worked out under that lock.
-// Two types are for cells the owner types by hand: `clock`, a time of day kept as text ("07:00"), and `count`, a
-// whole number that may come with words after it ("5 breaths" is 5), 0 when there is none.
+// Two types are for cells the owner types by hand: `clock`, a time of day kept as text ("07:00"), and `count`, the
+// number a cell starts with, words after it aside ("5 breaths" is 5), null when there is none.
 
 const TABLES_ = {
   // A student's batch (a key of the batches tab) and since when; empty until the teacher places them.
@@ -216,7 +216,7 @@ function encode_(value, type) {
 function decode_(value, type, own) {
   if (own && TEXT_TYPES_.indexOf(type) >= 0 && typeof value === 'string' && value.charAt(0) === "'") value = value.slice(1);
   if (type === 'clock') return clockText_(value);
-  if (type === 'count') return wholeNumber_(value);
+  if (type === 'count') return countOf_(value);
   if (type === 'text' || type === 'text?') {
     if (value === '' || value === null) return type === 'text?' ? null : '';
     return isDate_(value) ? isoTime_(value.getTime()) : String(value);
@@ -240,19 +240,17 @@ function clockText_(value) {
     const hundredths = Math.round((value - hours) * 100);
     // hours.minutes; past .59, hundredths of an hour (7.75 is 07:45)
     const typed = hours * 60 + (hundredths < 60 ? hundredths : Math.round(hundredths * 0.6));
-    const minutes = (value < 1 ? Math.round(value * 1440) : typed) % 1440;
-    return pad2_(Math.floor(minutes / 60)) + ':' + pad2_(minutes % 60);
+    return clockOf_((value < 1 ? Math.round(value * 1440) : typed) % 1440);
   }
   return value === null ? '' : String(value);
 }
 
-/** A count from a cell typed by hand, as a whole number: 5, "5 breaths", "१० श्वास" and 4.6 are 5, 5, 10 and 5; 0 for
- * an empty or worded cell ("slowly"), so a reader that expects a number always gets one. */
-function wholeNumber_(value) {
-  if (typeof value === 'number') return Math.max(0, Math.round(value));
-  const text = String(value === null ? '' : value).replace(/[०-९]/g, (d) => String(d.charCodeAt(0) - 0x966));
-  const m = /^\s*(\d+(?:\.\d+)?)/.exec(text);
-  return m ? Math.round(Number(m[1])) : 0;
+/** The number a count cell typed by hand starts with: 5, "5 breaths", "१० श्वास", 2.5 and "2.5 min" are 5, 5, 10, 2.5
+ * and 2.5; null for an empty or worded cell ("slowly"). */
+function countOf_(value) {
+  if (typeof value === 'number') return value >= 0 ? value : null;
+  const m = /^\s*(\d+(?:\.\d+)?)/.exec(latinDigits_(value === null ? '' : value));
+  return m ? Number(m[1]) : null;
 }
 
 // ---------- the cache ----------

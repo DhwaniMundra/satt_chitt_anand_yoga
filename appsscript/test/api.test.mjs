@@ -146,7 +146,8 @@ test('a student moved after joining a class can still say how it went, and joins
   assert.equal(checkin(joined, 'after').status, 200, 'the mood after the class joined before the move');
   const practice = b.call('POST', '/sessions/' + joined + '/practice', { token: s.token, body: { entries: [{ item: 'tadasana', reaction: 3 }] } });
   assert.deepEqual(practice, { status: 200, body: { ok: true, saved: 1 } });
-  assert.deepEqual(checkin(classStarted(b, 5, 'beginner'), 'before'), { status: 403, body: { detail: 'other_batch' } });
+  assert.deepEqual(checkin(classStarted(b, -30, 'beginner'), 'before'), { status: 403, body: { detail: 'other_batch' } },
+    'a class of the old batch that starts after the move');
 });
 
 test('a removed student gets nothing class-related, not even the class they joined', () => {
@@ -214,6 +215,7 @@ test('the class group link is optional: any group, any https link, and cleared b
     ['chat.whatsapp.com/AbC123', 'https://chat.whatsapp.com/AbC123'], ['https://chat.whatsapp.com/AbC123?mode=r_c', 'https://chat.whatsapp.com/AbC123'],
     ['https://chat.whatsapp.com/invite/AbC123', 'https://chat.whatsapp.com/AbC123'], ['https://t.me/joinchat/AbC123', 'https://t.me/joinchat/AbC123'],
     ['telegram.me/sattchitt', 'https://telegram.me/sattchitt'], ['https://signal.group/#CjQKIAb_c-D', 'https://signal.group/#CjQKIAb_c-D'],
+    ['signal.group/#CjQKIA', 'https://signal.group/#CjQKIA'],
     ['https://example.com', 'https://example.com'], ['Join our group: t.me/joinchat/xyz', 'https://t.me/joinchat/xyz'],
     ['Hi Mr.Sharma, our group https://t.me/x', 'https://t.me/x'], ['http://classroom.example.org/c/yoga?x=1', 'https://classroom.example.org/c/yoga?x=1'],
   ];
@@ -788,12 +790,12 @@ test('a time Sheets kept as a number reads as typed (7.15 is 07:15), and setup w
 
 test('one class per batch per day: a changed time moves the coming classes in their rows, keeping their links, and leaves one checked in to', () => {
   const b = freshBackend({ now: WEDNESDAY_6AM });
-  const { t, code } = teacherAndCode(b);
-  const s = signup(b, '9000000002', { code });
   const sheet = b.ss.getSheetByName('batches');
   const cell = sheet.getRange(2, sheet.rows()[0].indexOf('time') + 1);
-  cell.setValue("'07:08"); // the Beginner classes the app of v0.9 made from a 07:00 time cell read as 07:08
+  cell.setValue("'07:08"); // the Beginner classes made at 07:08 by a misread 07:00 time cell
   b.context.onEdit({});
+  const { t, code } = teacherAndCode(b);
+  const s = signup(b, '9000000002', { code });
   const beginner = () => b.ss.getSheetByName('class_sessions').rows().slice(1).filter((r) => r[1] === 'beginner')
     .map((r) => ({ id: r[0], at: new Date(r[2].getTime() + 330 * MIN).toISOString().slice(0, 16), link: r[4], curriculum: r[5] }));
   b.call('GET', '/teacher/home', { token: t.token });
@@ -804,7 +806,7 @@ test('one class per batch per day: a changed time moves the coming classes in th
   b.call('PUT', '/teacher/sessions/' + third + '/curriculum', { token: t.token, body: { curriculum: 'pain_management' } });
   b.state.offsetMs = 10 * MIN; // 06:10: today's check-in is open
   assert.equal(b.call('POST', '/sessions/' + today + '/checkin', { token: s.token, body: { phase: 'before', mood: 3 } }).status, 200);
-  cell.setValue(new Date(Date.parse('1899-12-30T01:38:50Z'))); // 07:00, now read as Sheets shows it
+  cell.setValue(new Date(Date.parse('1899-12-30T01:38:50Z'))); // the time cell, read as Sheets shows it: 07:00
   b.context.onEdit({});
   b.call('GET', '/teacher/home', { token: t.token });
   const now = beginner();
@@ -831,8 +833,7 @@ test('after class, a class is offered to the batch the student was in at its tim
   b.state.offsetMs = 0;
   const after = (id) => b.call('POST', '/sessions/' + id + '/checkin', { token: r.token, body: { phase: 'after', mood: 4 } });
   const said = (id) => b.call('POST', '/sessions/' + id + '/practice', { token: r.token, body: { entries: [{ item: 'tadasana', reaction: 3 }] } });
-  const offered = b.call('GET', '/home', { token: r.token }).body.after_class;
-  assert.deepEqual([offered.batch.key, offered.id === early], ['beginner', false], 'a class of the batch before the move, after the placement');
+  assert.notEqual(b.call('GET', '/home', { token: r.token }).body.after_class.id, early, 'not one from before the placement');
   assert.equal(after(old).status, 200, 'the old batch\'s class, from before the move');
   assert.deepEqual([after(early).body.detail, said(early).body.detail], ['checkin_closed', 'checkin_closed'], 'not theirs: before they were placed');
 });
@@ -849,4 +850,97 @@ test('two accounts stored for one number, with and without the 0 after +91: each
   assert.equal(login('+91 098765 43210', 'twin123').id, twin.id);
   assert.equal(login('98765 43210', 'secret1').id, first.user.id);
   assert.equal(login('+91 98765 43210', 'secret1').id, first.user.id);
+});
+
+/** Wednesday 10:00 in India, Pain management (17:30, Mon, Wed, Fri) with its week made, a student in it, and its time cell. */
+function painManagementAt10() {
+  const b = freshBackend({ now: Date.parse('2026-11-18T04:30:00Z') });
+  const { t, code } = teacherAndCode(b);
+  const s = signup(b, '9000000002', { code, batch: 'pain_management' });
+  const sheet = b.ss.getSheetByName('batches');
+  const cell = sheet.getRange(sheet.rows().findIndex((r) => r[0] === 'pain_management') + 1, sheet.rows()[0].indexOf('time') + 1);
+  const classes = () => b.ss.getSheetByName('class_sessions').rows().slice(1).filter((r) => r[1] === 'pain_management')
+    .map((r) => ({ id: r[0], at: new Date(r[2].getTime() + 330 * MIN).toISOString().slice(0, 16), link: r[4] }));
+  const type = (time) => {
+    cell.setValue(time);
+    b.context.onEdit({});
+    b.call('GET', '/teacher/home', { token: t.token });
+  };
+  b.call('GET', '/teacher/home', { token: t.token });
+  return { b, t, s, classes, type };
+}
+
+test('a time moved to earlier than now moves only the classes more than an hour away; today\'s stays, and a revert finds it', () => {
+  const { b, t, classes, type } = painManagementAt10();
+  const before = classes();
+  b.call('PUT', '/teacher/sessions/' + before[0].id, { token: t.token, body: { meet_link: 'meet.google.com/abc-defg-hij' } });
+  type("'07:00"); // meant from tomorrow: today's 07:00 is past
+  assert.deepEqual(classes().map((c) => c.at.slice(11)), ['17:30', '07:00', '07:00']);
+  assert.equal(classes()[0].link, 'https://meet.google.com/abc-defg-hij');
+  type("'17:30"); // put back
+  assert.deepEqual(classes(), before.map((c, i) => (i === 0 ? { ...c, link: 'https://meet.google.com/abc-defg-hij' } : c)), 'the same classes, at 17:30');
+});
+
+test('a time cell that is no time, while the owner retypes it, leaves its batch\'s classes as they are', () => {
+  const { b, s, classes, type } = painManagementAt10();
+  const before = classes();
+  for (const blank of ['', "'17h30"]) {
+    type(blank);
+    b.call('GET', '/home', { token: s.token });
+    assert.deepEqual(classes(), before, JSON.stringify(blank));
+    assert.equal(b.call('GET', '/studio').body.batches[3].time, null);
+  }
+  type("'17:30");
+  assert.deepEqual(classes(), before);
+});
+
+test('a class within an hour of its start, or moved to within an hour, stays where it is', () => {
+  const { b, classes, type } = painManagementAt10();
+  b.state.offsetMs = (6 * 60 + 40) * MIN; // 16:40: today's 17:30 check-in is open
+  type("'18:30");
+  assert.deepEqual(classes().map((c) => c.at.slice(11)), ['17:30', '18:30', '18:30'], 'today\'s stays at 17:30');
+  type("'16:50"); // ten minutes ahead
+  assert.deepEqual(classes().map((c) => c.at.slice(11)), ['17:30', '16:50', '16:50']);
+});
+
+test('a class is a student\'s when they were in its batch while it ran, by the app\'s moves or one made by hand in the users tab', () => {
+  const b = freshBackend();
+  const { t, code } = teacherAndCode(b);
+  b.state.offsetMs = -10 * DAY;
+  const r = b.call('POST', '/auth/signup', { body: { name: 'N', phone: '9000000004', password: 'secret1', code } }).body;
+  assert.equal(b.call('PUT', '/teacher/students/' + r.user.id + '/batch', { token: t.token, body: { batch: 'beginner' } }).status, 200);
+  b.state.offsetMs = -2 * DAY; // moved by hand in the users tab, which logs no change
+  const users = b.ss.getSheetByName('users');
+  const header = users.rows()[0];
+  const row = users.rows().findIndex((x) => x[0] === r.user.id) + 1;
+  users.getRange(row, header.indexOf('batch') + 1).setValue("'intermediate");
+  users.getRange(row, header.indexOf('batch_since') + 1).setValue(new Date(b.clock()));
+  b.context.onEdit({});
+  b.state.offsetMs = 0;
+  const inter = classStarted(b, 60, 'intermediate');
+  const beginner = classStarted(b, 120, 'beginner');
+  const said = (id) => b.call('POST', '/sessions/' + id + '/practice', { token: r.token, body: { entries: [{ item: 'tadasana', reaction: 3 }] } });
+  assert.equal(b.call('GET', '/home', { token: r.token }).body.after_class.batch.key, 'intermediate');
+  assert.deepEqual([said(inter).status, said(beginner).body.detail], [200, 'checkin_closed'], 'the new batch\'s, not the old');
+});
+
+test('a student placed during her first class can check in to it and say how it went', () => {
+  const b = freshBackend();
+  const { t, code } = teacherAndCode(b);
+  const r = b.call('POST', '/auth/signup', { body: { name: 'N', phone: '9000000004', password: 'secret1', code } }).body;
+  const first = classStarted(b, 30, 'beginner'); // under way
+  assert.equal(b.call('PUT', '/teacher/students/' + r.user.id + '/batch', { token: t.token, body: { batch: 'beginner' } }).status, 200);
+  const checkin = (phase) => b.call('POST', '/sessions/' + first + '/checkin', { token: r.token, body: { phase, mood: 3 } }).status;
+  assert.equal(checkin('before'), 200);
+  const other = b.call('POST', '/auth/signup', { body: { name: 'M', phone: '9000000005', password: 'secret1', code } }).body;
+  b.call('PUT', '/teacher/students/' + other.user.id + '/batch', { token: t.token, body: { batch: 'beginner' } });
+  b.state.offsetMs = 20 * MIN; // the class's last five minutes: she never checked in
+  assert.equal(b.call('POST', '/sessions/' + first + '/checkin', { token: other.token, body: { phase: 'after', mood: 4 } }).status, 200);
+  assert.equal(b.call('GET', '/home', { token: other.token }).body.after_class.id, first);
+});
+
+test('a time typed as the hour alone, or in Devanagari digits, reads as typed; one that is no time reads as none', () => {
+  const b = freshBackend();
+  const cases = [['7', 420], ['17', 1020], [' 7 ', 420], ['५:३०', 330], ['१७:३०', 1050], ['5.30 PM', 1050], ['17h30', null], ['', null], ['25:00', null], ['7:75', null]];
+  for (const [typed, minutes] of cases) assert.equal(b.evaluate('startMinutes_(' + JSON.stringify(typed) + ')'), minutes, typed);
 });

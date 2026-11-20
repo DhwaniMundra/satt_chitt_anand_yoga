@@ -77,12 +77,12 @@ fun TodayScreen(vm: AppViewModel) {
     val next = home.sessions.firstOrNull()
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     LaunchedEffect(next?.id) {
-        if (next == null) return@LaunchedEffect
         lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) { // only while the app is in front
             while (true) {
                 delay(2 * 60_000)
+                vm.sendCheckins() // any still waiting
                 val at = Instant.now()
-                if (at >= next.startsAt.minusSeconds(60 * 60) && at < next.endsAt) vm.refreshHome()
+                if (next != null && at >= next.startsAt.minusSeconds(60 * 60) && at < next.endsAt) vm.refreshHome()
             }
         }
     }

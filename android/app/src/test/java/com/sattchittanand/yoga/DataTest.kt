@@ -20,13 +20,15 @@ class DataTest {
                 {"item": "tadasana", "dose": null, "unit": "breaths", "cue": "Stand tall."},
                 {"item": "omkar", "dose": 3, "unit": null, "cue": null},
                 {"item": "omkar", "dose": "5"},
-                {"item": "tadasana", "dose": 0, "unit": "breaths", "cue": "Slowly."}]},
+                {"item": "tadasana", "dose": 0, "unit": "breaths", "cue": "Slowly."},
+                {"item": "omkar", "dose": 2, "dose_label": "2.5", "unit": "minutes", "cue": "Easy."}]},
               {"key": "empty", "name": null}]
         }"""))
         val items = c.find("beginner")!!.items
-        assertEquals("0 is no count, as null is", listOf(null, 3, 5, null), items.map { it.dose })
-        assertEquals(listOf("breaths", "", "", "breaths"), items.map { it.unit })
-        assertEquals(listOf("Stand tall.", "", "", "Slowly."), items.map { it.cue })
+        assertEquals("0 is no count, as null is", listOf(null, 3, 5, null, 2), items.map { it.dose })
+        assertEquals("a count that is not whole, as written", listOf(null, null, null, null, "2.5"), items.map { it.doseLabel })
+        assertEquals(listOf("breaths", "", "", "breaths", "minutes"), items.map { it.unit })
+        assertEquals(listOf("Stand tall.", "", "", "Slowly.", "Easy."), items.map { it.cue })
         assertEquals("", c.find("beginner")!!.about)
         assertEquals(emptyList<PlanItem>(), c.find("empty")!!.items)
         assertEquals("", c.library.getValue("tadasana").english)
@@ -52,7 +54,7 @@ class DataTest {
     }
 
     @Test fun aCheckInNotYetConfirmedIsKeptWithItsRequestId() {
-        val pending = listOf(PendingCheckin(5, 3, "a1"), PendingCheckin(9, 5, "b2"))
+        val pending = listOf(PendingCheckin(5, 3, "a1", "token-a"), PendingCheckin(9, 5, "b2", "token-b"))
         assertEquals(pending, PendingCheckin.restore(PendingCheckin.saved(pending)))
         assertEquals(emptyList<PendingCheckin>(), PendingCheckin.restore(null))
         assertEquals(emptyList<PendingCheckin>(), PendingCheckin.restore("not json"))
@@ -123,6 +125,8 @@ class DataTest {
         val back = SoloRun.restore(run.saved())!!
         assertEquals(run, back)
         assertEquals(run.copy(startedAt = start - 12_000, runningSince = start + 28_000), back.shifted(-12_000))
+        val unsure = run.stopped(start + 50_000).copy(unsure = true) // a Finish whose outcome is unknown
+        assertEquals(unsure, SoloRun.restore(unsure.saved()))
         assertNull(SoloRun.restore("not json"))
         assertNull(SoloRun.restore("""{"started_at": 1, "at": 3, "held_ms": [0], "said": [{"item": "x"}]}"""))
     }

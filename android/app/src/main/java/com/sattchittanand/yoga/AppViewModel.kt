@@ -8,10 +8,15 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONException
 import org.json.JSONObject
+import java.time.Instant
 import java.util.UUID
 
 /** All screen state, and every call to the server. Errors land in [error] as the server's code. */
@@ -74,22 +79,29 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private var refreshedAt = 0L
     /** Check-ins sent in the background that the server has not confirmed: kept on the phone, shown as done on the
      *  Today tab, and sent again at each start and return to the app until they land. */
-    private var pending = PendingCheckin.restore(prefs.checkins.takeIf { prefs.token != null })
+    private var pending = PendingCheckin.restore(prefs.checkins).filter { it.token == prefs.token }
         set(value) {
             field = value
             prefs.checkins = PendingCheckin.saved(value)
         }
     private val sending = mutableSetOf<Int>()
+    /** Check-ins the server has confirmed, by class, kept shown as done until the class ends (its end, as a moment). */
+    private val confirmed = mutableMapOf<Int, Instant>()
     /** Why the server refused a check-in sent in the background, until the student has read it: apart from [error],
      *  which every call clears. */
     var checkInError by mutableStateOf<String?>(null)
+
+    /** The calls of this sign-in, cancelled when signing out, so no reply for the account left lands on the next. */
+    private var signedInScope = newSignedInScope()
+
+    private fun newSignedInScope() = CoroutineScope(viewModelScope.coroutineContext + SupervisorJob(viewModelScope.coroutineContext[Job]))
 
     init {
         if (prefs.token == null) loadStudio() else launchCall { refreshAll() }
     }
 
     private fun launchCall(block: suspend () -> Unit) {
-        viewModelScope.launch {
+        signedInScope.launch {
             busy = true
             error = null
             try {
@@ -113,13 +125,14 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    // A write that creates something carries one request id per action, kept until the action goes through, so a
-    // retry of it (after a timeout, say) is written once.
+    // A write that creates something carries one request id per action on its target (a student's batch, an item's
+    // feedback), kept until the action goes through, so a retry of it (after a timeout, say) is written once. When any
+    // action on the target goes through, every id kept for it goes, so a later action, even the same one, is new.
     private val requestIds = mutableMapOf<String, String>()
 
-    private suspend fun <T> once(action: String, send: suspend (String) -> T): T {
-        val reply = send(requestIds.getOrPut(action) { UUID.randomUUID().toString() })
-        requestIds.remove(action)
+    private suspend fun <T> once(target: String, action: String, send: suspend (String) -> T): T {
+        val reply = send(requestIds.getOrPut("$target|$action") { UUID.randomUUID().toString() })
+        requestIds.keys.removeAll { it.startsWith("$target|") }
         return reply
     }
 
@@ -147,16 +160,20 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun refresh() = launchCall { refreshAll() }
 
-    /** The student's Today tab from the server, with the check-ins it has not confirmed yet shown as done. */
+    /** The student's Today tab from the server, with the check-ins made on this phone shown as done: those it has not
+     *  confirmed yet, and those it has, until their class ends, in case the reply was read before the check-in. */
     private suspend fun readHome() {
-        home = pending.fold(Home.from(api.get("/home?lang=${prefs.lang}"))) { h, p -> h.checkedIn(p.sessionId, true) }
+        val now = Instant.now()
+        confirmed.values.removeAll { it < now }
+        val done = pending.map { it.sessionId } + confirmed.keys
+        home = done.fold(Home.from(api.get("/home?lang=${prefs.lang}"))) { h, id -> h.checkedIn(id, true) }
     }
 
     /** The student's Today tab read again in one call, quietly (no spinner, no error shown): while a class is near, or
      *  after the server said the student is now in another batch. */
     fun refreshHome() {
         if (user?.isTeacher != false) return
-        viewModelScope.launch {
+        signedInScope.launch {
             try {
                 readHome()
             } catch (_: ApiError) {
@@ -194,7 +211,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val body = JSONObject().put("current_password", current).put("new_password", new)
         try {
             // Not tried again by itself: a second try overlapping the first would find the current password changed.
-            once("password:" + (current + "\n" + new).hashCode()) { api.post("/me/password", body, it, retry = false) }
+            once("password", (current + "\n" + new).hashCode().toString()) { api.post("/me/password", body, it, retry = false) }
         } catch (e: ApiError) {
             throw if (e.code == "Not Found") ApiError("old_server") else e // no /me/password on this server
         }
@@ -210,6 +227,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private fun signOutLocally() {
+        signedInScope.cancel()
+        signedInScope = newSignedInScope()
+        confirmed.clear()
         prefs.token = null
         signedIn = false
         askIntake = false
@@ -250,7 +270,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Sends feedback to the studio; [sent] runs only once it is through, so a failed send keeps the text. */
     fun sendFeedback(text: String, thanks: String, sent: () -> Unit) = launchCall {
-        once("feedback:$text") { api.post("/feedback", JSONObject().put("screen", "me").put("text", text), it) }
+        once("feedback", text) { api.post("/feedback", JSONObject().put("screen", "me").put("text", text), it) }
         notice = thanks
         sent()
     }
@@ -258,36 +278,41 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     // ---------- student ----------
 
     /** The mood before class. The Today tab shows the check-in at once and the student goes into class: it is kept on
-     *  the phone and sent in the background ([sendCheckins]) until the server has it. */
+     *  the phone, with this sign-in's token, and sent in the background ([sendCheckins]) until the server has it. */
     fun checkIn(sessionId: Int, mood: Int) {
-        pending = pending.filter { it.sessionId != sessionId } + PendingCheckin(sessionId, mood, UUID.randomUUID().toString())
+        val token = prefs.token ?: return
+        pending = pending.filter { it.sessionId != sessionId } + PendingCheckin(sessionId, mood, UUID.randomUUID().toString(), token)
         home = home?.checkedIn(sessionId, true)
         checkInError = null
         sendCheckins()
     }
 
-    /** Sends each check-in the server has not confirmed, with its request id, tried again while the connection fails
-     *  and then at the next start or return to the app. One the server refuses is dropped and undone on the Today
-     *  tab, and [checkInError] says why; one that came too late is dropped quietly, as the class can still be said
-     *  after it. */
-    private fun sendCheckins() {
+    /** Sends each check-in the server has not confirmed, with its request id and the token it was made with: at once,
+     *  at each start and return to the app, and every two minutes while the Today tab is open, until it lands. A clear
+     *  refusal (a 4xx) drops it and undoes it on the Today tab; [checkInError] says why, except for one that came after
+     *  its class (the class can still be said after it). Anything else (no connection, busy, a 5xx, a page that is no
+     *  reply) keeps it for the next try. A reply that comes after signing out is ignored. */
+    fun sendCheckins() {
         pending.filter { it.sessionId !in sending }.forEach { p ->
             sending += p.sessionId
-            viewModelScope.launch {
+            signedInScope.launch {
                 try {
-                    val reply = api.post("/sessions/${p.sessionId}/checkin", JSONObject().put("phase", "before").put("mood", p.mood), p.requestId)
+                    val reply = api.post("/sessions/${p.sessionId}/checkin", JSONObject().put("phase", "before").put("mood", p.mood), p.requestId,
+                        token = p.token)
+                    if (prefs.token != p.token) return@launch
                     pending = pending - p
+                    confirmed[p.sessionId] = classOf(p.sessionId)?.endsAt ?: Instant.now()
                     stats = Stats.from(reply.getJSONObject("stats"))
                 } catch (e: ApiError) {
-                    if (e.code != "network" && e.code != "busy") {
-                        pending = pending - p
-                        if (pending.none { it.sessionId == p.sessionId }) home = home?.checkedIn(p.sessionId, false)
-                        when (e.code) {
-                            "signed_out" -> signOutLocally()
-                            "checkin_closed" -> {}
-                            "other_batch" -> { checkInError = e.code; refreshHome() }
-                            else -> checkInError = e.code
-                        }
+                    if (prefs.token != p.token || e.status !in 400..499) return@launch
+                    pending = pending - p
+                    if (pending.none { it.sessionId == p.sessionId }) home = home?.checkedIn(p.sessionId, false)
+                    when (e.code) {
+                        "signed_out" -> signOutLocally()
+                        "checkin_closed" -> if (classOf(p.sessionId)?.let { Instant.now() < it.endsAt } == true) checkInError = e.code
+                        "no_session" -> refreshHome()
+                        "other_batch" -> { checkInError = e.code; refreshHome() }
+                        else -> checkInError = e.code
                     }
                 } catch (_: JSONException) {
                     pending = pending - p
@@ -299,6 +324,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** A class on the Today tab, coming or to say how it went. */
+    private fun classOf(sessionId: Int) = home?.let { h -> h.sessions.firstOrNull { it.id == sessionId } ?: h.afterClass?.takeIf { it.id == sessionId } }
+
     fun loadPractice() = launchCall { readPractice() }
 
     /** The last two weeks: the classes joined and the practice on one's own, newest first. */
@@ -308,17 +336,23 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         soloSessions = summary.getJSONArray("solo").map(SoloSession::from).reversed()
     }
 
-    /** Sends the practice on one's own, if anything was timed or said, and closes it; on an error it stays open to send
-     *  again: with the same request id if nothing was changed since, with a new one if something was. */
+    /** Sends the practice on one's own, if anything was timed or said, and closes it, with one request id per run. If
+     *  the server refuses it, it stays open to change and send again. If the outcome is unknown (no connection, busy,
+     *  a 5xx), the run is [SoloRun.unsure]: it can only be sent again as it is, or left, so the same id stays right. */
     fun finishSolo(saved: String) = launchCall {
         val now = SystemClock.elapsedRealtime()
-        val run = solo?.stopped(now) ?: return@launchCall
+        val run = solo?.let { if (it.unsure) it else it.stopped(now) } ?: return@launchCall
         solo = run
         val entries = run.entries()
         if (entries.isNotEmpty()) {
             val minutes = ((now - run.startedAt + 59_999) / 60000).toInt().coerceIn(1, 240) // whole minutes, rounded up
-            val said = JSONArray(entries.map { it.json() })
-            once("solo:${run.startedAt}:$said") { api.post("/me/solo", JSONObject().put("minutes", minutes).put("entries", said), it) }
+            val body = JSONObject().put("minutes", minutes).put("entries", JSONArray(entries.map { it.json() }))
+            try {
+                once("solo:${run.startedAt}", "") { api.post("/me/solo", body, it) }
+            } catch (e: ApiError) {
+                if (e.status !in 400..499) solo = run.copy(unsure = true)
+                throw e
+            }
             notice = saved
         }
         solo = null
@@ -415,12 +449,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         teacherHome = TeacherHome.from(api.get("/teacher/home?lang=${prefs.lang}"))
     }
 
-    /** Saves one class's own link; [done] runs once it is saved. Then [share], if given, gets the class's message for
-     *  the share sheet; if not, the snackbar says [saved]. */
+    /** Saves one class's own link; [done] runs once it is saved and the classes read again. Then [share], if given,
+     *  gets the class's message for the share sheet; if not, the snackbar says [saved]. */
     fun saveLink(sessionId: Int, link: String, saved: String, done: () -> Unit, share: ((String) -> Unit)?) = launchCall {
         val reply = api.put("/teacher/sessions/$sessionId?lang=${prefs.lang}", JSONObject().put("meet_link", link))
-        done()
         readTeacherHome()
+        done()
         if (share != null) share(reply.getString("text")) else notice = saved
     }
 
@@ -493,7 +527,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      *  runs once it is saved, so a move that fails keeps the picker and the note. */
     fun placeStudent(userId: Int, batch: String, note: String, done: () -> Unit) = launchCall {
         val body = JSONObject().put("batch", batch).put("note", note.trim().ifEmpty { null } ?: JSONObject.NULL)
-        once("move:$userId:$batch:${note.trim()}") { api.put("/teacher/students/$userId/batch", body, it) }
+        once("move:$userId", "$batch:${note.trim()}") { api.put("/teacher/students/$userId/batch", body, it) }
         done()
         students = api.get("/teacher/students").getJSONArray("students").map(Student::from)
         readTeacherHome()
@@ -505,9 +539,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         readTeacherHome()
     }
 
-    /** A new password for a student; a retry after a lost reply gets the same one back. */
+    /** A new password for a student. Not tried again by itself, so two can never overlap; the teacher's own retry after
+     *  a lost reply sends the same request id and gets the same password back. */
     fun resetPassword(userId: Int, show: (String) -> Unit) = launchCall {
-        show(once("reset:$userId") { api.post("/teacher/students/$userId/password", JSONObject(), it) }.getString("password"))
+        show(once("reset:$userId", "") { api.post("/teacher/students/$userId/password", JSONObject(), it, retry = false) }.getString("password"))
     }
 
     fun setCurriculum(sessionId: Int, curriculum: String) = launchCall {
@@ -535,7 +570,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** The teacher's feedback on one student's item; [done] runs only once it is through, so a failed send keeps the text. */
     fun sendItemFeedback(studentId: Int, item: String, text: String, sent: String, done: () -> Unit) = launchCall {
         val body = JSONObject().put("item", item).put("text", text)
-        once("item-feedback:$studentId:$item:$text") { api.post("/teacher/students/$studentId/feedback", body, it) }
+        once("item-feedback:$studentId:$item", text) { api.post("/teacher/students/$studentId/feedback", body, it) }
         itemHistory = ItemHistory.from(api.get(itemsPath(studentId) + "/$item"))
         notice = sent
         done()

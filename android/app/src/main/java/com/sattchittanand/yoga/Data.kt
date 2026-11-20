@@ -51,8 +51,8 @@ class Prefs(context: Context) {
 }
 
 /** An error the server named ("bad_login", "pending", …), "network" when it could not be reached, or for a check the
- *  server's validation refused, a [problemCode] naming the field. */
-class ApiError(val code: String) : Exception(code)
+ *  server's validation refused, a [problemCode] naming the field; [status] is the answer's status, 0 with no answer. */
+class ApiError(val code: String, val status: Int = 0) : Exception(code)
 
 /** A 422's first problem as a code the app words: "too_long:pain_note:600", "range:height_cm" or "invalid:name", the
  *  field being the last name in its location (["body", "entries", 0, "note"] is "note"). */
@@ -79,23 +79,23 @@ class Api(private val prefs: Prefs) {
     suspend fun get(path: String) = call("GET", path, null, null, retry = false)
 
     /** [requestId] for a write that creates something: the same id for each try of the same action, which the server
-     *  writes once, so it may be tried again ([retry]). */
-    suspend fun post(path: String, body: JSONObject = JSONObject(), requestId: String? = null, retry: Boolean = requestId != null) =
-        call("POST", path, body, requestId, retry)
+     *  writes once, so it may be tried again ([retry]). [token]: the login to send it as, when not the current one. */
+    suspend fun post(path: String, body: JSONObject = JSONObject(), requestId: String? = null, retry: Boolean = requestId != null,
+        token: String? = null) = call("POST", path, body, requestId, retry, token)
 
     suspend fun put(path: String, body: JSONObject, requestId: String? = null) = call("PUT", path, body, requestId, requestId != null)
 
-    private suspend fun call(method: String, path: String, body: JSONObject?, requestId: String?, retry: Boolean): JSONObject =
-        withContext(Dispatchers.IO) { send(method, path, body, requestId, retry) }
+    private suspend fun call(method: String, path: String, body: JSONObject?, requestId: String?, retry: Boolean, token: String? = null): JSONObject =
+        withContext(Dispatchers.IO) { send(method, path, body, requestId, retry, token) }
 
     /** With [retry]: tries again, waiting a little longer each time, while the connection fails, and once while the
      *  server is busy (it has waited 20 s for its lock already, and did nothing). Anything else is the caller's. */
-    private suspend fun send(method: String, path: String, body: JSONObject?, requestId: String?, retry: Boolean): JSONObject {
+    private suspend fun send(method: String, path: String, body: JSONObject?, requestId: String?, retry: Boolean, token: String?): JSONObject {
         var wait = FIRST_WAIT_MS
         var busyAgain = retry
         while (true) {
             try {
-                return request(method, path, body, requestId)
+                return request(method, path, body, requestId, token)
             } catch (e: ApiError) {
                 val again = when (e.code) {
                     "busy" -> busyAgain.also { busyAgain = false }
@@ -110,10 +110,11 @@ class Api(private val prefs: Prefs) {
     }
 
     /** A GET on the calling thread, for the companion's tools, which run on Gemma's own thread. */
-    fun getNow(path: String): JSONObject = request("GET", path, null, null)
+    fun getNow(path: String): JSONObject = request("GET", path, null, null, null)
 
-    private fun request(method: String, path: String, body: JSONObject?, requestId: String?): JSONObject {
-        val envelope = JSONObject().put("method", method).put("path", path).put("token", prefs.token ?: "").put("body", body ?: JSONObject.NULL)
+    private fun request(method: String, path: String, body: JSONObject?, requestId: String?, token: String?): JSONObject {
+        val login = token ?: prefs.token ?: ""
+        val envelope = JSONObject().put("method", method).put("path", path).put("token", login).put("body", body ?: JSONObject.NULL)
         if (requestId != null) envelope.put("request_id", requestId)
         val reply = try {
             JSONObject(exchange(envelope.toString()))
@@ -124,11 +125,12 @@ class Api(private val prefs: Prefs) {
         }
         val answer = reply.optJSONObject("body") ?: JSONObject()
         if (reply.optInt("status") !in 200..299) {
-            throw ApiError(when (val detail = answer.opt("detail")) {
+            val code = when (val detail = answer.opt("detail")) {
                 is JSONArray -> problemCode(detail)
                 is String -> detail.ifEmpty { "generic" }
                 else -> "generic"
-            })
+            }
+            throw ApiError(code, reply.optInt("status"))
         }
         return answer
     }
@@ -251,8 +253,8 @@ data class LibraryItem(val key: String, val type: String, val sanskrit: String, 
 
 /** One item of a curriculum: so many breaths, seconds, minutes, rounds or strokes, and how to do it. [dose] is null
  *  when the reply has no count (none, or 0, for a cell the owner left empty or wrote words in); the unit or the cue
- *  then says it alone. */
-data class PlanItem(val item: String, val dose: Int?, val unit: String, val cue: String)
+ *  then says it alone. [doseLabel] is a count that is not whole, as written ("2.5"), shown instead of [dose]. */
+data class PlanItem(val item: String, val dose: Int?, val unit: String, val cue: String, val doseLabel: String? = null)
 
 data class Curriculum(val key: String, val name: String, val about: String, val items: List<PlanItem>)
 
@@ -267,7 +269,9 @@ data class Curricula(val library: Map<String, LibraryItem>, val curricula: List<
             }.associateBy { it.key },
             o.list("curricula").map { c ->
                 Curriculum(c.text("key"), c.text("name"), c.text("about"),
-                    c.list("items").map { PlanItem(it.text("item"), it.intOrNull("dose")?.takeIf { d -> d > 0 }, it.text("unit"), it.text("cue")) })
+                    c.list("items").map {
+                        PlanItem(it.text("item"), it.intOrNull("dose")?.takeIf { d -> d > 0 }, it.text("unit"), it.text("cue"), it.str("dose_label"))
+                    })
             },
         )
     }
@@ -319,9 +323,9 @@ data class ItemHistory(val item: String, val inClass: Int, val solo: Int, val fi
 /** Practice on one's own, kept on the phone until Finish: what was said about each item, the one in front of the
  *  student ([at]), each item's stopwatch time ([heldMs], an hour at most), and since when the stopwatch has been
  *  running. Times are SystemClock.elapsedRealtime() milliseconds. [curriculum] is the sequence repeated, for its doses
- *  and cues. */
+ *  and cues. [unsure] after a Finish whose outcome is unknown: the run can then only be sent again as it is, or left. */
 data class SoloRun(val startedAt: Long, val curriculum: String?, val said: List<ItemFeedback>, val heldMs: List<Long>, val at: Int = 0,
-    val runningSince: Long? = null) {
+    val runningSince: Long? = null, val unsure: Boolean = false) {
     val current get() = said[at]
 
     /** The stopwatch stops at 60:00, as long as the server keeps. */
@@ -343,7 +347,7 @@ data class SoloRun(val startedAt: Long, val curriculum: String?, val said: List<
 
     /** The run as the phone keeps it, every note as typed so far. */
     fun saved(): String = JSONObject().put("started_at", startedAt).put("curriculum", curriculum ?: JSONObject.NULL).put("at", at)
-        .put("running_since", runningSince ?: JSONObject.NULL).put("held_ms", JSONArray(heldMs))
+        .put("running_since", runningSince ?: JSONObject.NULL).put("held_ms", JSONArray(heldMs)).put("unsure", unsure)
         .put("said", JSONArray(said.map { JSONObject().put("item", it.item).put("reaction", it.reaction ?: JSONObject.NULL).put("pain", it.pain).put("note", it.note) }))
         .toString()
 
@@ -358,8 +362,8 @@ data class SoloRun(val startedAt: Long, val curriculum: String?, val said: List<
             val o = JSONObject(text)
             val said = o.getJSONArray("said").map { ItemFeedback(it.getString("item"), it.intOrNull("reaction"), it.optBoolean("pain"), it.text("note")) }
             val held = o.getJSONArray("held_ms").let { a -> List(a.length()) { a.getLong(it) } }
-            SoloRun(o.getLong("started_at"), o.str("curriculum"), said, held, o.getInt("at"), if (o.isNull("running_since")) null else o.getLong("running_since"))
-                .takeIf { said.isNotEmpty() && held.size == said.size && it.at in said.indices }
+            SoloRun(o.getLong("started_at"), o.str("curriculum"), said, held, o.getInt("at"), if (o.isNull("running_since")) null else o.getLong("running_since"),
+                o.optBoolean("unsure")).takeIf { said.isNotEmpty() && held.size == said.size && it.at in said.indices }
         } catch (e: JSONException) {
             null
         }
@@ -368,14 +372,15 @@ data class SoloRun(val startedAt: Long, val curriculum: String?, val said: List<
 
 /** A check-in sent in the background that the server has not confirmed yet: kept on the phone and sent again, with
  *  the same request id, until it lands. */
-data class PendingCheckin(val sessionId: Int, val mood: Int, val requestId: String) {
+data class PendingCheckin(val sessionId: Int, val mood: Int, val requestId: String, val token: String) {
     companion object {
-        fun saved(list: List<PendingCheckin>): String =
-            JSONArray(list.map { JSONObject().put("session", it.sessionId).put("mood", it.mood).put("id", it.requestId) }).toString()
+        fun saved(list: List<PendingCheckin>): String = JSONArray(list.map {
+            JSONObject().put("session", it.sessionId).put("mood", it.mood).put("id", it.requestId).put("token", it.token)
+        }).toString()
 
         /** The check-ins [saved] wrote; none if the text is missing or not theirs. */
         fun restore(text: String?): List<PendingCheckin> = try {
-            if (text == null) emptyList() else JSONArray(text).map { PendingCheckin(it.getInt("session"), it.getInt("mood"), it.getString("id")) }
+            if (text == null) emptyList() else JSONArray(text).map { PendingCheckin(it.getInt("session"), it.getInt("mood"), it.getString("id"), it.text("token")) }
         } catch (e: JSONException) {
             emptyList()
         }

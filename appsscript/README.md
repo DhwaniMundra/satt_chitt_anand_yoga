@@ -50,12 +50,17 @@ column of `batches` plain text, so a time typed there stays as typed. A time She
 or a number (7.15) is written back as the text it stands for ("07:15"). The app of v0.9 works with this backend as it
 is.
 
-**When a batch's time or length changes** (the owner edits the `batches` tab, or this backend reads a time cell
-differently from the one before: v0.9 read a 07:00 time-of-day cell as 07:08), the coming classes follow it on the next
-visit, one class per batch per day: each class that has not begun and nobody has checked in to is moved to the new
-time in its own row, keeping its id, its own Meet link and its curriculum. A class someone has checked in to stays as
-it is, and that day gets no second class. A class is removed only from a day its batch no longer meets (and only if it
-has not begun and nobody has checked in to it).
+An older backend read a time typed as a time of day eight minutes late (07:00 as 07:08), so a Sheet may hold classes
+made at 07:08. This backend reads 07:00, and on the next visit moves those classes to 07:00 in their own rows, keeping
+their ids, Meet links and curricula, under the rule below; one already within an hour of its start, or checked in to,
+stays at 07:08 for that day.
+
+**When a batch's time or length changes**, the coming classes follow it on the next visit, one class per batch per
+day: a class nobody has checked in to is moved to the new time in its own row, keeping its id, its own Meet link and
+its curriculum, when both its old and its new start are more than an hour away. Otherwise it stays as it is (a time
+changed to earlier than now leaves today's class where it was), and that day gets no second class. A class is removed
+only from a day its batch no longer meets, under the same conditions. While a batch's time is no time (being retyped,
+say), its classes are left as they are.
 
 A Sheet made before v1.0 needs these steps once, after pasting the new `Code.gs`:
 1. Run `setup`. It adds the `batches` and `batch_changes` tabs, the hidden `intake` and `intake_ratings` tabs, and the
@@ -97,8 +102,12 @@ phone app ◀──── HTTP 200 {"status": 401, "body": {...}} ────�
   as seeded), each meeting on its own days at its own time with its own Meet link, as the `batches` tab says. The
   week is made on demand: every visit to `/home` or `/teacher/home` makes the next 7 days' classes match the batches,
   one class per batch per day: it adds each one missing, moves a class whose batch's time or length changed in its
-  row (keeping its id, link and curriculum), and removes one from a day its batch no longer meets; it never moves or
-  removes a class that has begun or that someone has checked in to.
+  row (keeping its id, link and curriculum), and removes one from a day its batch no longer meets; it moves or
+  removes only a class nobody has checked in to whose start (old and new) is more than an hour away, and leaves a
+  batch whose time is no time alone.
+- **Whose class it is**: a class is a student's when they were in its batch at some moment while it ran, by their
+  placements and moves (`batch_changes`) or a batch set by hand in the `users` tab (from its `batch_since`). That
+  decides the check-in before class (`other_batch`), saying how it went without one, and the streak.
 - **Caching** (`CacheService`, ten minutes): the user a login token belongs to, and the settings. Each key carries a
   generation; a settings change, a logout, a password reset, or any hand edit in the Sheet (the `onEdit` trigger)
   starts a new generation after its writes are flushed, so no request reads a value older than the last write. A
@@ -176,9 +185,9 @@ curl -sL "$URL" -H 'Content-Type: text/plain' \
 | `GET /me/asanas` | approved student, teacher | | `{items: [{item, in_class, solo, last, reaction_trend, pain_times, teacher_said}]}`: each item the student practised, in class or on their own, or had feedback on: those with strain or pain first, then those with the teacher's feedback (the latest first), then the most practised; `teacher_said` is the date of the latest feedback |
 | `GET /me/asanas/{item}` | approved student, teacher | | one item's history, worked out in code: `{item, in_class, solo, first, last, reaction_trend: {early_average, recent_average, each}, holds: {recent_seconds, longest_seconds}, strain_or_pain: {times, last}, teacher_said: {date, text}, your_notes: [{date, text}], entries: [{date, at, kind, hold_s, reaction, pain, note}], feedback: [{date, at, text}]}`, `kind` being `class` or `solo`, `date` the India date and `at` the moment. The trend sets the first `each` reactions against the latest `each` (up to three), in class and on one's own together; `holds` are the stopwatch's, on one's own |
 | `POST /me/shared` | approved student | yes | `{text}` (1 to 1000) → `{ok, id}`; the same words again return the same id; `pending`, `empty_note` |
-| `GET /home?lang=` | signed in | the day's classes, once | `{user, batch, studio, sessions, after_checkin, after_class, group_link}`: `sessions` are the student's batch's coming classes (none before they are placed), each `{id, starts_at, duration_min, batch: {key, name, about, days, time}, meet_link, has_link, checked_in, curriculum}`, links only for approved students. `after_class` is the latest class of the batch the student was in at its time (none from before they were placed), or one they checked in to, whose after-class window is open (from 10 minutes before its end to 12 hours after), with `checked_in` and `said`: null before the student answers, then `{mood, items: [{item, reaction, pain, note}]}`, so the app can change it (a second send replaces the first). `after_checkin` is the same for the classes checked in to only, for the app of v0.9. `group_link` is the class group's, if the teacher gave one |
-| `GET /curricula?lang=` | signed in | | `{library: [{key, type, level, sanskrit, name, english, aliases}], curricula: [{key, name, level, about, items: [{item, dose, unit, cue}]}]}`, from the curriculum tabs, names, about and cues in `lang`; `dose` is always a whole number: "5 breaths" in the cell is 5, 2.5 is 3, and an empty or worded cell is 0 |
-| `POST /sessions/{session_id}/checkin` | approved student | yes | `{phase: before\|after, mood: 1..5}` → `{ok, stats}`. "before" from an hour before class to its end, for the student's own batch (`other_batch`); "after" from 10 minutes before the end to 12 hours after, for a class checked in to or of the batch the student was in at its time: without a check-in before, it records that they came, with no mood before. `pending`, `no_session`, `checkin_closed` |
+| `GET /home?lang=` | signed in | the day's classes, once | `{user, batch, studio, sessions, after_checkin, after_class, group_link}`: `sessions` are the student's batch's coming classes (none before they are placed), each `{id, starts_at, duration_min, batch: {key, name, about, days, time}, meet_link, has_link, checked_in, curriculum}`, links only for approved students. `after_class` is the latest class that is the student's (above; none from before they were placed), or one they checked in to, whose after-class window is open (from 10 minutes before its end to 12 hours after), with `checked_in` and `said`: null before the student answers, then `{mood, items: [{item, reaction, pain, note}]}`, so the app can change it (a second send replaces the first). `after_checkin` is the same for the classes checked in to only, for the app of v0.9. `group_link` is the class group's, if the teacher gave one |
+| `GET /curricula?lang=` | signed in | | `{library: [{key, type, level, sanskrit, name, english, aliases}], curricula: [{key, name, level, about, items: [{item, dose, unit, cue}]}]}`, from the curriculum tabs, names, about and cues in `lang`; `dose` is always a whole number, rounded down: "5 breaths" in the cell is 5, 2.5 is 2, and an empty or worded cell is 0; a count that is not whole comes as written in `dose_label` too ("2.5") |
+| `POST /sessions/{session_id}/checkin` | approved student | yes | `{phase: before\|after, mood: 1..5}` → `{ok, stats}`. "before" from an hour before class to its end, for a class that is the student's (`other_batch`); "after" from 10 minutes before the end to 12 hours after, for a class checked in to or that is the student's (above): without a check-in before, it records that they came, with no mood before. `pending`, `no_session`, `checkin_closed` |
 | `POST /sessions/{session_id}/practice` | approved student | yes | `{entries: [{item, reaction: 1..4\|null, pain: 0\|1, note?}]}` (at most 60, notes up to 1000) → `{ok, saved}`: how each item went, replacing what was sent before for this class; entries with nothing said are not kept. Open when the "after" check-in is, and records coming in the same way; `checkin_closed`, `unknown_item`, `pending`, `no_session` |
 | `POST /feedback` | signed in | yes | `{screen, text}` → `{ok}` |
 | `GET /teacher/home?lang=` | teacher | the day's classes, once | `{sessions, batches, settings, pending_students}`: `sessions` are the classes of the next day that has some left (today, or tomorrow once today's are over), every batch's, each with `own_link`, `joined` and `curriculum`; `batches` with their everyday `meet_link` |
@@ -219,7 +228,7 @@ add columns of her own (to the right is tidiest); `setup()` adds back any column
 | `asana_feedback` | id, student_id, item, text, created_at | the teacher's feedback to one student on one item |
 | `library` | key, type, level, sanskrit, name, english, aliases, source | the asanas, pranayama and meditation the curricula draw on; type `asana`/`pranayama`/`meditation`, level 1 to 3, aliases comma-separated |
 | `curricula` | key, name, name_hi, name_mr, level, about, about_hi, about_mr, source | the curricula the teacher picks from; the first is the default |
-| `curriculum_items` | curriculum, position, item, dose, unit, cue, cue_hi, cue_mr | each curriculum's items in order; `dose` a whole number (words after it are ignored; an empty one shows the unit alone); unit `breaths`, `seconds`, `minutes`, `rounds` or `strokes` |
+| `curriculum_items` | curriculum, position, item, dose, unit, cue, cue_hi, cue_mr | each curriculum's items in order; `dose` a number, as many as the unit says (words after it are ignored; an empty one shows the unit alone); unit `breaths`, `seconds`, `minutes`, `rounds` or `strokes` |
 | `feedback` | id, user_id, screen, text, created_at | |
 | `shared_notes` | id, user_id, text, created_at | notes students chose to share with the teacher |
 | `intake` (hidden) | user_id, age, height_cm, weight_kg, food, meals, pain, pain_note, updated_at | each student's answers about themselves, for the teacher to place them: health data, on the Dashboard only as counts |
