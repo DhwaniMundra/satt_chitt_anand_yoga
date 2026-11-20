@@ -240,8 +240,8 @@ Keywords: app, link, meet, whatsapp, group, code, check in, mood, password, logi
 
 - Today's class card shows the Google Meet link. Tap "Join class" a few minutes before your batch's class time.
 - Before joining, the app asks how you feel (one tap), and after class it asks again. This helps Ramit ji see how
-  the classes help, and you see your own progress. If you joined from the class's message without the app, you can
-  still say how class went afterwards.
+  the classes help, and you see your own progress. Joined from the shared message without the app? You can still say
+  afterwards how it went.
 - Everyone signs up with their phone number and the group code from the teacher (in the class group, or however
   your class keeps in touch), then waits for the teacher to place them in a batch.
 - Forgot your password? Ask the teacher, who can give you a new one. You can change it yourself on the Me tab.
