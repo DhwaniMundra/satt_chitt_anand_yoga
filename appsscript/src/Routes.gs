@@ -83,8 +83,12 @@ function login_(ctx) {
   const ok = checkPassword_(body.password, user ? user.pw_hash : DUMMY_HASH_); // the same work for an unknown number
   if (!user || !ok) throw new HttpError_(401, 'bad_login');
   return ctx.lock(() => {
+    // The users tab is read again under the lock: an account removed from the Sheet's menu, or given a new password,
+    // while this one was checked gets no token (an id freed by a removal may be someone else's by now).
+    const still = ctx.db.t('users').rows.filter((u) => u.id === user.id && u.pw_hash === user.pw_hash)[0];
+    if (!still) throw new HttpError_(401, 'bad_login');
     attemptsClear_(key);
-    return signIn_(ctx, user);
+    return signIn_(ctx, still);
   });
 }
 

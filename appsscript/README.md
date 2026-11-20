@@ -7,7 +7,8 @@ extend. It costs nothing, needs no computer left running, and keeps the studio's
 - [`dist/Code.gs`](dist/Code.gs): the one file to paste, built from [`src/`](src/) and `content/studio.json`.
 - [`dist/appsscript.json`](dist/appsscript.json): the manifest (optional, see step 3).
 
-Contents: [Set up](#set-up-5-minutes) · [How it works](#how-it-works) · [The envelope](#the-envelope) ·
+Contents: [Set up](#set-up-5-minutes) ·
+[Clearing test data or starting again](#clearing-test-data-or-starting-again) · [How it works](#how-it-works) · [The envelope](#the-envelope) ·
 [Routes](#routes) · [The Sheet](#the-sheet) · [The Dashboard](#the-dashboard) ·
 [Limits for a class of ten](#limits-for-a-class-of-ten) · [Security](#security) · [Tests](#tests) ·
 [Developing](#developing)
@@ -71,6 +72,34 @@ A Sheet made before v0.9 needs these steps once, after pasting the new `Code.gs`
    `setup` again.
 4. Deploy a new version (above), then place each existing student in a batch from the app (Students).
    Students who signed up before then can tell the teacher about themselves from Me.
+
+## Clearing test data or starting again
+
+The Sheet has a menu of its own, **Satt Chitt Anand**, at the end of the menu bar (after Help). Each item first says
+what it will remove and what stays, and asks; nothing is removed until you say yes. It cannot be undone: a removed
+row is gone (File → Version history can only bring back the whole Sheet as it was at an earlier time).
+
+- **Remove test people…** removes everyone whose name starts with TEST (in capitals or not), and every row of theirs
+  in every tab: their sign-ins, intake answers, check-ins, what they said after class about each item, practice on
+  their own, shared notes, feedback sent from the app, the teacher's feedback to them on items, and their batch
+  placements and moves. The dialog lists them by name and phone number and counts their rows. Everyone else and their
+  rows stay, as do the batches, the curriculum, the classes and the settings. A phone signed in as one of them is
+  signed out at its next request. A teacher whose name starts with TEST goes too, and the teacher code then works
+  again.
+- **Reset the studio…** removes everyone, the teacher too, and every row of those tabs, so the studio is as it was
+  right after `setup`. What stays: the batches, the curriculum (`library`, `curricula`, `curriculum_items`), the
+  classes (`class_sessions`), the settings (teacher code, group code, group link, app link) and the Dashboard. It asks
+  twice: yes or no, then a box where you type RESET. Afterwards the teacher signs up again with the same teacher code,
+  and students with the same group code.
+- **New group code…** makes a new group code, as the teacher can from the app. The old code stops working for
+  sign-ups; no one is signed out.
+
+Rows are deleted whole, so each tab keeps its header row and the Dashboard keeps working. The app's writes wait
+while an item runs, so use the menu when no class is on.
+
+The menu runs the code saved in the Apps Script editor, not the deployed web app: after pasting a new `Code.gs`,
+Save is enough for the menu, and no new deployment is needed. Then reload the Sheet so the menu appears. Its items
+need the Sheet open, so they cannot be run from the editor's Run menu.
 
 ## How it works
 
@@ -247,7 +276,8 @@ seeded curricula are a mock for the teacher to confirm (the note on `curricula`'
 
 Editing by hand: the data tabs have a warning-only protection (Sheets asks "are you sure?"), and any edit makes the
 script drop its cache. When typing text that looks like a number or a date (a code, a phone number), start it with
-an apostrophe. Deleting a student's row leaves their check-ins in place.
+an apostrophe. Deleting a student's row by hand leaves their check-ins and other rows in place; the Sheet's menu
+removes a person with all their rows ([Clearing test data or starting again](#clearing-test-data-or-starting-again)).
 
 ## The Dashboard
 
@@ -322,7 +352,7 @@ from `practice` (the app reads only `practice`).
   (`sha256x$100$131072$<salt>$<hash>`), so they can be raised without breaking existing passwords. An unknown phone
   number is checked against a dummy hash of the same cost, so timing does not reveal who has an account.
 - **Login tokens** are 32 random bytes (43 characters), stored only as their SHA-256; the cache keys are those
-  hashes too. A token lasts until logout or a password reset.
+  hashes too. A token lasts until logout, a password reset, or its person's removal from the Sheet's menu.
 - **Randomness** comes from `Utilities.getUuid()` (Java's `UUID.randomUUID()`, a `SecureRandom`), hashed: tokens,
   salts, the teacher and group codes, temporary passwords.
 - **Guessing is slowed:** 5 wrong passwords for a number, 5 wrong teacher codes, or 5 wrong group codes from one
@@ -346,8 +376,9 @@ node --test 'appsscript/test/*.test.mjs'
 On the studio laptop, Node is in `tools/node/bin` (`export PATH=$PWD/tools/node/bin:$PATH`). The tests load
 `dist/Code.gs` (the file that gets pasted) into a Node `vm` context with small fakes of `SpreadsheetApp`,
 `LockService`, `CacheService`, `Utilities`, `ContentService` and `Logger` ([`test/fakes.mjs`](test/fakes.mjs)).
-The fake Sheet behaves like Sheets where it matters: a fixed grid, and text that looks like a number, a boolean, a
-date or a formula is read as one unless it starts with an apostrophe.
+The fake Sheet behaves like Sheets where it matters: a fixed grid, at least one row kept below the frozen header,
+and text that looks like a number, a boolean, a date or a formula is read as one unless it starts with an
+apostrophe. The menu's dialogs are answered by the test.
 
 No test reads the real clock: each runs at a fixed moment (`NOW` in [`test/helpers.mjs`](test/helpers.mjs),
 Wednesday 6:00 in India), and a test about a particular moment pins its own. To check that the suite holds at any
@@ -382,6 +413,11 @@ done
 - [`store.test.mjs`](test/store.test.mjs): the envelope, a write repeated with its request id, validation shapes, text
   kept as typed, hashed tokens and passwords, columns by name, ids, the lock (busy, always let go), a failure inside a
   route, growing tabs, the cache and its invalidation, the Dashboard's formulas.
+- [`reset.test.mjs`](test/reset.test.mjs): the Sheet's menu: which tabs hold a person's rows; removing the test
+  people (theirs go, everyone else's rows stay as they were); a removed person's token refused at once, a write
+  replayed with its request id bringing nothing back, a login that overlaps the removal; resetting the studio (what
+  stays, the codes working again); a tab whose rows fill its grid; the lock; the dialogs and the RESET box; a new
+  group code.
 - [`snapshot.test.mjs`](test/snapshot.test.mjs): a regression snapshot, 105 requests and their recorded answers
   ([`test/snapshot/`](test/snapshot/)); every status and every body must match. After a deliberate change to the
   answers, `node appsscript/test/snapshot/record.mjs` records them again; read its diff before committing.
@@ -400,12 +436,15 @@ teacher has signed up, run it at most once a quarter of an hour.
   function per route), `Practice.gs` (the curriculum, each class's plan, how each item went, practice on one's own,
   each student's history per item, the teacher's feedback), `Intake.gs` (a student's answers about themselves and the
   batch they point to), `Setup.gs` (`setup()`, the
-  curriculum seed and the Dashboard), `appsscript.json`.
+  curriculum seed and the Dashboard), `Reset.gs` (the Sheet's menu: removing the test people, resetting the studio, a
+  new group code), `appsscript.json`.
 - `node appsscript/scripts/build.mjs` writes `dist/Code.gs` and `dist/appsscript.json`; `--check` fails if they are
   out of date (the tests check this too). Commit `dist/` with every change to `src/` or to `content/studio.json`
   and `content/curriculum.json`.
-- Only `setup`, `doGet`, `doPost` and `onEdit` are public; every other function ends in `_`, so the editor's Run menu
-  lists just those four (run `setup`; the others are for the web app and the edit trigger).
+- Only `setup`, `doGet`, `doPost`, `onEdit` and `onOpen` are public, with the three functions the Sheet's menu calls
+  (`removeTestPeople`, `resetStudio`, `newGroupCode`); every other function ends in `_`, so the editor's Run menu
+  lists just those (run `setup`; the others are for the web app, the triggers and the menu). The work of the menu's
+  items is in `removeTestPeople_(db)`, `resetStudio_(db)` and `newGroupCode_(db)`, which the tests call directly.
 - `loadBackend()` in [`test/fakes.mjs`](test/fakes.mjs) runs Code.gs locally, as a stand-in backend for app
   development: it returns `{ss, state, cache, context, evaluate, call, Date, clock}`, where `call(method, path,
   {query, token, body})` goes through the envelope and `state.offsetMs` / `state.frozenMs` move or stop the clock.

@@ -8,7 +8,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-export const SOURCES = ['Main.gs', 'Validate.gs', 'Store.gs', 'Auth.gs', 'Studio.gs', 'Practice.gs', 'Intake.gs', 'Routes.gs', 'Setup.gs'];
+export const SOURCES = ['Main.gs', 'Validate.gs', 'Store.gs', 'Auth.gs', 'Studio.gs', 'Practice.gs', 'Intake.gs', 'Routes.gs', 'Setup.gs', 'Reset.gs'];
 export const CODE_PATH = join(ROOT, 'dist', 'Code.gs');
 export const MANIFEST_PATH = join(ROOT, 'dist', 'appsscript.json');
 

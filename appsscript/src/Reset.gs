@@ -1,0 +1,213 @@
+// ---------- Reset: the Sheet's own menu, to clear test people or start the studio again ----------
+// onOpen adds a "Satt Chitt Anand" menu to the Sheet. Each item says first what it removes and what stays, and asks;
+// then it deletes rows under the script lock, as the app's writes do, and makes the app forget what it cached, so a
+// removed person's phone is signed out at its next request. Rows are deleted whole, so every tab keeps its header and
+// the Dashboard's formulas go on reading it. A person's rows are found by the person column of each tab in TABLES_
+// (personTabs_), so a tab added later with a user_id or student_id column is cleared with the rest.
+
+const TEST_NAME_ = 'TEST';
+// How the dialogs name a row of each tab: [one, many].
+const ROW_WORDS_ = {
+  tokens: ['sign-in', 'sign-ins'],
+  checkins: ['check-in', 'check-ins'],
+  feedback: ['feedback message from the app', 'feedback messages from the app'],
+  shared_notes: ['shared note', 'shared notes'],
+  intake: ['intake', 'intakes'],
+  intake_ratings: ['intake self-assessment answer', 'intake self-assessment answers'],
+  batch_changes: ['batch placement or move', 'batch placements and moves'],
+  practice: ['practice item (after class or on their own)', 'practice items (after class or on their own)'],
+  solo_sessions: ['practice on their own', 'practices on their own'],
+  asana_feedback: ['note from the teacher on an item', 'notes from the teacher on items'],
+};
+
+function onOpen() {
+  SpreadsheetApp.getUi().createMenu('Satt Chitt Anand')
+    .addItem('Remove test people…', 'removeTestPeople')
+    .addItem('Reset the studio…', 'resetStudio')
+    .addSeparator()
+    .addItem('New group code…', 'newGroupCode')
+    .addToUi();
+}
+
+/** Every tab whose rows are one person's, with the column naming them: [[tab, column]]. */
+function personTabs_() {
+  return Object.keys(TABLES_)
+    .map((name) => [name, TABLES_[name].map(([col]) => col).filter((col) => col === 'user_id' || col === 'student_id')[0]])
+    .filter(([, col]) => col);
+}
+
+/** A name starting with TEST, in any case, spaces before it aside. */
+function isTestName_(name) {
+  return String(name === null || name === undefined ? '' : name).trim().toUpperCase().indexOf(TEST_NAME_) === 0;
+}
+
+/** What removing the people `pick` chooses would delete: their users rows, and their rows of each person tab. With
+ * `everything`, every row of the person tabs, so rows left by someone deleted from users by hand go too. */
+function removal_(db, pick, everything) {
+  const people = db.t('users').rows.filter(pick);
+  const ids = {};
+  people.forEach((u) => {
+    ids[u.id] = true;
+  });
+  const rows = {};
+  personTabs_().forEach(([name, col]) => {
+    rows[name] = db.t(name).rows.filter((r) => everything || ids[r[col]] === true);
+  });
+  return { people: people, rows: rows };
+}
+
+/** A removal as counts: {people, names, teacher (one of them is the teacher), rows: {tab: count}, total}. */
+function removalCounts_(removal) {
+  const rows = {};
+  let total = 0;
+  Object.keys(removal.rows).forEach((name) => {
+    rows[name] = removal.rows[name].length;
+    total += rows[name];
+  });
+  return { people: removal.people.length, names: removal.people.map((u) => u.name), teacher: removal.people.some((u) => u.role === 'teacher'),
+    rows: rows, total: total };
+}
+
+/** Deletes whole rows of a tab, bottom up, a run of neighbours at a time. Sheets keeps at least one row below the
+ * frozen header, so a tab losing every row it has gets an empty row added at its end first. */
+function deleteSheetRows_(sheet, rows) {
+  const numbers = rows.map((r) => r._row).sort((a, b) => b - a);
+  if (!numbers.length) return;
+  if (numbers.length >= sheet.getMaxRows() - 1) sheet.insertRowsAfter(sheet.getMaxRows(), 1);
+  for (let i = 0; i < numbers.length;) {
+    let j = i;
+    while (j + 1 < numbers.length && numbers[j + 1] === numbers[j] - 1) j++;
+    sheet.deleteRows(numbers[j], j - i + 1);
+    i = j + 1;
+  }
+}
+
+/** Runs `fn` under the script lock with the Sheet read afresh, then flushes and starts a new cache generation, so no
+ * request goes on using a login token or setting cached before. */
+function menuLock_(db, fn) {
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(30000)) throw new Error('The app is busy writing to the Sheet. Try again in a minute.');
+  db.dropAll();
+  try {
+    return fn();
+  } finally {
+    try {
+      SpreadsheetApp.flush();
+      bumpCacheGeneration_();
+    } finally {
+      db.dropAll();
+      lock.releaseLock();
+    }
+  }
+}
+
+/** Under the lock: removes the people `pick` chooses and their rows (every row of the person tabs, with
+ * `everything`); the counts. Their sign-ins go first and their users rows last, so a removal cut short leaves no one
+ * signed in and can simply be run again. */
+function removePeople_(db, pick, everything) {
+  return menuLock_(db, () => {
+    const removal = removal_(db, pick, everything);
+    personTabs_().forEach(([name]) => deleteSheetRows_(db.t(name).sheet, removal.rows[name]));
+    deleteSheetRows_(db.t('users').sheet, removal.people);
+    return removalCounts_(removal);
+  });
+}
+
+/** Everyone whose name starts with TEST, and every row of theirs; the counts. */
+function removeTestPeople_(db) {
+  return removePeople_(db, (u) => isTestName_(u.name));
+}
+
+/** Everyone, the teacher too, and every row of the person tabs; the counts. The batches, the curriculum, the classes,
+ * the settings and the Dashboard stay, as setup() left them, so the teacher code works again. */
+function resetStudio_(db) {
+  return removePeople_(db, () => true, true);
+}
+
+/** A new group code, as the teacher can make from the app; the code. */
+function newGroupCode_(db) {
+  return menuLock_(db, () => {
+    const code = newCode_();
+    db.setSetting('group_code', code);
+    return code;
+  });
+}
+
+function count_(n, one, many) {
+  return n + ' ' + (n === 1 ? one : many);
+}
+
+/** "4 sign-ins, 10 check-ins and 2 shared notes", the tabs with any. */
+function rowsText_(counts) {
+  const parts = Object.keys(counts.rows).filter((name) => counts.rows[name]).map((name) => {
+    const words = ROW_WORDS_[name] || [name + ' row', name + ' rows'];
+    return count_(counts.rows[name], words[0], words[1]);
+  });
+  return parts.length > 1 ? parts.slice(0, -1).join(', ') + ' and ' + parts[parts.length - 1] : parts.join('');
+}
+
+// ---------- the menu's items: thin wrappers that ask, then call the functions above ----------
+
+/** The menu's "Remove test people…". */
+function removeTestPeople() {
+  const ui = SpreadsheetApp.getUi();
+  const title = 'Remove test people';
+  const db = new Db_();
+  const removal = removal_(db, (u) => isTestName_(u.name));
+  const plan = removalCounts_(removal);
+  if (!plan.people) {
+    ui.alert(title, 'No one\'s name starts with TEST, so there is no one to remove.', ui.ButtonSet.OK);
+    return;
+  }
+  const list = removal.people.map((u) => '• ' + u.name + ' (' + u.phone + (u.role === 'teacher' ? ', the teacher' : '') + ')').join('\n');
+  const text = 'Remove ' + count_(plan.people, 'person whose name starts', 'people whose names start') + ' with TEST' +
+    (plan.total ? ', and the ' + count_(plan.total, 'row', 'rows') + ' that are theirs?' : '? They have no other rows.') + '\n\n' +
+    list + '\n\n' + (plan.total ? 'Their rows: ' + rowsText_(plan) + '.\n\n' : '') +
+    'Everyone else and their rows stay, as do the batches, the curriculum, the classes and the settings. ' +
+    'A phone signed in as one of these people is signed out.' +
+    (plan.teacher ? ' The teacher code works again, for the teacher to sign up anew.' : '') + '\n\nThis cannot be undone.';
+  if (ui.alert(title, text, ui.ButtonSet.YES_NO) !== ui.Button.YES) return;
+  const done = removeTestPeople_(db);
+  ui.alert(title, 'Removed ' + count_(done.people, 'person', 'people') + ' and ' + count_(done.total, 'row', 'rows') + '.', ui.ButtonSet.OK);
+}
+
+/** The menu's "Reset the studio…": asks twice, the second time for RESET typed in. */
+function resetStudio() {
+  const ui = SpreadsheetApp.getUi();
+  const title = 'Reset the studio';
+  const plan = removalCounts_(removal_(new Db_(), () => true, true));
+  if (!plan.people && !plan.total) {
+    ui.alert(title, 'No one has signed up and there are no rows of anyone\'s: the studio is as setup left it.', ui.ButtonSet.OK);
+    return;
+  }
+  const text = 'This removes everyone signed up (' + count_(plan.people, 'person', 'people') +
+    (plan.teacher ? ', the teacher among them' : '') + ') and every row they made (' + count_(plan.total, 'row', 'rows') + ')' +
+    (plan.total ? ': ' + rowsText_(plan) : '') + '. Every phone is signed out.\n\n' +
+    'What stays: the batches, the curriculum (library, curricula, curriculum_items), the classes (class_sessions), the ' +
+    'settings (the teacher code, the group code, the group link and the app link) and the Dashboard. Afterwards the ' +
+    'teacher signs up again with the same teacher code, and students with the same group code.\n\nThis cannot be undone. Go on?';
+  if (ui.alert(title, text, ui.ButtonSet.YES_NO) !== ui.Button.YES) return;
+  const typed = ui.prompt(title, 'To remove ' + count_(plan.people, 'person', 'people') + ' and ' + count_(plan.total, 'row', 'rows') +
+    ', type RESET and click OK.', ui.ButtonSet.OK_CANCEL);
+  if (typed.getSelectedButton() !== ui.Button.OK) return;
+  if (typed.getResponseText().trim() !== 'RESET') {
+    ui.alert(title, 'Nothing was removed: the box did not say RESET.', ui.ButtonSet.OK);
+    return;
+  }
+  const done = resetStudio_(new Db_());
+  ui.alert(title, 'The studio is reset: ' + count_(done.people, 'person', 'people') + ' and ' + count_(done.total, 'row', 'rows') +
+    ' were removed. The teacher can sign up again with the teacher code (in the hidden settings tab), and students with ' +
+    'the group code.', ui.ButtonSet.OK);
+}
+
+/** The menu's "New group code…". */
+function newGroupCode() {
+  const ui = SpreadsheetApp.getUi();
+  const title = 'New group code';
+  const ask = 'Make a new group code? Students sign up with it. The current code stops working, so an invite already ' +
+    'sent with it no longer lets anyone sign up; everyone already signed up stays signed in.';
+  if (ui.alert(title, ask, ui.ButtonSet.YES_NO) !== ui.Button.YES) return;
+  const code = newGroupCode_(new Db_());
+  ui.alert(title, 'The new group code is ' + code + '. The teacher sees it in the app, and the invite shared from the app carries it.',
+    ui.ButtonSet.OK);
+}

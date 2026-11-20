@@ -72,7 +72,7 @@ export class FakeRange {
 
 export class FakeSheet {
   constructor(ss, name) {
-    Object.assign(this, { ss, name, maxRows: 1000, maxCols: 26, data: [], notes: {}, hidden: false, protections: [] });
+    Object.assign(this, { ss, name, maxRows: 1000, maxCols: 26, frozenRows: 0, data: [], notes: {}, hidden: false, protections: [] });
   }
   getName() { return this.name; }
   cell(r, c) { return (this.data[r - 1] || [])[c - 1] ?? ''; }
@@ -94,7 +94,15 @@ export class FakeSheet {
   getMaxColumns() { return this.maxCols; }
   insertRowsAfter(after, n) { this.data.splice(after, 0, ...Array.from({ length: n }, () => [])); this.maxRows += n; return this; }
   insertColumnsAfter(after, n) { this.maxCols += n; return this; }
-  deleteRow(r) { this.data.splice(r - 1, 1); this.maxRows -= 1; this.ss.writes++; return this; }
+  deleteRow(r) { return this.deleteRows(r, 1); }
+  deleteRows(r, n) {
+    if (r < 1 || n < 1 || r + n - 1 > this.maxRows) throw new Error('Those rows are out of bounds.');
+    if (this.maxRows - n <= this.frozenRows) throw new Error('Sorry, it is not possible to delete all non-frozen rows.');
+    this.data.splice(r - 1, n);
+    this.maxRows -= n;
+    this.ss.writes++;
+    return this;
+  }
   getDataRange() { return new FakeRange(this, 1, 1, Math.max(this.getLastRow(), 1), Math.max(this.getLastColumn(), 1)); }
   getRange(a, b, c, d) {
     if (typeof a === 'string') {
@@ -110,7 +118,7 @@ export class FakeSheet {
     return new FakeRange(this, a, b, c || 1, d || 1);
   }
   clearContents() { this.data = []; return this; }
-  setFrozenRows() { return this; }
+  setFrozenRows(n) { this.frozenRows = n; return this; }
   hideSheet() { this.hidden = true; return this; }
   isSheetHidden() { return this.hidden; }
   protect() {
@@ -192,9 +200,33 @@ export function loadBackend({ code, now } = {}) {
     releaseLock() { state.lockHeld = Math.max(0, state.lockHeld - 1); },
   };
   const toSigned = (buf) => Array.from(buf, (b) => (b > 127 ? b - 256 : b));
+  // The owner at the Sheet's menu: each dialog is kept in state.dialogs and answered from state.answers, a button for
+  // an alert, [button, text] for a prompt; with none left, an alert is closed with OK and a prompt cancelled.
+  state.menus = [];
+  state.dialogs = [];
+  state.answers = [];
+  const Button = { OK: 'OK', CANCEL: 'CANCEL', YES: 'YES', NO: 'NO', CLOSE: 'CLOSE' };
+  const ui = {
+    Button,
+    ButtonSet: { OK: 'OK', OK_CANCEL: 'OK_CANCEL', YES_NO: 'YES_NO', YES_NO_CANCEL: 'YES_NO_CANCEL' },
+    createMenu(caption) {
+      return { caption, items: [], addItem(c, fn) { this.items.push([c, fn]); return this; },
+        addSeparator() { this.items.push(['-']); return this; }, addToUi() { state.menus.push(this); } };
+    },
+    alert(title, prompt, buttons) {
+      state.dialogs.push({ kind: 'alert', title, prompt, buttons });
+      return state.answers.length ? state.answers.shift() : Button.OK;
+    },
+    prompt(title, prompt, buttons) {
+      state.dialogs.push({ kind: 'prompt', title, prompt, buttons });
+      const [button, text] = state.answers.length ? state.answers.shift() : [Button.CANCEL, ''];
+      return { getSelectedButton: () => button, getResponseText: () => text };
+    },
+  };
   const services = {
     SpreadsheetApp: {
       getActiveSpreadsheet: () => ss,
+      getUi: () => ui,
       flush: () => {},
       ProtectionType: { SHEET: 'SHEET', RANGE: 'RANGE' },
     },
