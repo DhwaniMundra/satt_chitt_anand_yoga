@@ -1614,12 +1614,14 @@ const CURRICULUM = {
 //   {"method": "GET", "path": "/home", "query": {"lang": "hi"}, "token": "<login token>", "body": null}
 // and every answer is HTTP 200 with
 //   {"status": <the HTTP status of the answer: 200, 400, 401, ...>, "body": <the answer's JSON>}.
-// A write may carry a "request_id": the same id again (the app retrying after a timeout) gets the first answer back.
+// A write may carry a "request_id": the same id again (the app retrying after a timeout) gets the first answer back;
+// for sign-up and login, which carry no token, the same id with the same phone number.
 // A GET with no envelope answers /health. appsscript/README.md describes the envelope and every route.
 
 const METHODS_ = ['GET', 'POST', 'PUT', 'DELETE'];
 const LOCK_ = true; // the route writes: it runs under the script lock from start to finish
 const REPLAY_S_ = 600; // how long the answer to a write with a request id is kept for a repeat of it
+const AUTH_PATHS_ = ['/auth/signup', '/auth/login']; // answered again by the phone number and the request id
 
 class HttpError_ extends Error {
   constructor(status, detail) {
@@ -1709,7 +1711,7 @@ function handle_(request) {
 
 /** [method, path pattern, handler, LOCK_ when the handler writes and holds the lock throughout]. A writing route
  * without LOCK_ takes the lock itself around its writes, to keep a slow step (a password hash) or its reads (a
- * check-in) out of it. */
+ * check-in, an intake) out of it; what it writes it reads for the first time under the lock wherever it can. */
 function routes_() {
   return [
     ['GET', '/health', health_],
@@ -1720,7 +1722,7 @@ function routes_() {
     ['GET', '/me', me_],
     ['POST', '/me', updateMe_, LOCK_],
     ['GET', '/me/intake', myIntake_],
-    ['PUT', '/me/intake', saveIntake_, LOCK_],
+    ['PUT', '/me/intake', saveIntake_],
     ['GET', '/me/practice', myPractice_],
     ['POST', '/me/solo', soloPractice_, LOCK_],
     ['GET', '/me/asanas', myItems_],
@@ -1782,16 +1784,44 @@ function route_(request) {
   throw new HttpError_(404, 'Not Found');
 }
 
-/** Runs a write once per request id: a repeat from the same login (a retry after a timeout) gets the answer kept from
- * the first time, for REPLAY_S_, instead of writing again. Only answers that succeeded are kept. A route that holds the
- * lock throughout looks inside it, so two copies arriving together write once. */
+/** Runs a write once per request id: a repeat (a retry after a timeout) gets the answer kept from the first time, for
+ * REPLAY_S_, instead of writing again. Only answers that succeeded are kept. A route that holds the lock throughout
+ * looks inside it, so two copies arriving together write once; sign-up and login look again under their own lock. */
 function once_(request, fn) {
-  if (request.method === 'GET' || !request.requestId || !request.token) return fn();
-  const key = 'req:' + sha256Hex_(request.token) + ':' + request.requestId;
-  const kept = cache_().get(key);
-  if (kept) return JSON.parse(kept);
-  const answer = fn();
-  cache_().put(key, JSON.stringify(answer), REPLAY_S_);
+  return replayed_(request) || keepAnswer_(request, fn());
+}
+
+/** Where the answer to a write is kept for a repeat of it: by the login token's hash and the request id; for sign-up
+ * and login, which carry no token, by the hash of the phone number, normalised (so "098765 43210" and "+91 98765
+ * 43210" are one), and the request id. Null when there is none: a GET, a write without an id, or one without a token
+ * other than those two. */
+function replayKey_(request) {
+  if (request.method === 'GET' || !request.requestId) return null;
+  if (AUTH_PATHS_.indexOf(request.path) >= 0) {
+    const body = request.body;
+    let phone;
+    try {
+      phone = normalizePhone_(body && typeof body === 'object' && typeof body.phone === 'string' ? body.phone : '');
+    } catch (err) {
+      return null; // the route answers bad_phone
+    }
+    return 'req:auth:' + request.path + ':' + sha256Hex_(phone) + ':' + request.requestId;
+  }
+  return request.token ? 'req:' + sha256Hex_(request.token) + ':' + request.requestId : null;
+}
+
+/** The answer kept for a repeat of this request, or null. */
+function replayed_(request) {
+  const key = replayKey_(request);
+  const kept = key ? cache_().get(key) : null;
+  return kept ? JSON.parse(kept) : null;
+}
+
+/** Keeps `answer` for a repeat of this request (sign-up and login do so under their lock, before letting it go);
+ * returns it. */
+function keepAnswer_(request, answer) {
+  const key = replayKey_(request);
+  if (key) cache_().put(key, JSON.stringify(answer), REPLAY_S_);
   return answer;
 }
 
@@ -1808,19 +1838,24 @@ class Context_ {
     this._user = null;
   }
 
-  /** Runs `fn` holding the script lock; re-entrant. Tabs read before the lock are read again inside it (unless
-   * `keepReads`, for a lock that writes no tab or reads afresh the one it writes), and writes are flushed before the
-   * lock is let go. */
+  /** Runs `fn` holding the script lock; re-entrant. It flushes first: Apps Script may answer a read of a tab from what
+   * this execution read of it before (it fetches more than it is asked for, to answer the reads that follow), so a tab
+   * read before the lock could come back under it without the rows another request wrote while this one waited (in
+   * the live test of v0.9.1, six sign-ups at once got the ids 2, 2, 2, 2, 3, 3); a flush sends the next reads to the
+   * Sheet. The tabs read before the lock are then read again (unless `keepReads`, for a lock that writes no tab or
+   * reads for the first time the ones it writes), and writes are flushed before the lock is let go. A route that
+   * writes a tab reads it for the first time under the lock wherever it can, so as not to rest on the flush alone. */
   lock(fn, keepReads) {
     if (this.locked) return fn();
     const lock = LockService.getScriptLock();
     if (!lock.tryLock(LOCK_WAIT_MS_)) throw new HttpError_(503, 'busy');
     this.locked = true;
-    if (!keepReads) {
-      this.db.dropAll();
-      CACHE_GENERATION_ = null; // and the cache generation, which a write may have moved on while this request waited
-    }
     try {
+      SpreadsheetApp.flush();
+      if (!keepReads) {
+        this.db.dropAll();
+        CACHE_GENERATION_ = null; // and the cache generation, which a write may have moved on while this request waited
+      }
       return fn();
     } finally {
       try {
@@ -2046,7 +2081,8 @@ function plural_(n, word) {
 // Each tab has a header row; columns are found by header name, so the owner may add columns of her own. Text is
 // written with a leading apostrophe, so Sheets keeps "+919876543210", "2E5K7Q" or "=..." exactly as typed instead of
 // reading a number, a date or a formula. Times are real date cells (shown in India time); the API sends them as
-// UTC ISO-8601 strings. Writes happen under the script lock; ids are the largest id + 1, worked out under that lock.
+// UTC ISO-8601 strings. Writes happen under the script lock. Ids are the largest id + 1, worked out under that lock;
+// those other rows point at (a person's, a class's) come from a counter that never goes back (newIds_).
 // Two types are for cells the owner types by hand: `clock`, a time of day kept as text ("07:00"), and `count`, the
 // number a cell starts with, words after it aside ("5 breaths" is 5), null when there is none.
 
@@ -2120,7 +2156,9 @@ class Db_ {
     return this.tables[name];
   }
 
+  /** Forgets every tab read, and the spreadsheet's handle, so the next use reads afresh. */
   dropAll() {
+    this._ss = null;
     this.tables = {};
     this._settings = null;
   }
@@ -2223,23 +2261,90 @@ class Table_ {
     return added;
   }
 
+  /** Changes some cells of one row, one setValues for each run of neighbouring columns. */
   update(row, changes) {
-    Object.keys(changes).forEach((col) => {
-      const type = this.schema.filter(([c]) => c === col)[0][1];
-      this.sheet.getRange(row._row, this.cols[col] + 1).setValue(encode_(changes[col], type));
+    const cols = Object.keys(changes);
+    const values = {};
+    cols.forEach((col) => {
+      values[col] = encode_(changes[col], this.schema.filter(([c]) => c === col)[0][1]);
+    });
+    this.write_([{ n: row._row, values: values }], cols);
+    cols.forEach((col) => {
       row[col] = changes[col];
     });
   }
 
+  /** Writes over rows in place: each [row, object] takes the object's values (as insert() writes them), each [row,
+   * null] is emptied, as a deleted row would be but without moving the rows below it (an empty row is skipped when
+   * the tab is read, and one at the end of the tab is taken again by the next insert). One setValues for each block
+   * of neighbouring rows. */
+  rewrite(pairs) {
+    const cols = this.schema.map(([col]) => col);
+    this.write_(pairs.map(([row, o]) => {
+      const values = {};
+      this.schema.forEach(([col, type]) => {
+        values[col] = o ? encode_(o[col], type) : '';
+      });
+      return { n: row._row, values: values };
+    }), cols);
+    pairs.forEach(([row, o]) => {
+      if (o) {
+        this.schema.forEach(([col, type]) => {
+          row[col] = decode_(encode_(o[col], type), type, true);
+        });
+      }
+    });
+    const emptied = pairs.filter(([, o]) => !o).map(([row]) => row);
+    this.rows = this.rows.filter((r) => emptied.indexOf(r) < 0);
+  }
+
+  /** Writes `entries` ({n: row number, values: {column: encoded value}}, each with every column of `cols`): one
+   * setValues for each block of neighbouring rows and neighbouring columns. */
+  write_(entries, cols) {
+    const at = (col) => this.cols[col];
+    const colRuns = runs_(cols.slice().sort((a, b) => at(a) - at(b)), at);
+    runs_(entries.slice().sort((a, b) => a.n - b.n), (e) => e.n).forEach((rows) => {
+      colRuns.forEach((run) => {
+        this.sheet.getRange(rows[0].n, at(run[0]) + 1, rows.length, run.length).setValues(rows.map((e) => run.map((col) => e.values[col])));
+      });
+    });
+  }
+
+  /** Deletes rows, one deleteRows for each run of neighbours, from the bottom up. */
   remove(rows) {
     const gone = rows.map((r) => r._row).sort((a, b) => b - a);
-    gone.forEach((n) => this.sheet.deleteRow(n));
+    runs_(gone.slice().reverse(), (n) => n).reverse().forEach((run) => this.sheet.deleteRows(run[0], run.length));
     this.rows = this.rows.filter((r) => gone.indexOf(r._row) < 0);
     this.rows.forEach((r) => {
       r._row -= gone.filter((n) => n < r._row).length;
     });
     this.lastRow -= gone.length;
   }
+}
+
+/** `list`, in order, cut into runs whose key goes up by one from each item to the next. */
+function runs_(list, key) {
+  const out = [];
+  list.forEach((x) => {
+    const run = out[out.length - 1];
+    if (run && key(x) === key(run[run.length - 1]) + 1) run.push(x);
+    else out.push([x]);
+  });
+  return out;
+}
+
+/** Under the lock: the first of `n` new ids for the users or class_sessions tab, whose ids other rows point at (a
+ * login token, a check-in, a practice entry). They come from a counter in the script properties that never goes back:
+ * the larger of it and the tab's largest id, + 1. So an id is never given twice: not to the next person after the
+ * owner removes someone (whose token a phone may still hold), nor when this request's read of the tab missed a row
+ * another request had just written. A Sheet without the counter (made before v1.0) starts it from its largest id. */
+function newIds_(ctx, name, n) {
+  if (!ctx.locked) throw new Error('newIds_ outside the lock');
+  const props = PropertiesService.getScriptProperties();
+  const key = 'last_id:' + name;
+  const first = Math.max((Number(props.getProperty(key)) || 0) + 1, ctx.db.t(name).nextId());
+  if (n > 0) props.setProperty(key, String(first + n - 1));
+  return first;
 }
 
 function isDate_(v) {
@@ -2466,7 +2571,73 @@ function attemptsClear_(key) {
   cache_().remove('fail:' + key);
 }
 
+// ---------- one account per number ----------
+// The users tab, read under the lock, says whether a number has an account. As a second guard, each sign-up also keeps
+// its number in the script properties ("phone:+919876543210" → {"id": 12, "at": <ms>}). A number kept there for an
+// account the users tab, as read, does not show is refused for PHONE_TRUST_MS_ (a read that missed a sign-up written
+// just before it) and forgotten after (the owner deleted the row by hand). The Sheet's menu forgets the numbers of the
+// people it removes.
+
+const PHONE_TRUST_MS_ = 6 * 60000; // how long an Apps Script execution may run: no read can miss an older sign-up
+
+function phoneKey_(phone) {
+  return 'phone:' + phone;
+}
+
+/** Under the lock: whether `phone` (normalised) is kept for an account. One the users tab shows with another number
+ * (changed by hand) does not count. */
+function phoneHeld_(ctx, phone, users) {
+  const raw = PropertiesService.getScriptProperties().getProperty(phoneKey_(phone));
+  let held = null;
+  try {
+    held = raw ? JSON.parse(raw) : null;
+  } catch (err) {
+    return false;
+  }
+  if (!held) return false;
+  const row = users.rows.filter((u) => u.id === held.id)[0];
+  if (row) return phoneOf_(row) === phone;
+  if (ctx.now - held.at >= PHONE_TRUST_MS_) return false;
+  console.error('signup: account %s keeps this number, but the users tab as read under the lock has no row with its id; refused as taken',
+    held.id);
+  return true;
+}
+
+/** Under the lock, once the sign-up's row is written: keeps its number for it. */
+function holdPhone_(ctx, phone, userId) {
+  PropertiesService.getScriptProperties().setProperty(phoneKey_(phone), JSON.stringify({ id: userId, at: ctx.now }));
+}
+
+/** Under the lock: forgets the numbers kept for `people` (every number, with `everything`). */
+function forgetPhones_(people, everything) {
+  const props = PropertiesService.getScriptProperties();
+  const ids = {};
+  const keys = {};
+  people.forEach((u) => {
+    ids[u.id] = true;
+    keys[phoneKey_(phoneOf_(u))] = true;
+  });
+  props.getKeys().filter((key) => key.indexOf('phone:') === 0).forEach((key) => {
+    let id = null;
+    try {
+      id = JSON.parse(props.getProperty(key)).id;
+    } catch (err) {
+      // a value typed by hand: forgotten with its number
+    }
+    if (everything || keys[key] || ids[id] === true) props.deleteProperty(key);
+  });
+}
+
 // ---------- who is asking ----------
+
+/** The users row with this id, or null. Two rows sharing an id give null, and the execution log says so: ids from
+ * newIds_ never repeat, but a row copied by hand, or the duplicates an older backend wrote, must not let one person's
+ * token or a lookup reach another. */
+function userById_(users, id) {
+  const found = users.filter((u) => u.id === id);
+  if (found.length > 1) console.error('users: %s rows share the id %s; none of them is used', found.length, id);
+  return found.length === 1 ? found[0] : null;
+}
 
 function currentUser_(ctx) {
   if (ctx._user) return ctx._user;
@@ -2480,7 +2651,7 @@ function currentUser_(ctx) {
     userId = String(row.user_id);
     cachePut_(key, userId);
   }
-  const user = ctx.db.t('users').rows.filter((u) => u.id === Number(userId))[0];
+  const user = userById_(ctx.db.t('users').rows, Number(userId));
   if (!user) throw new HttpError_(401, 'signed_out');
   ctx._user = user;
   return user;
@@ -2728,8 +2899,14 @@ function weekStarts_(now, batches) {
  * id, its own link and its curriculum, when nobody has checked in to it and both its old and its new start are more
  * than an hour away (out of its check-in window, perhaps after its message was shared); otherwise it stays as it is,
  * and the day gets no second class. A class is removed only on a day its batch no longer meets, under the same
- * conditions. A batch whose time is no time (being retyped, say) is left as it is. Takes the lock only when there is
- * something to change. */
+ * conditions. A batch whose time is no time (being retyped, say) is left as it is.
+ *
+ * The classes and check-ins are read for this only under the lock, for the first time in the request: read before
+ * it, they could come back under it without the classes another request had just added, which would be added again
+ * with the same ids. So that most visits take no lock, a mark in the cache says the week was made, for the day, the
+ * batches' days, times and lengths, and the cache generation (which a hand edit or the Sheet's menu moves on); it
+ * lasts as the cache does, so a class row deleted by hand (which fires no onEdit) comes back within ten minutes. A
+ * visit that cannot have the lock goes on with the classes as they are, rather than answer busy. */
 function ensureWeek_(ctx) {
   const batches = batches_(ctx);
   const wanted = weekStarts_(ctx.now, batches);
@@ -2764,18 +2941,34 @@ function ensureWeek_(ctx) {
     });
     return todo;
   };
-  let todo = changes(ctx.db.t('class_sessions'));
-  if (!todo.missing.length && !todo.moved.length && !todo.stale.length) return;
-  ctx.lock(() => {
+  const shape = Object.keys(batches).sort()
+    .map((key) => [key, batches[key].days.join(' '), batches[key].start_min, batches[key].duration_min].join('/')).join(';');
+  const mark = () => cacheKey_('week:' + today + ':' + sha256Hex_(shape));
+  if (cacheGet_(mark())) return;
+  const make = () => {
+    CACHE_GENERATION_ = null; // read again: it may have moved on while this request waited
+    if (cacheGet_(mark())) return; // made by a request that had the lock first
+    ctx.db.forget('class_sessions');
+    ctx.db.forget('checkins');
     const table = ctx.db.t('class_sessions');
-    todo = changes(table);
+    const todo = changes(table);
     todo.moved.forEach(([row, w]) => table.update(row, { starts_at: w.starts_at, duration_min: w.duration_min, updated_at: ctx.now }));
     if (todo.stale.length) table.remove(todo.stale);
-    let id = table.nextId();
-    table.insert(todo.missing.map((w) => ({
-      id: id++, batch: w.batch, starts_at: w.starts_at, duration_min: w.duration_min, meet_link: null, updated_at: ctx.now,
-    })));
-  });
+    if (todo.missing.length) {
+      let id = newIds_(ctx, 'class_sessions', todo.missing.length);
+      table.insert(todo.missing.map((w) => ({
+        id: id++, batch: w.batch, starts_at: w.starts_at, duration_min: w.duration_min, meet_link: null, updated_at: ctx.now,
+      })));
+    }
+    SpreadsheetApp.flush(); // the classes are in the Sheet before the mark says so
+    cachePut_(mark(), '1');
+  };
+  try {
+    ctx.lock(make, true);
+  } catch (err) {
+    if (!(err instanceof HttpError_) || err.status !== 503) throw err;
+    // The lock was busy: this visit goes on with the classes as they are, and a later one makes the week.
+  }
 }
 
 /** Whether a class's after-class window is open at [now]: from 10 minutes before its end to 12 hours after it. */
@@ -3286,10 +3479,10 @@ function oneItem_(ctx, userId, item) {
   return progressByItem_(ctx, userId)[item] || itemProgress_(item, [], [], () => null);
 }
 
-/** The student the teacher asks about, or 404 no_student. */
+/** The student the teacher asks about, or 404 no_student (also when two rows share the id: userById_). */
 function studentRow_(ctx, id) {
-  const student = ctx.db.t('users').rows.filter((u) => u.id === id && u.role === 'student')[0];
-  if (!student) throw new HttpError_(404, 'no_student');
+  const student = userById_(ctx.db.t('users').rows, id);
+  if (!student || student.role !== 'student') throw new HttpError_(404, 'no_student');
   return student;
 }
 
@@ -3364,7 +3557,10 @@ function myIntake_(ctx) {
   return { intake: intakeOf_(ctx, currentUser_(ctx).id) };
 }
 
-/** A student's intake, after sign-up (pending) or later from Me; a second send replaces the first. */
+/** A student's intake, after sign-up (pending) or later from Me; a second send replaces the first. Only its writes
+ * hold the lock: the two intake tabs, read there for the first time in the request, the student's row changed in
+ * place and their self-assessment rows written over in place (emptied when there are fewer, added at the end when
+ * there are more), a handful of calls with no row deleted, so a class sending theirs at once is not kept waiting. */
 function saveIntake_(ctx) {
   const user = currentUser_(ctx);
   if (user.role !== 'student') throw new HttpError_(403, 'students_only');
@@ -3380,21 +3576,26 @@ function saveIntake_(ctx) {
   const trimmed = (text) => (text === null ? null : text.trim() || null);
   const values = { age: body.age, height_cm: body.height_cm, weight_kg: body.weight_kg, food: body.food, meals: trimmed(body.meals),
     pain: pain.join(', ') || null, pain_note: trimmed(body.pain_note), updated_at: ctx.now };
-  const table = ctx.db.t('intake');
-  const row = table.rows.filter((r) => r.user_id === user.id)[0];
-  if (row) table.update(row, values);
-  else table.insert([Object.assign({ user_id: user.id }, values)]);
-  const ratings = ctx.db.t('intake_ratings');
-  ratings.remove(ratings.rows.filter((r) => r.user_id === user.id));
-  ratings.insert(Object.keys(byItem).map((k) => byItem[k]).filter((r) => r.reaction !== null || r.pain === 1)
-    .map((r) => ({ user_id: user.id, item: r.item, reaction: r.reaction, pain: r.pain })));
+  const said = Object.keys(byItem).map((k) => byItem[k]).filter((r) => r.reaction !== null || r.pain === 1)
+    .map((r) => ({ user_id: user.id, item: r.item, reaction: r.reaction, pain: r.pain }));
+  ctx.lock(() => {
+    const table = ctx.db.t('intake');
+    const row = table.rows.filter((r) => r.user_id === user.id)[0];
+    if (row) table.update(row, values);
+    else table.insert([Object.assign({ user_id: user.id }, values)]);
+    const ratings = ctx.db.t('intake_ratings');
+    const before = ratings.rows.filter((r) => r.user_id === user.id);
+    ratings.rewrite(before.map((r, i) => [r, said[i] || null]));
+    ratings.insert(said.slice(before.length));
+  }, true);
   return { intake: intakeOf_(ctx, user.id) };
 }
 
 // ---------- Routes: one function per route ----------
 // Each checks who is asking first, then the inputs, then the rules: a signed-out request is a 401 whatever its inputs,
 // and a bad input is a 422 before any rule is applied. Routes marked LOCK_ in routes_() run entirely under the script
-// lock; the others take it only around their writes, so a slow password hash never holds up everyone else.
+// lock; the others take it only around their writes, so a slow password hash never holds up everyone else, and read
+// the tabs they write for the first time under it wherever they can (Context_.lock says why).
 
 // ---------- public ----------
 
@@ -3407,49 +3608,38 @@ function studio_(ctx) {
   return studioJson_(ctx, query.lang);
 }
 
+/** One teacher, with the teacher code, which then works no more; students with the group code, which the teacher
+ * gives with the invite, and who then wait for the teacher to place them in a batch. The code is checked first, under
+ * its brake on guessing, then the slow password hash is done; the users tab is read only under the lock after it, so a
+ * sign-up another request has just written cannot be missed, and a number already taken costs one hash. One number,
+ * one account: the users tab says so, and the numbers kept in the script properties (phoneHeld_) say it again. */
 function signup_(ctx) {
   const { body } = ctx.check({ body: BODY_.signup });
   const phone = normalizePhone_(body.phone);
   // A code copied from a message may bring spaces, stars or a full stop with it.
   const code = body.code.replace(/^[^A-Za-z0-9]+|[^A-Za-z0-9]+$/g, '').toUpperCase();
-  const hasTeacher = () => ctx.db.t('users').rows.some((u) => u.role === 'teacher');
-  const taken = (users) => users.rows.some((u) => phoneOf_(u) === phone);
-  let status;
-  // The quick refusals come first, before the slow password hash; the lock below checks again.
-  if (body.role === 'teacher') {
-    if (hasTeacher()) throw new HttpError_(409, 'teacher_exists'); // one teacher per studio: the code works once
-    ctx.lock(() => {
-      if (attemptsBlocked_('login:teacher-code')) throw new HttpError_(429, 'too_many_attempts');
-      if (!codeMatches_(ctx, code, 'teacher_code')) {
-        attemptsFail_('login:teacher-code');
-        throw new HttpError_(400, 'bad_teacher_code');
-      }
-    }, true);
-    status = 'approved';
-  } else {
-    // The group code, which the teacher gives with the invite, keeps sign-ups to the class; the teacher then places
-    // each student in a batch.
-    const key = 'group-code:' + phone;
-    ctx.lock(() => {
-      if (attemptsBlocked_(key)) throw new HttpError_(429, 'too_many_attempts');
-      if (!codeMatches_(ctx, code, 'group_code')) {
-        attemptsFail_(key);
-        throw new HttpError_(400, 'bad_group_code');
-      }
-    }, true);
-    status = 'pending';
-  }
-  if (taken(ctx.db.t('users'))) throw new HttpError_(409, 'phone_taken');
+  const teacher = body.role === 'teacher';
+  const key = teacher ? 'login:teacher-code' : 'group-code:' + phone;
+  ctx.lock(() => {
+    if (attemptsBlocked_(key)) throw new HttpError_(429, 'too_many_attempts');
+    if (!codeMatches_(ctx, code, teacher ? 'teacher_code' : 'group_code')) {
+      attemptsFail_(key);
+      throw new HttpError_(400, teacher ? 'bad_teacher_code' : 'bad_group_code');
+    }
+  }, true);
   const pwHash = hashPassword_(body.password);
   return ctx.lock(() => {
+    const kept = replayed_(ctx.request); // a copy of this sign-up, with its request id, that had the lock first
+    if (kept) return kept;
     const users = ctx.db.t('users');
-    if (body.role === 'teacher' && hasTeacher()) throw new HttpError_(409, 'teacher_exists');
-    if (taken(users)) throw new HttpError_(409, 'phone_taken');
+    if (teacher && users.rows.some((u) => u.role === 'teacher')) throw new HttpError_(409, 'teacher_exists');
+    if (users.rows.some((u) => phoneOf_(u) === phone) || phoneHeld_(ctx, phone, users)) throw new HttpError_(409, 'phone_taken');
     const user = users.insert([{
-      id: users.nextId(), name: body.name.trim(), phone: phone, role: body.role, status: status, pw_hash: pwHash,
-      lang: body.lang, created_at: ctx.now,
+      id: newIds_(ctx, 'users', 1), name: body.name.trim(), phone: phone, role: body.role, status: teacher ? 'approved' : 'pending',
+      pw_hash: pwHash, lang: body.lang, created_at: ctx.now,
     }])[0];
-    return signIn_(ctx, user);
+    holdPhone_(ctx, phone, user.id);
+    return keepAnswer_(ctx.request, signIn_(ctx, user));
   });
 }
 
@@ -3469,36 +3659,37 @@ function login_(ctx) {
     attemptsFail_(key);
   }, true);
   // The account stored with the number exactly as typed first (two may be stored, with and without a 0 after +91),
-  // then the one whose number reads the same.
+  // then the one whose number reads the same. Read before the lock, for the slow password check; read again under it.
   const users = ctx.db.t('users').rows;
   const typed = normalizePhone_(body.phone, true);
   const user = users.filter((u) => u.phone === typed)[0] || users.filter((u) => phoneOf_(u) === phone)[0];
   const ok = checkPassword_(body.password, user ? user.pw_hash : DUMMY_HASH_); // the same work for an unknown number
   if (!user || !ok) throw new HttpError_(401, 'bad_login');
   return ctx.lock(() => {
+    const kept = replayed_(ctx.request); // a copy of this login, with its request id, that had the lock first
     // The users tab is read again under the lock: an account removed from the Sheet's menu, or given a new password,
-    // while this one was checked gets no token (an id freed by a removal may be someone else's by now).
-    const still = ctx.db.t('users').rows.filter((u) => u.id === user.id && u.pw_hash === user.pw_hash)[0];
-    if (!still) throw new HttpError_(401, 'bad_login');
+    // while this one was checked gets no token.
+    const still = userById_(ctx.db.t('users').rows, user.id);
+    if (!kept && (!still || still.pw_hash !== user.pw_hash)) throw new HttpError_(401, 'bad_login');
     attemptsClear_(key);
-    return signIn_(ctx, still);
+    return kept || keepAnswer_(ctx.request, signIn_(ctx, still));
   });
 }
 
 // ---------- signed in ----------
 
+/** Forgets this login's token. The tokens tab is read only under the lock: rows are deleted by their number, and one
+ * read before it could point at another person's row by then. */
 function logout_(ctx) {
-  if (ctx.token) {
-    const hash = sha256Hex_(ctx.token);
-    const mine = (table) => table.rows.filter((r) => r.token_hash === hash);
-    if (mine(ctx.db.t('tokens')).length) {
-      ctx.lock(() => {
-        const tokens = ctx.db.t('tokens');
-        tokens.remove(mine(tokens));
-        ctx.db.changedCache = true;
-      });
-    }
-  }
+  if (!ctx.token) return { ok: true };
+  const hash = sha256Hex_(ctx.token);
+  ctx.lock(() => {
+    const tokens = ctx.db.t('tokens');
+    const mine = tokens.rows.filter((r) => r.token_hash === hash);
+    if (!mine.length) return;
+    tokens.remove(mine);
+    ctx.db.changedCache = true;
+  });
   return { ok: true };
 }
 
@@ -3508,7 +3699,8 @@ function me_(ctx) {
 }
 
 /** A student (or the teacher) changing their own password: the current one first, under the login's brake on
- * guessing. This login stays signed in; every other is signed out. */
+ * guessing. This login stays signed in; every other is signed out. Who is asking is read before the lock, for the slow
+ * password check; the rows written are those of the users and tokens tabs as read again under it. */
 function changePassword_(ctx) {
   const user = currentUser_(ctx);
   const { body } = ctx.check({ body: BODY_.password });
@@ -3524,7 +3716,7 @@ function changePassword_(ctx) {
   return ctx.lock(() => {
     attemptsClear_(key);
     const users = ctx.db.t('users');
-    const me = users.rows.filter((u) => u.id === user.id)[0];
+    const me = userById_(users.rows, user.id);
     if (!me) throw new HttpError_(401, 'signed_out');
     users.update(me, { pw_hash: pwHash });
     const tokens = ctx.db.t('tokens');
@@ -3789,14 +3981,11 @@ function placeInBatch_(ctx) {
 function resetPassword_(ctx) {
   teacher_(ctx);
   const { path } = ctx.check({ path: PATH_USER_ });
-  const isStudent = (u) => u.id === path.user_id && u.role === 'student';
-  if (!ctx.db.t('users').rows.some(isStudent)) throw new HttpError_(404, 'no_student');
   const password = newCode_(8);
   const pwHash = hashPassword_(password);
   return ctx.lock(() => {
     const users = ctx.db.t('users');
-    const student = users.rows.filter(isStudent)[0];
-    if (!student) throw new HttpError_(404, 'no_student');
+    const student = studentRow_(ctx, path.user_id);
     users.update(student, { pw_hash: pwHash });
     const tokens = ctx.db.t('tokens');
     tokens.remove(tokens.rows.filter((r) => r.user_id === student.id));
@@ -4136,7 +4325,9 @@ function writeDashboard_(ss) {
 // ---------- Reset: the Sheet's own menu, to clear test people or start the studio again ----------
 // onOpen adds a "Satt Chitt Anand" menu to the Sheet. Each item says first what it removes and what stays, and asks;
 // then it deletes rows under the script lock, as the app's writes do, and makes the app forget what it cached, so a
-// removed person's phone is signed out at its next request. Rows are deleted whole, so every tab keeps its header and
+// removed person's phone is signed out at its next request, and the numbers it kept for them (phoneHeld_), so they can
+// sign up again at once. Ids are never given again (newIds_): after a reset the next person's id follows the last one
+// given, not 1. Rows are deleted whole, so every tab keeps its header and
 // the Dashboard's formulas go on reading it. A person's rows are found by the person column of each tab in TABLES_
 // (personTabs_), so a tab added later with a user_id or student_id column is cleared with the rest.
 
@@ -4217,13 +4408,14 @@ function deleteSheetRows_(sheet, rows) {
   }
 }
 
-/** Runs `fn` under the script lock with the Sheet read afresh, then flushes and starts a new cache generation, so no
- * request goes on using a login token or setting cached before. */
+/** Runs `fn` under the script lock with the Sheet read afresh (a flush first, as Context_.lock does), then flushes and
+ * starts a new cache generation, so no request goes on using a login token or setting cached before. */
 function menuLock_(db, fn) {
   const lock = LockService.getScriptLock();
   if (!lock.tryLock(30000)) throw new Error('The app is busy writing to the Sheet. Try again in a minute.');
-  db.dropAll();
   try {
+    SpreadsheetApp.flush();
+    db.dropAll();
     return fn();
   } finally {
     try {
@@ -4237,11 +4429,12 @@ function menuLock_(db, fn) {
 }
 
 /** Under the lock: removes the people `pick` chooses and their rows (every row of the person tabs, with
- * `everything`); the counts. Their sign-ins go first and their users rows last, so a removal cut short leaves no one
- * signed in and can simply be run again. */
+ * `everything`); the counts. Their numbers are forgotten first, then their sign-ins and their other rows go, and their
+ * users rows last, so a removal cut short leaves no one signed in and can simply be run again. */
 function removePeople_(db, pick, everything) {
   return menuLock_(db, () => {
     const removal = removal_(db, pick, everything);
+    forgetPhones_(removal.people, everything);
     personTabs_().forEach(([name]) => deleteSheetRows_(db.t(name).sheet, removal.rows[name]));
     deleteSheetRows_(db.t('users').sheet, removal.people);
     return removalCounts_(removal);

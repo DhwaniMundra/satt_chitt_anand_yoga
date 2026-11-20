@@ -5,12 +5,14 @@
 //   {"method": "GET", "path": "/home", "query": {"lang": "hi"}, "token": "<login token>", "body": null}
 // and every answer is HTTP 200 with
 //   {"status": <the HTTP status of the answer: 200, 400, 401, ...>, "body": <the answer's JSON>}.
-// A write may carry a "request_id": the same id again (the app retrying after a timeout) gets the first answer back.
+// A write may carry a "request_id": the same id again (the app retrying after a timeout) gets the first answer back;
+// for sign-up and login, which carry no token, the same id with the same phone number.
 // A GET with no envelope answers /health. appsscript/README.md describes the envelope and every route.
 
 const METHODS_ = ['GET', 'POST', 'PUT', 'DELETE'];
 const LOCK_ = true; // the route writes: it runs under the script lock from start to finish
 const REPLAY_S_ = 600; // how long the answer to a write with a request id is kept for a repeat of it
+const AUTH_PATHS_ = ['/auth/signup', '/auth/login']; // answered again by the phone number and the request id
 
 class HttpError_ extends Error {
   constructor(status, detail) {
@@ -100,7 +102,7 @@ function handle_(request) {
 
 /** [method, path pattern, handler, LOCK_ when the handler writes and holds the lock throughout]. A writing route
  * without LOCK_ takes the lock itself around its writes, to keep a slow step (a password hash) or its reads (a
- * check-in) out of it. */
+ * check-in, an intake) out of it; what it writes it reads for the first time under the lock wherever it can. */
 function routes_() {
   return [
     ['GET', '/health', health_],
@@ -111,7 +113,7 @@ function routes_() {
     ['GET', '/me', me_],
     ['POST', '/me', updateMe_, LOCK_],
     ['GET', '/me/intake', myIntake_],
-    ['PUT', '/me/intake', saveIntake_, LOCK_],
+    ['PUT', '/me/intake', saveIntake_],
     ['GET', '/me/practice', myPractice_],
     ['POST', '/me/solo', soloPractice_, LOCK_],
     ['GET', '/me/asanas', myItems_],
@@ -173,16 +175,44 @@ function route_(request) {
   throw new HttpError_(404, 'Not Found');
 }
 
-/** Runs a write once per request id: a repeat from the same login (a retry after a timeout) gets the answer kept from
- * the first time, for REPLAY_S_, instead of writing again. Only answers that succeeded are kept. A route that holds the
- * lock throughout looks inside it, so two copies arriving together write once. */
+/** Runs a write once per request id: a repeat (a retry after a timeout) gets the answer kept from the first time, for
+ * REPLAY_S_, instead of writing again. Only answers that succeeded are kept. A route that holds the lock throughout
+ * looks inside it, so two copies arriving together write once; sign-up and login look again under their own lock. */
 function once_(request, fn) {
-  if (request.method === 'GET' || !request.requestId || !request.token) return fn();
-  const key = 'req:' + sha256Hex_(request.token) + ':' + request.requestId;
-  const kept = cache_().get(key);
-  if (kept) return JSON.parse(kept);
-  const answer = fn();
-  cache_().put(key, JSON.stringify(answer), REPLAY_S_);
+  return replayed_(request) || keepAnswer_(request, fn());
+}
+
+/** Where the answer to a write is kept for a repeat of it: by the login token's hash and the request id; for sign-up
+ * and login, which carry no token, by the hash of the phone number, normalised (so "098765 43210" and "+91 98765
+ * 43210" are one), and the request id. Null when there is none: a GET, a write without an id, or one without a token
+ * other than those two. */
+function replayKey_(request) {
+  if (request.method === 'GET' || !request.requestId) return null;
+  if (AUTH_PATHS_.indexOf(request.path) >= 0) {
+    const body = request.body;
+    let phone;
+    try {
+      phone = normalizePhone_(body && typeof body === 'object' && typeof body.phone === 'string' ? body.phone : '');
+    } catch (err) {
+      return null; // the route answers bad_phone
+    }
+    return 'req:auth:' + request.path + ':' + sha256Hex_(phone) + ':' + request.requestId;
+  }
+  return request.token ? 'req:' + sha256Hex_(request.token) + ':' + request.requestId : null;
+}
+
+/** The answer kept for a repeat of this request, or null. */
+function replayed_(request) {
+  const key = replayKey_(request);
+  const kept = key ? cache_().get(key) : null;
+  return kept ? JSON.parse(kept) : null;
+}
+
+/** Keeps `answer` for a repeat of this request (sign-up and login do so under their lock, before letting it go);
+ * returns it. */
+function keepAnswer_(request, answer) {
+  const key = replayKey_(request);
+  if (key) cache_().put(key, JSON.stringify(answer), REPLAY_S_);
   return answer;
 }
 
@@ -199,19 +229,24 @@ class Context_ {
     this._user = null;
   }
 
-  /** Runs `fn` holding the script lock; re-entrant. Tabs read before the lock are read again inside it (unless
-   * `keepReads`, for a lock that writes no tab or reads afresh the one it writes), and writes are flushed before the
-   * lock is let go. */
+  /** Runs `fn` holding the script lock; re-entrant. It flushes first: Apps Script may answer a read of a tab from what
+   * this execution read of it before (it fetches more than it is asked for, to answer the reads that follow), so a tab
+   * read before the lock could come back under it without the rows another request wrote while this one waited (in
+   * the live test of v0.9.1, six sign-ups at once got the ids 2, 2, 2, 2, 3, 3); a flush sends the next reads to the
+   * Sheet. The tabs read before the lock are then read again (unless `keepReads`, for a lock that writes no tab or
+   * reads for the first time the ones it writes), and writes are flushed before the lock is let go. A route that
+   * writes a tab reads it for the first time under the lock wherever it can, so as not to rest on the flush alone. */
   lock(fn, keepReads) {
     if (this.locked) return fn();
     const lock = LockService.getScriptLock();
     if (!lock.tryLock(LOCK_WAIT_MS_)) throw new HttpError_(503, 'busy');
     this.locked = true;
-    if (!keepReads) {
-      this.db.dropAll();
-      CACHE_GENERATION_ = null; // and the cache generation, which a write may have moved on while this request waited
-    }
     try {
+      SpreadsheetApp.flush();
+      if (!keepReads) {
+        this.db.dropAll();
+        CACHE_GENERATION_ = null; // and the cache generation, which a write may have moved on while this request waited
+      }
       return fn();
     } finally {
       try {

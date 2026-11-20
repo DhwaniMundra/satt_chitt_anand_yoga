@@ -3,7 +3,8 @@
 // Each tab has a header row; columns are found by header name, so the owner may add columns of her own. Text is
 // written with a leading apostrophe, so Sheets keeps "+919876543210", "2E5K7Q" or "=..." exactly as typed instead of
 // reading a number, a date or a formula. Times are real date cells (shown in India time); the API sends them as
-// UTC ISO-8601 strings. Writes happen under the script lock; ids are the largest id + 1, worked out under that lock.
+// UTC ISO-8601 strings. Writes happen under the script lock. Ids are the largest id + 1, worked out under that lock;
+// those other rows point at (a person's, a class's) come from a counter that never goes back (newIds_).
 // Two types are for cells the owner types by hand: `clock`, a time of day kept as text ("07:00"), and `count`, the
 // number a cell starts with, words after it aside ("5 breaths" is 5), null when there is none.
 
@@ -77,7 +78,9 @@ class Db_ {
     return this.tables[name];
   }
 
+  /** Forgets every tab read, and the spreadsheet's handle, so the next use reads afresh. */
   dropAll() {
+    this._ss = null;
     this.tables = {};
     this._settings = null;
   }
@@ -180,23 +183,90 @@ class Table_ {
     return added;
   }
 
+  /** Changes some cells of one row, one setValues for each run of neighbouring columns. */
   update(row, changes) {
-    Object.keys(changes).forEach((col) => {
-      const type = this.schema.filter(([c]) => c === col)[0][1];
-      this.sheet.getRange(row._row, this.cols[col] + 1).setValue(encode_(changes[col], type));
+    const cols = Object.keys(changes);
+    const values = {};
+    cols.forEach((col) => {
+      values[col] = encode_(changes[col], this.schema.filter(([c]) => c === col)[0][1]);
+    });
+    this.write_([{ n: row._row, values: values }], cols);
+    cols.forEach((col) => {
       row[col] = changes[col];
     });
   }
 
+  /** Writes over rows in place: each [row, object] takes the object's values (as insert() writes them), each [row,
+   * null] is emptied, as a deleted row would be but without moving the rows below it (an empty row is skipped when
+   * the tab is read, and one at the end of the tab is taken again by the next insert). One setValues for each block
+   * of neighbouring rows. */
+  rewrite(pairs) {
+    const cols = this.schema.map(([col]) => col);
+    this.write_(pairs.map(([row, o]) => {
+      const values = {};
+      this.schema.forEach(([col, type]) => {
+        values[col] = o ? encode_(o[col], type) : '';
+      });
+      return { n: row._row, values: values };
+    }), cols);
+    pairs.forEach(([row, o]) => {
+      if (o) {
+        this.schema.forEach(([col, type]) => {
+          row[col] = decode_(encode_(o[col], type), type, true);
+        });
+      }
+    });
+    const emptied = pairs.filter(([, o]) => !o).map(([row]) => row);
+    this.rows = this.rows.filter((r) => emptied.indexOf(r) < 0);
+  }
+
+  /** Writes `entries` ({n: row number, values: {column: encoded value}}, each with every column of `cols`): one
+   * setValues for each block of neighbouring rows and neighbouring columns. */
+  write_(entries, cols) {
+    const at = (col) => this.cols[col];
+    const colRuns = runs_(cols.slice().sort((a, b) => at(a) - at(b)), at);
+    runs_(entries.slice().sort((a, b) => a.n - b.n), (e) => e.n).forEach((rows) => {
+      colRuns.forEach((run) => {
+        this.sheet.getRange(rows[0].n, at(run[0]) + 1, rows.length, run.length).setValues(rows.map((e) => run.map((col) => e.values[col])));
+      });
+    });
+  }
+
+  /** Deletes rows, one deleteRows for each run of neighbours, from the bottom up. */
   remove(rows) {
     const gone = rows.map((r) => r._row).sort((a, b) => b - a);
-    gone.forEach((n) => this.sheet.deleteRow(n));
+    runs_(gone.slice().reverse(), (n) => n).reverse().forEach((run) => this.sheet.deleteRows(run[0], run.length));
     this.rows = this.rows.filter((r) => gone.indexOf(r._row) < 0);
     this.rows.forEach((r) => {
       r._row -= gone.filter((n) => n < r._row).length;
     });
     this.lastRow -= gone.length;
   }
+}
+
+/** `list`, in order, cut into runs whose key goes up by one from each item to the next. */
+function runs_(list, key) {
+  const out = [];
+  list.forEach((x) => {
+    const run = out[out.length - 1];
+    if (run && key(x) === key(run[run.length - 1]) + 1) run.push(x);
+    else out.push([x]);
+  });
+  return out;
+}
+
+/** Under the lock: the first of `n` new ids for the users or class_sessions tab, whose ids other rows point at (a
+ * login token, a check-in, a practice entry). They come from a counter in the script properties that never goes back:
+ * the larger of it and the tab's largest id, + 1. So an id is never given twice: not to the next person after the
+ * owner removes someone (whose token a phone may still hold), nor when this request's read of the tab missed a row
+ * another request had just written. A Sheet without the counter (made before v1.0) starts it from its largest id. */
+function newIds_(ctx, name, n) {
+  if (!ctx.locked) throw new Error('newIds_ outside the lock');
+  const props = PropertiesService.getScriptProperties();
+  const key = 'last_id:' + name;
+  const first = Math.max((Number(props.getProperty(key)) || 0) + 1, ctx.db.t(name).nextId());
+  if (n > 0) props.setProperty(key, String(first + n - 1));
+  return first;
 }
 
 function isDate_(v) {

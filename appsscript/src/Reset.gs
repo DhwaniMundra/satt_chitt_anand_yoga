@@ -1,7 +1,9 @@
 // ---------- Reset: the Sheet's own menu, to clear test people or start the studio again ----------
 // onOpen adds a "Satt Chitt Anand" menu to the Sheet. Each item says first what it removes and what stays, and asks;
 // then it deletes rows under the script lock, as the app's writes do, and makes the app forget what it cached, so a
-// removed person's phone is signed out at its next request. Rows are deleted whole, so every tab keeps its header and
+// removed person's phone is signed out at its next request, and the numbers it kept for them (phoneHeld_), so they can
+// sign up again at once. Ids are never given again (newIds_): after a reset the next person's id follows the last one
+// given, not 1. Rows are deleted whole, so every tab keeps its header and
 // the Dashboard's formulas go on reading it. A person's rows are found by the person column of each tab in TABLES_
 // (personTabs_), so a tab added later with a user_id or student_id column is cleared with the rest.
 
@@ -82,13 +84,14 @@ function deleteSheetRows_(sheet, rows) {
   }
 }
 
-/** Runs `fn` under the script lock with the Sheet read afresh, then flushes and starts a new cache generation, so no
- * request goes on using a login token or setting cached before. */
+/** Runs `fn` under the script lock with the Sheet read afresh (a flush first, as Context_.lock does), then flushes and
+ * starts a new cache generation, so no request goes on using a login token or setting cached before. */
 function menuLock_(db, fn) {
   const lock = LockService.getScriptLock();
   if (!lock.tryLock(30000)) throw new Error('The app is busy writing to the Sheet. Try again in a minute.');
-  db.dropAll();
   try {
+    SpreadsheetApp.flush();
+    db.dropAll();
     return fn();
   } finally {
     try {
@@ -102,11 +105,12 @@ function menuLock_(db, fn) {
 }
 
 /** Under the lock: removes the people `pick` chooses and their rows (every row of the person tabs, with
- * `everything`); the counts. Their sign-ins go first and their users rows last, so a removal cut short leaves no one
- * signed in and can simply be run again. */
+ * `everything`); the counts. Their numbers are forgotten first, then their sign-ins and their other rows go, and their
+ * users rows last, so a removal cut short leaves no one signed in and can simply be run again. */
 function removePeople_(db, pick, everything) {
   return menuLock_(db, () => {
     const removal = removal_(db, pick, everything);
+    forgetPhones_(removal.people, everything);
     personTabs_().forEach(([name]) => deleteSheetRows_(db.t(name).sheet, removal.rows[name]));
     deleteSheetRows_(db.t('users').sheet, removal.people);
     return removalCounts_(removal);

@@ -254,10 +254,10 @@ function oneItem_(ctx, userId, item) {
   return progressByItem_(ctx, userId)[item] || itemProgress_(item, [], [], () => null);
 }
 
-/** The student the teacher asks about, or 404 no_student. */
+/** The student the teacher asks about, or 404 no_student (also when two rows share the id: userById_). */
 function studentRow_(ctx, id) {
-  const student = ctx.db.t('users').rows.filter((u) => u.id === id && u.role === 'student')[0];
-  if (!student) throw new HttpError_(404, 'no_student');
+  const student = userById_(ctx.db.t('users').rows, id);
+  if (!student || student.role !== 'student') throw new HttpError_(404, 'no_student');
   return student;
 }
 

@@ -81,7 +81,7 @@ test('remove test people: only names starting with TEST go, with every row of th
   assert.equal(run(b, 'removeTestPeople_(new Db_())').people, 0, 'run again: no one left to remove');
 });
 
-test('a removed person is signed out at once; a write replayed with its request id brings nothing back, nor does a new person given the id', () => {
+test('a removed person is signed out at once; a write replayed with its request id brings nothing back; the next person gets an id of their own', () => {
   const b = freshBackend();
   const { code } = teacherAndCode(b);
   const ravi = signup(b, '1000000001', { code, name: 'TEST Ravi' });
@@ -97,7 +97,7 @@ test('a removed person is signed out at once; a write replayed with its request 
   assert.deepEqual([tab(b, 'solo_sessions').length, tab(b, 'practice').length, tab(b, 'tokens').length - 1], [1, 1, 1], 'the teacher\'s token only');
 
   const next = signup(b, '9000000002', { name: 'Asha' }); // waiting: no hand edit, so nothing else clears the cache
-  assert.equal(next.user.id, ravi.user.id, 'ids are the largest + 1, so Ravi\'s is given again');
+  assert.equal(next.user.id, ravi.user.id + 1, 'an id is never given again, so not Ravi\'s');
   assert.equal(me(b, ravi).status, 401, 'the old token, cached before, is not the new person\'s');
   assert.equal(me(b, next).body.user.name, 'Asha');
   b.call('POST', '/me/solo', { token: ravi.token, body: solo, requestId: 'r-1' });
@@ -119,6 +119,7 @@ test('reset the studio: everyone goes, the teacher too, and rows left by anyone;
   assert.equal(b.call('PUT', '/teacher/batches/beginner', { token: t.token, body: { meet_link: 'https://meet.google.com/abc-defg-hij' } }).status, 200);
   addRow(b, 'checkins', { user_id: 99, session_id: 1, phase: 'before', mood: 3, created_at: b.clock() }); // someone deleted from users by hand
   const users = tab(b, 'users').length - 1;
+  const lastId = Math.max(...tab(b, 'users').slice(1).map((r) => r[0]));
   const kept = snapshot(b, KEPT_TABS);
   const headers = Object.fromEntries(['users'].concat(PERSON_TABS.map(([name]) => name)).map((name) => [name, tab(b, name)[0]]));
 
@@ -130,7 +131,7 @@ test('reset the studio: everyone goes, the teacher too, and rows left by anyone;
   assert.equal(me(b, t).status, 401, 'the teacher too is signed out');
 
   const teacher = signup(b, '9000000009', { role: 'teacher', code: 'TEACH123' });
-  assert.deepEqual([teacher.user.id, teacher.user.role], [1, 'teacher'], 'the teacher code works again');
+  assert.deepEqual([teacher.user.id, teacher.user.role], [lastId + 1, 'teacher'], 'the teacher code works again, and ids go on from the last');
   const home = b.call('GET', '/teacher/home', { token: teacher.token }).body;
   assert.deepEqual([home.settings.group_code, home.settings.group_link, home.batches[0].meet_link],
     [code, 'https://chat.whatsapp.com/AbCdEf123', 'https://meet.google.com/abc-defg-hij']);
@@ -145,7 +146,8 @@ test('a tab whose rows fill its grid is emptied down to its header', () => {
   run(b, 'resetStudio_(new Db_())');
   assert.deepEqual(tab(b, 'tokens'), [['token_hash', 'user_id', 'created_at']]);
   assert.equal(tokens.getMaxRows(), 2);
-  assert.equal(signup(b, '9000000009', { role: 'teacher', code: 'TEACH123' }).user.id, 1, 'and it takes rows again');
+  const teacher = signup(b, '9000000009', { role: 'teacher', code: 'TEACH123' });
+  assert.deepEqual(tab(b, 'tokens').slice(1).map((r) => r[1]), [teacher.user.id], 'and it takes rows again');
 });
 
 test('the removal takes the script lock, and waits for none when the app holds it', () => {
