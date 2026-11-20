@@ -11,7 +11,7 @@ teacher reads it to guide them.
 
 One teacher teaches live on Google Meet, in four batches: Beginner, Intermediate, Advanced, and Pain management for
 knee, back and neck pain. The teacher guides each body safely, and a strain or a pain is the signal not to miss.
-Students want to see their own progress, in English, Hindi or Marathi, and keep their health private.
+Students should be able to see their own progress, in English, Hindi or Marathi, and keep their health private.
 
 A Meet call and a chat group run the class but keep little of it: the link gets buried in the chat, how each pose felt
 goes unsaid, and nothing is remembered from week to week. The app keeps that record.
