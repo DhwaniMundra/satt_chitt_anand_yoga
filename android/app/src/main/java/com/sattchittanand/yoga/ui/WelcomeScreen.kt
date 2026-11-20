@@ -98,9 +98,12 @@ fun WelcomeScreen(vm: AppViewModel, onLanguage: (String) -> Unit) {
         Spacer(Modifier.height(if (role == null) 48.dp else 8.dp))
         BrandHeader(large = role == null)
         Text(stringResource(R.string.welcome_sub, LocalTeacher.current), style = MaterialTheme.typography.bodyLarge, color = Palette.muted, textAlign = TextAlign.Center)
-        vm.studio?.takeIf { role == null }?.let { studio -> // from the server: the first sign that the app can reach it
-            Text(studio.tagline, style = MaterialTheme.typography.labelLarge, color = Palette.saffron, textAlign = TextAlign.Center)
-            Text("${studio.teacherName} · ${studio.teacherTitle}", style = MaterialTheme.typography.bodyMedium, color = Palette.muted, textAlign = TextAlign.Center)
+        if (role == null) { // from the server: the first sign that the app can reach it. Its lines are kept until it comes, so
+            // the buttons below never move under a finger.
+            val studio = vm.studio
+            Text(studio?.tagline ?: " ", style = MaterialTheme.typography.labelLarge, color = Palette.saffron, textAlign = TextAlign.Center)
+            Text(studio?.let { "${it.teacherName} · ${it.teacherTitle}" } ?: " ", style = MaterialTheme.typography.bodyMedium, color = Palette.muted,
+                textAlign = TextAlign.Center)
         }
         Spacer(Modifier.height(4.dp))
         LanguageChips(vm.prefs.lang, onLanguage)
