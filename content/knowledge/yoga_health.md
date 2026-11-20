@@ -23,8 +23,8 @@ Keywords: studio, classes, batch, schedule, timing, time, when, Ramit, teacher, 
   as they progress.
 - The teacher is Ramit M Tippannavar, trained for more than 12 years in the Kaivalyadhama lineage, certified in
   classical Hatha and therapeutic Pranayama.
-- The first class is free. Each batch has its own meeting link, which appears in the app and is shared in the
-  WhatsApp group.
+- The first class is free. Each batch has its own meeting link, which appears in the app and comes from your teacher
+  (in the class group, or however your class keeps in touch).
 
 ## Getting ready for an online class
 Keywords: prepare, before class, mat, camera, space, clothes, what to bring, तैयारी, चटाई, कैमरा, कपड़े, तयारी, सतरंजी, कपडे
@@ -236,10 +236,12 @@ Keywords: sat chit ananda, satt chitt anand, meaning, name, सत्·चित
   joy in stillness.
 
 ## Using the app
-Keywords: app, link, meet, whatsapp, check in, mood, password, login, ऐप, लिंक, ॲप
+Keywords: app, link, meet, whatsapp, group, code, check in, mood, password, login, ऐप, लिंक, ॲप
 
 - Today's class card shows the Google Meet link. Tap "Join class" a few minutes before your batch's class time.
 - Before joining, the app asks how you feel (one tap), and after class it asks again. This helps Ramit ji see how
-  the classes help, and you see your own progress.
-- Everyone signs up with the group code shared in the WhatsApp group, then waits for the teacher to place them in a batch.
-- Forgot your password? Ask the teacher in the WhatsApp group.
+  the classes help, and you see your own progress. If you joined from the class's message without the app, you can
+  still say how class went afterwards.
+- Everyone signs up with their phone number and the group code from the teacher (in the class group, or however
+  your class keeps in touch), then waits for the teacher to place them in a batch.
+- Forgot your password? Ask the teacher, who can give you a new one. You can change it yourself on the Me tab.

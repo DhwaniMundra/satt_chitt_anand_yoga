@@ -59,7 +59,7 @@ def tour(version: str) -> None:
 
     def log_in(number: str, password: str) -> None:
         p.tap("Log in", exact=True)
-        p.type_into("WhatsApp number", number)
+        p.type_into("Phone number", number)
         p.type_into("Password", password)
         p.hide_keyboard()
         p.tap("Log in", exact=True, last=True)  # the button under the form, not the switch above it
@@ -133,7 +133,7 @@ def tour(version: str) -> None:
     p.tap("I'm the teacher")
     log_in(*TEACHER)
     shot("24_teacher_today")
-    tap_scrolling("Share on WhatsApp", exact=True)  # the next class, on its batch's everyday link
+    tap_scrolling("Share", exact=True)  # the next class, on its batch's everyday link: the share sheet
     time.sleep(2.5)
     shot("25_teacher_share")  # the message names the batch
     p.back()
