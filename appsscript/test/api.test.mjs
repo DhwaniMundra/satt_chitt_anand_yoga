@@ -79,7 +79,7 @@ test('an account stored with the trunk 0 after +91 still logs in, however the nu
   signup(b, '9000000002');
   const users = b.ss.getSheetByName('users');
   const row = users.rows().findIndex((r) => r[2] === '+919000000002') + 1;
-  users.getRange(row, 3).setValue("'+9109000000002"); // as "+91 090000 00002" was stored before the 0 was dropped
+  users.getRange(row, 3).setValue("'+9109000000002"); // "+91 090000 00002" stored with its trunk 0
   b.context.onEdit({});
   for (const typed of ['+91 090000 00002', '9000000002', '09000000002', '+91 90000 00002']) {
     const r = b.call('POST', '/auth/login', { body: { phone: typed, password: 'secret1' } });

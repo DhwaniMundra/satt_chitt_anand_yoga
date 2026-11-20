@@ -66,7 +66,7 @@ test('a dose the owner types as words, or leaves empty, is a number or nothing: 
   const r = b.call('GET', '/curricula', { token: t.token });
   assert.equal(r.status, 200);
   assert.deepEqual(r.body.curricula[0].items.slice(0, 5).map((i) => i.dose), [5, null, null, null, 12]);
-  assert.equal(r.body.curricula[0].items[0].unit, 'minutes', 'the unit as it was');
+  assert.equal(r.body.curricula[0].items[0].unit, 'minutes', 'the unit as the Sheet has it');
 });
 
 test('a class follows its own curriculum, else its batch\'s', () => {
