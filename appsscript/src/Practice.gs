@@ -4,6 +4,8 @@
 // on their own with a stopwatch; the teacher reads each student's history per item and can write feedback on an
 // item, which the student sees with it.
 
+const MAX_HOLD_S_ = 3600; // the app's stopwatch stops at an hour
+
 /** The curriculum as the Sheet holds it: the library by key, the curricula in tab order, each one's items in order. */
 function curriculum_(ctx) {
   const library = {};
@@ -36,7 +38,8 @@ function sessionCurricula_(ctx) {
   return out;
 }
 
-/** The library and the curricula in the student's language (the Devanagari names serve Hindi and Marathi). */
+/** The library and the curricula in the student's language (the Devanagari names serve Hindi and Marathi). An item's
+ * dose is a whole number, or null when its cell holds none (the app then shows the unit or the cue alone). */
 function curricula_(ctx) {
   currentUser_(ctx);
   const { query } = ctx.check({ query: QUERY_LANG_ });
@@ -64,17 +67,24 @@ function setCurriculum_(ctx) {
   return { ok: true, curriculum: body.curriculum };
 }
 
-/** After class, how each item went for this student. Open while the "after" check-in is; a second send replaces the
- * first. Entries with no reaction, no pain and no note are not kept. */
+/** After class, how each item went for this student. Open while the "after" check-in is, to one who checked in or
+ * any of the class's batch; a second send replaces the first. Entries with no reaction, no pain and no note are not
+ * kept. */
 function sessionPractice_(ctx) {
   const user = currentUser_(ctx);
   const { path, body } = ctx.check({ path: PATH_SESSION_, body: BODY_.practice });
   if (user.status !== 'approved') throw new HttpError_(403, 'pending');
   const row = sessionRow_(ctx, path.session_id);
-  const joined = ctx.db.t('checkins').rows.some((c) => c.user_id === user.id && c.session_id === row.id && c.phase === 'before');
-  if (!joined || !afterOpen_(row, ctx.now)) throw new HttpError_(400, 'checkin_closed');
+  const checkins = ctx.db.t('checkins');
+  const joined = checkins.rows.some((c) => c.user_id === user.id && c.session_id === row.id && c.phase === 'before');
+  const own = row.batch === user.batch; // never for the teacher, who has no batch
+  if (!(joined || own) || !afterOpen_(row, ctx.now)) throw new HttpError_(400, 'checkin_closed');
   const library = curriculum_(ctx).library;
   const kept = saidEntries_(body.entries, library);
+  // Saying how it went records coming to the class, with no mood before, for one who did not check in.
+  if (!joined && kept.length) {
+    checkins.insert([Object.assign({ user_id: user.id, session_id: row.id, phase: 'before', mood: null, created_at: ctx.now }, checkinCopy_(ctx, row))]);
+  }
   const table = ctx.db.t('practice');
   table.remove(table.rows.filter((r) => r.user_id === user.id && r.session_id === row.id));
   let id = table.nextId();
@@ -83,8 +93,9 @@ function sessionPractice_(ctx) {
   return { ok: true, saved: kept.length };
 }
 
-/** Practice on the student's own: each item with the stopwatch's seconds, how it went, strain or pain and a note. The
- * server dates it: the session ends now and began `minutes` ago. Items with nothing timed or said are not kept. */
+/** Practice on the student's own: each item with the stopwatch's seconds (an hour at most: a longer hold is kept as
+ * an hour), how it went, strain or pain and a note. The server dates it: the session ends now and began `minutes`
+ * ago. Items with nothing timed or said are not kept. */
 function soloPractice_(ctx) {
   const user = member_(ctx);
   const { body } = ctx.check({ body: BODY_.solo });
@@ -96,7 +107,7 @@ function soloPractice_(ctx) {
   const row = solo.insert([{ id: solo.nextId(), user_id: user.id, started_at: started, ended_at: ctx.now }])[0];
   const table = ctx.db.t('practice');
   let id = table.nextId();
-  table.insert(kept.map((e) => ({ id: id++, user_id: user.id, solo_id: row.id, item: e.item, hold_s: e.hold_s || null,
+  table.insert(kept.map((e) => ({ id: id++, user_id: user.id, solo_id: row.id, item: e.item, hold_s: Math.min(e.hold_s || 0, MAX_HOLD_S_) || null,
     reaction: e.reaction, pain: e.pain, note: e.note, created_at: ctx.now, item_name: library[e.item].name, week: mondayOf_(started) })));
   return { ok: true, id: row.id, saved: kept.length };
 }
@@ -121,15 +132,17 @@ function mondayOf_(ms) {
 }
 
 /** How a class went, item by item, for the teacher: the reactions counted (not yet, with effort, steady, at ease),
- * items with strain or pain first, each with who and what they wrote, then the other notes. */
+ * items with strain or pain first, each with who and what they wrote, then the other notes. One whose row the owner
+ * deleted is named "A former student", in `lang`. */
 function classReview_(ctx) {
   teacher_(ctx);
-  const { path } = ctx.check({ path: PATH_SESSION_ });
+  const { path, query } = ctx.check({ path: PATH_SESSION_, query: QUERY_LANG_ });
   const row = sessionRow_(ctx, path.session_id);
   const names = {};
   ctx.db.t('users').rows.forEach((u) => {
     names[u.id] = u.name;
   });
+  const nameOf = (id) => names[id] || pick_(TEXT_.former_student, query.lang);
   const plan = sessionCurricula_(ctx)[row.id];
   const entries = ctx.db.t('practice').rows.filter((r) => r.session_id === row.id).sort((a, b) => a.id - b.id);
   const order = (curriculum_(ctx).items[plan] || []).map((i) => i.item);
@@ -141,8 +154,8 @@ function classReview_(ctx) {
     return {
       item: item,
       reactions: [1, 2, 3, 4].map((n) => mine.filter((e) => e.reaction === n).length),
-      pain: mine.filter((e) => e.pain === 1).map((e) => ({ name: names[e.user_id], note: e.note })),
-      notes: mine.filter((e) => e.pain !== 1 && e.note).map((e) => ({ name: names[e.user_id], text: e.note })),
+      pain: mine.filter((e) => e.pain === 1).map((e) => ({ name: nameOf(e.user_id), note: e.note })),
+      notes: mine.filter((e) => e.pain !== 1 && e.note).map((e) => ({ name: nameOf(e.user_id), text: e.note })),
     };
   });
   const answered = {};

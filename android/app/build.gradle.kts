@@ -46,8 +46,8 @@ android {
         applicationId = "com.sattchittanand.yoga"
         minSdk = 26
         targetSdk = 36
-        versionCode = 4
-        versionName = "0.9"
+        versionCode = 5
+        versionName = "0.9.1"
         // Where the phone downloads Gemma 4 E2B from: the studio's Google Drive copy, unless built with -PmodelUrl=<url>
         // (a laptop serving the file to the emulator, say). The public Hugging Face copy is the fallback (GemmaFile).
         // confirm=t: without it, Drive answers a large file with an HTML page ("can't scan for viruses").
@@ -115,4 +115,5 @@ dependencies {
     implementation(libs.androidx.compose.material.icons.extended)
     implementation(libs.litertlm.android)
     testImplementation(libs.junit)
+    testImplementation(libs.org.json) // the JVM tests parse the server's JSON: Android's org.json is a stub off the phone
 }

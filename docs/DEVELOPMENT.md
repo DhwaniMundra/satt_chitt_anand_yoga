@@ -59,7 +59,7 @@ The properties file names `~/.android/debug.keystore` (`storePassword`, `keyPass
 node --test 'appsscript/test/*.test.mjs'                                 # the backend: every route, on fakes of the Sheet
 SCA_TEST_NOW=2026-11-22T18:31:00Z node --test 'appsscript/test/*.test.mjs'  # the same at another moment
 node appsscript/scripts/build.mjs --check                                # dist/Code.gs is the build of src/ and content/
-cd android && ./gradlew testDebugUnitTest                                # the app's JVM tests: the companion, notes, solo
+cd android && ./gradlew testDebugUnitTest                                # the app's JVM tests: the companion, notes, solo, the server's JSON
 python3 scripts/eval_phone.py docs/evals/next_phone.md                   # Gemma in the app on the 6 GB emulator
 SCA_WEBAPP_URL=<url> node appsscript/scripts/smoke.mjs 5                 # the live web app, with requests that write no row
 ```

@@ -147,6 +147,14 @@ export class FakeSpreadsheet {
     this.sheets.splice(position - 1, 0, this.active);
   }
   setSpreadsheetTimeZone(tz) { this.timeZone = tz; }
+  getSpreadsheetTimeZone() { return this.timeZone; }
+}
+
+/** Utilities.formatDate for the one pattern the backend uses, "HH:mm", in a time zone with its history (Asia/Kolkata
+ * was +5:21:10 in 1899), as Java's time zone data has it. */
+function formatDate(date, timeZone, pattern) {
+  if (pattern !== 'HH:mm') throw new Error('only HH:mm is faked');
+  return new Intl.DateTimeFormat('en-GB', { timeZone, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(date);
 }
 
 export class FakeCache {
@@ -202,6 +210,7 @@ export function loadBackend({ code, now } = {}) {
         return toSigned(createHash('sha256').update(data).digest());
       },
       getUuid: () => randomUUID(),
+      formatDate,
     },
     ContentService: {
       MimeType: { JSON: 'JSON' },
@@ -218,8 +227,9 @@ export function loadBackend({ code, now } = {}) {
   const evaluate = (expression) => vm.runInContext(expression, context);
 
   /** One call through the envelope, as the app will make it: {status, body}. */
-  function call(method, path, { query, token, body } = {}) {
+  function call(method, path, { query, token, body, requestId } = {}) {
     const envelope = { method, path, query: query || {}, token: token || '', body: body === undefined ? null : body };
+    if (requestId) envelope.request_id = requestId;
     const out = context.doPost({ postData: { contents: JSON.stringify(envelope), type: 'application/json' } });
     if (out.mime !== 'JSON') throw new Error('not JSON output');
     return JSON.parse(out.getContent());

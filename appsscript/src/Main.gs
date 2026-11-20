@@ -5,10 +5,12 @@
 //   {"method": "GET", "path": "/home", "query": {"lang": "hi"}, "token": "<login token>", "body": null}
 // and every answer is HTTP 200 with
 //   {"status": <the HTTP status of the answer: 200, 400, 401, ...>, "body": <the answer's JSON>}.
+// A write may carry a "request_id": the same id again (the app retrying after a timeout) gets the first answer back.
 // A GET with no envelope answers /health. appsscript/README.md describes the envelope and every route.
 
 const METHODS_ = ['GET', 'POST', 'PUT', 'DELETE'];
 const LOCK_ = true; // the route writes: it runs under the script lock from start to finish
+const REPLAY_S_ = 600; // how long the answer to a write with a request id is kept for a repeat of it
 
 class HttpError_ extends Error {
   constructor(status, detail) {
@@ -74,7 +76,8 @@ function parseEnvelope_(text) {
   }
   let token = typeof env.token === 'string' ? env.token : '';
   if (token.indexOf('Bearer ') === 0) token = token.slice(7);
-  return { method: method, path: path, query: query, token: token.trim(), body: env.body === undefined ? null : env.body };
+  const requestId = typeof env.request_id === 'string' ? env.request_id.trim().slice(0, 64) : '';
+  return { method: method, path: path, query: query, token: token.trim(), body: env.body === undefined ? null : env.body, requestId: requestId };
 }
 
 function decodeQuery_(text) {
@@ -112,9 +115,10 @@ function routes_() {
     ['GET', '/me/asanas', myItems_],
     ['GET', '/me/asanas/{item}', myItem_],
     ['POST', '/me/shared', shareNote_, LOCK_],
+    ['POST', '/me/password', changePassword_],
     ['GET', '/home', home_],
     ['GET', '/curricula', curricula_],
-    ['POST', '/sessions/{session_id}/checkin', checkin_, LOCK_],
+    ['POST', '/sessions/{session_id}/checkin', checkin_],
     ['POST', '/sessions/{session_id}/practice', sessionPractice_, LOCK_],
     ['POST', '/feedback', feedback_, LOCK_],
     ['GET', '/teacher/home', teacherHome_],
@@ -160,10 +164,24 @@ function route_(request) {
     pathMatched = true;
     if (method !== request.method) continue;
     const ctx = new Context_(request, params);
-    return lock ? ctx.lock(() => handler(ctx)) : handler(ctx);
+    const run = () => once_(request, () => handler(ctx));
+    return lock ? ctx.lock(run) : run();
   }
   if (pathMatched) throw new HttpError_(405, 'Method Not Allowed');
   throw new HttpError_(404, 'Not Found');
+}
+
+/** Runs a write once per request id: a repeat from the same login (a retry after a timeout) gets the answer kept from
+ * the first time, for REPLAY_S_, instead of writing again. Only answers that succeeded are kept. A route that holds the
+ * lock throughout looks inside it, so two copies arriving together write once. */
+function once_(request, fn) {
+  if (request.method === 'GET' || !request.requestId || !request.token) return fn();
+  const key = 'req:' + sha256Hex_(request.token) + ':' + request.requestId;
+  const kept = cache_().get(key);
+  if (kept) return JSON.parse(kept);
+  const answer = fn();
+  cache_().put(key, JSON.stringify(answer), REPLAY_S_);
+  return answer;
 }
 
 /** One request: its inputs, its view of the Sheet (each tab read at most once), the time, and the lock. */
@@ -180,7 +198,8 @@ class Context_ {
   }
 
   /** Runs `fn` holding the script lock; re-entrant. Tabs read before the lock are read again inside it (unless
-   * `keepReads`, for a lock that writes no tab), and writes are flushed before the lock is let go. */
+   * `keepReads`, for a lock that writes no tab or reads afresh the one it writes), and writes are flushed before the
+   * lock is let go. */
   lock(fn, keepReads) {
     if (this.locked) return fn();
     const lock = LockService.getScriptLock();

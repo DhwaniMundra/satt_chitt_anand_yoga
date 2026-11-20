@@ -10,9 +10,9 @@ teacher reads it to guide them.
 ## The studio
 
 The teacher teaches live on Google Meet, in four batches (Beginner, Intermediate, Advanced and Pain management), each
-with its own days, time and link. The class keeps in touch in one WhatsApp group. The app fits around that: the
-teacher shares each class's link into the group from the app, and the app keeps what WhatsApp cannot, a record of each
-student's practice.
+with its own days, time and link. The class keeps in touch in a WhatsApp group. The app fits around that without
+depending on it: the teacher shares each class's link from the app through Android's share sheet, to the group or
+anywhere else, and the app keeps what a chat cannot, a record of each student's practice.
 
 ## What it does
 
@@ -24,8 +24,9 @@ student's practice.
 </p>
 
 **For a student**
-- **Joining** takes the group code from the WhatsApp invite. The student signs up, then answers a few questions for
-  the teacher: age, height, weight, food habits, any pain, and how six poses feel. The teacher places them in a batch.
+- **Joining** takes a phone number and the group code, which the teacher gives with the invite. The student signs up,
+  then answers a few questions for the teacher: age, height, weight, food habits, any pain, and how six poses feel. The
+  teacher places them in a batch.
 - **The Today tab** shows the batch's next class in the student's own time zone, with its sequence and the Meet link.
   After class, the student gives each item one tap (not yet, with effort, steady or at ease), can flag strain or pain,
   and can add a note.
@@ -42,8 +43,8 @@ student's practice.
 </p>
 
 **For the teacher**
-- **The Today tab** shows one card per batch, with the class's sequence and its Meet link, shared to WhatsApp in one
-  tap.
+- **The Today tab** shows one card per batch, with the class's sequence and its Meet link, saved and shared from there
+  to the class's group, or anywhere else.
 - **The Students tab** shows a new student's answers and the batch they point to. The teacher approves them into a
   batch, or moves a student later with a note, and can write feedback on any of a student's asanas.
 - **The Insights tab** shows mood before and after each class, and how each class went item by item, with strain or pain
@@ -56,7 +57,7 @@ flowchart LR
     S[Student's phone<br/>the app + Gemma 4] -- "classes, check-ins,<br/>how each item went" --> B[Apps Script web app<br/>over a Google Sheet]
     T[Teacher's phone<br/>the app] -- "batches, links,<br/>feedback" --> B
     B --> O[The studio's Sheet<br/>tabs + a Dashboard]
-    T -- "the class link" --> W[WhatsApp group]
+    T -- "the class link,<br/>through the share sheet" --> W[The class's group<br/>on WhatsApp, or elsewhere]
     W --> S
 ```
 

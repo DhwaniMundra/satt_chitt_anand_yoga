@@ -32,9 +32,13 @@ private val DOSE_UNITS = mapOf(
     "strokes" to R.plurals.dose_strokes,
 )
 
-/** "5 breaths", "3 min": a unit the app does not know (the owner can type any in the Sheet) is shown as written. */
+/** "5 breaths", "3 min": a unit the app does not know (the owner can type any in the Sheet) is shown as written, and
+ *  so is the unit alone when the owner left the dose empty or wrote words in it. */
 @Composable
-fun doseLabel(dose: Int, unit: String): String = DOSE_UNITS[unit]?.let { pluralStringResource(it, dose, dose) } ?: "$dose $unit"
+fun doseLabel(dose: Int?, unit: String): String = when (dose) {
+    null -> unit
+    else -> DOSE_UNITS[unit]?.let { pluralStringResource(it, dose, dose) } ?: "$dose $unit".trim()
+}
 
 /** A curriculum's items in order, each with how much and how to do it; with [collapsed], that many until "Show all". */
 @Composable

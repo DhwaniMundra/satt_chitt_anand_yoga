@@ -108,7 +108,7 @@ def log_in(number):
     p.launch(fresh=True)
     p.tap("I'm a student")
     p.tap("Log in", exact=True)
-    p.type_into("WhatsApp number", number)
+    p.type_into("Phone number", number)
     p.type_into("Password", "demo123")
     p.hide_keyboard()
     p.tap("Log in", exact=True, last=True)

@@ -82,10 +82,11 @@ function checkPassword_(password, stored) {
 }
 
 /**
- * The WhatsApp number as +<country><number>, so one person always gets one account however they type it:
- * "98765 43210", "098765 43210", "+91 98765 43210" and "0091 98765 43210" are the same number. A bare 10-digit
- * number, or 11 digits with the trunk prefix 0, is taken as Indian (+91). Devanagari digits count as digits.
- * Throws a 400 bad_phone if it is not a plausible phone number.
+ * The phone number as +<country><number>, so one person always gets one account however they type it:
+ * "98765 43210", "098765 43210", "+91 98765 43210", "+91 098765 43210" and "0091 98765 43210" are the same number. A
+ * bare 10-digit number, or 11 digits with the trunk prefix 0, is taken as Indian (+91); a number from abroad starts
+ * with + and its country code. Devanagari digits count as digits. Throws a 400 bad_phone if it is not a plausible
+ * phone number.
  */
 function normalizePhone_(raw) {
   let digits = String(raw)
@@ -93,9 +94,19 @@ function normalizePhone_(raw) {
     .replace(/\D/g, '');
   if (digits.indexOf('00') === 0) digits = digits.slice(2); // international prefix
   else if (digits.length === 11 && digits.charAt(0) === '0') digits = digits.slice(1); // Indian trunk prefix
+  if (digits.length === 13 && digits.indexOf('910') === 0) digits = '91' + digits.slice(3); // the trunk 0 after +91
   if (digits.length === 10) digits = '91' + digits;
   if (digits.length < 11 || digits.length > 15 || digits.charAt(0) === '0') throw new HttpError_(400, 'bad_phone');
   return '+' + digits;
+}
+
+/** A user's stored number as normalizePhone_ reads it, so an account stored as "+910…" still matches "+91…". */
+function phoneOf_(user) {
+  try {
+    return normalizePhone_(user.phone);
+  } catch (err) {
+    return user.phone;
+  }
 }
 
 // After ATTEMPT_LIMIT_ failures for one key (a phone number logging in, the teacher code, a number signing up with a

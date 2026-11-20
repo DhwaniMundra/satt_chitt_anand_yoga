@@ -12,22 +12,22 @@
     <string name="login">Log in</string>
     <string name="signup">Create account</string>
     <string name="name">Your name</string>
-    <string name="phone">WhatsApp number</string>
+    <string name="phone">Phone number</string>
     <string name="password">Password (6 or more letters)</string>
-    <string name="group_code">Group code (from the class\'s WhatsApp invite)</string>
+    <string name="group_code">Group code (from your teacher)</string>
     <string name="group_code_help">No code? Ask %1$s for it.</string>
     <string name="teacher_code">Teacher code</string>
     <string name="back">Back</string>
     <string name="role_student">Student</string>
 
     <!-- Errors, by the code the server sends -->
-    <string name="err_bad_phone">Please enter a valid WhatsApp number.</string>
+    <string name="err_bad_phone">Please enter a valid phone number.</string>
     <string name="err_bad_login">Wrong number or password.</string>
     <string name="err_phone_taken">This number already has an account. Please log in.</string>
-    <string name="err_bad_group_code">Ask %1$s for the group code; it\'s in the class\'s WhatsApp invite.</string>
+    <string name="err_bad_group_code">That isn\'t the group code. It comes from your teacher, %1$s.</string>
     <string name="err_bad_teacher_code">That teacher code is not right.</string>
-    <string name="err_bad_meet_link">Please paste a Google Meet or Zoom link.</string>
-    <string name="err_bad_group_link">Please paste a WhatsApp group invite link (chat.whatsapp.com/…).</string>
+    <string name="err_bad_meet_link">Please paste a video call link: Google Meet, Zoom, Teams or Jitsi.</string>
+    <string name="err_bad_group_link">Please paste the class group\'s link, or leave it empty.</string>
     <string name="err_network">Cannot reach the studio server. Check your internet and try again.</string>
     <string name="err_short_password">The password needs at least 6 letters.</string>
     <string name="err_generic">Something went wrong. Please try again.</string>
@@ -97,7 +97,7 @@
     <string name="intake_none">No answers about themselves yet</string>
     <string name="intake_meals">Meals: %1$s</string>
     <string name="see_all">See all</string>
-    <string name="open_group">Open WhatsApp group</string>
+    <string name="open_group">Open the class group</string>
     <string name="how_feel_before">How do you feel right now?</string>
     <string name="how_feel_after">Class done! How do you feel now?</string>
     <string name="how_did_it_go">How did it go?</string>
@@ -149,7 +149,7 @@
     <!-- Me -->
     <string name="my_practice">My practice</string>
     <string name="classes_joined">Classes</string>
-    <string name="streak">Day streak</string>
+    <string name="streak">Classes in a row</string>
     <string name="mood_lift">Mood lift</string>
     <string name="mood_lift_help">How much better you feel after class, on average (−4 to +4).</string>
     <string name="memory_title">My health notes</string>
@@ -168,8 +168,6 @@
     <!-- Teacher -->
     <string name="classes_title">Your classes</string>
     <string name="meet_link">Google Meet link</string>
-    <string name="save_share">Save and share on WhatsApp</string>
-    <string name="share_whatsapp">Share on WhatsApp</string>
     <string name="uses_standing_link">Using the batch\'s everyday link</string>
     <string name="no_link_yet">No link yet</string>
     <plurals name="joined_count">
@@ -179,9 +177,9 @@
     <string name="settings_title">Class links and group</string>
     <string name="standing_link">Each batch\'s everyday Meet link</string>
     <string name="standing_link_help">Used for the batch\'s classes without a link of their own.</string>
-    <string name="group_link">WhatsApp group invite link</string>
+    <string name="group_link">Class group link (optional)</string>
     <string name="group_code_label">Group code</string>
-    <string name="invite_students">Invite students on WhatsApp</string>
+    <string name="invite_students">Invite students</string>
     <string name="new_code">New code</string>
     <string name="saved">Saved</string>
     <string name="students_title">Students</string>
@@ -191,7 +189,7 @@
     <string name="remove">Remove</string>
     <string name="new_password">New password</string>
     <string name="new_password_is">New password for %1$s: %2$s</string>
-    <string name="no_students">No students yet. Share the invite on WhatsApp.</string>
+    <string name="no_students">No students yet. Share the invite with them.</string>
     <string name="insights_title">How classes are going</string>
     <string name="avg_lift">Average mood lift</string>
     <plurals name="pairs">
@@ -330,4 +328,35 @@
         <item quantity="one">%d solo</item>
         <item quantity="other">%d solo</item>
     </plurals>
+    <string name="phone_hint">Outside India? Start with + and your country code.</string>
+    <string name="were_you_in_class">Were you in class?</string>
+    <string name="range_hint">%1$d to %2$d</string>
+    <string name="change_password">Change password</string>
+    <string name="current_password">Current password</string>
+    <string name="new_password_again">New password again</string>
+    <string name="passwords_differ">The two new passwords are not the same.</string>
+    <string name="password_changed">Password changed</string>
+    <string name="new_code_ask">Make a new group code?</string>
+    <string name="new_code_why">Students who have the old code won\'t be able to sign up with it.</string>
+    <string name="remove_ask">Remove %1$s?</string>
+    <string name="remove_why">%1$s will no longer see the classes. You can take them back later.</string>
+    <string name="copy">Copy</string>
+    <string name="copied">Copied</string>
+    <string name="former_student">A former student</string>
+    <string name="err_bad_password">That is not your current password.</string>
+    <string name="err_after_closed">It\'s too late to say how this class went: that closes 12 hours after class.</string>
+    <string name="err_other_batch">That class is for another batch. The Today tab now shows your own.</string>
+    <string name="err_needs_batch">Place this student in a batch first.</string>
+    <string name="err_no_link">This class has no link yet. Paste one first.</string>
+    <string name="err_nothing_said">Nothing to save yet: time an item, or say how it went.</string>
+    <string name="err_empty_note">The note is empty.</string>
+    <string name="err_old_server">This needs the studio\'s server to be updated. Until then, ask %1$s for a new password.</string>
+    <string name="err_field_too_long">%1$s is too long: %2$d letters at most.</string>
+    <string name="err_field_range">%1$s: please check the number.</string>
+    <string name="err_field_invalid">Please check: %1$s.</string>
+    <string name="field_password">The password</string>
+    <string name="field_meals">The meals answer</string>
+    <string name="field_pain_note">The pain note</string>
+    <string name="field_note">The note</string>
+    <string name="field_text">The text</string>
 </resources>

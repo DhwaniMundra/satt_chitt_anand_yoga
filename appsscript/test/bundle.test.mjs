@@ -59,6 +59,23 @@ test('setup builds the tabs, makes the codes once, and can run again', () => {
   assert.equal(b.ss.getSheets().length, names.length);
 });
 
+test('setup run again on a Sheet in use adds the app_link row and changes nothing the owner entered', () => {
+  const b = freshBackend();
+  const settings = b.ss.getSheetByName('settings');
+  const keys = () => settings.rows().map((r) => r[0]);
+  assert.deepEqual(keys(), ['key', 'teacher_code', 'group_code', 'group_link', 'app_link']);
+  assert.match(settings.rows()[4][2], /^Optional: where students get the app/);
+  const appRow = keys().indexOf('app_link') + 1;
+  settings.getRange(appRow, 2).setValue("'https://example.org/sca.apk");
+  settings.getRange(appRow - 1, 2).setValue("'https://t.me/sattchitt");
+  const batches = b.ss.getSheetByName('batches');
+  batches.getRange(2, batches.rows()[0].indexOf('time') + 1).setValue("'06:45");
+  const before = b.ss.getSheets().map((s) => [s.getName(), JSON.stringify(s.rows())]);
+  b.context.setup();
+  assert.deepEqual(b.ss.getSheets().map((s) => [s.getName(), JSON.stringify(s.rows())]), before);
+  assert.equal(b.call('GET', '/studio').body.batches[0].time, '06:45');
+});
+
 test('a GET answers the health check in the envelope', () => {
   const b = testBackend();
   const out = b.context.doGet({ parameter: {} });

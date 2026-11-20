@@ -2,6 +2,7 @@ package com.sattchittanand.yoga
 
 import android.content.Context
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONException
@@ -12,8 +13,10 @@ import java.net.URL
 import java.text.Normalizer
 import java.time.Instant
 import java.time.LocalDate
+import kotlin.random.Random
 
-/** What the app keeps on the phone: the login token, the chosen language and, in a debug build, the server address. */
+/** What the app keeps on the phone: the login token, the chosen language, the practice on one's own in progress and,
+ *  in a debug build, the server address. */
 class Prefs(context: Context) {
     private val store = context.getSharedPreferences("sca", Context.MODE_PRIVATE)
 
@@ -30,6 +33,11 @@ class Prefs(context: Context) {
         get() = store.getString("lang", null) ?: "en"
         set(value) = store.edit().putString("lang", value).apply()
 
+    /** The practice on one's own in progress, as [SoloRun.saved] writes it. */
+    var solo: String?
+        get() = store.getString("solo", null)
+        set(value) = store.edit().putString("solo", value).apply()
+
     companion object {
         /** Read before the activity exists, to pick the language its resources load in. */
         fun lang(context: Context): String =
@@ -37,28 +45,60 @@ class Prefs(context: Context) {
     }
 }
 
-/** An error the server named ("bad_login", "pending", …) or "network" when it could not be reached. */
+/** An error the server named ("bad_login", "pending", …), "network" when it could not be reached, or for a check the
+ *  server's validation refused, a [problemCode] naming the field. */
 class ApiError(val code: String) : Exception(code)
+
+/** A 422's first problem as a code the app words: "too_long:pain_note:600", "range:height_cm" or "invalid:name", the
+ *  field being the last name in its location (["body", "entries", 0, "note"] is "note"). */
+fun problemCode(detail: JSONArray): String {
+    val first = detail.optJSONObject(0) ?: return "generic"
+    val loc = first.optJSONArray("loc") ?: JSONArray()
+    val field = (loc.length() - 1 downTo 0).map { loc.opt(it) }.firstOrNull { it is String } as String? ?: "body"
+    return when (first.text("type")) {
+        "string_too_long" -> "too_long:$field:${first.optJSONObject("ctx")?.intOrNull("max_length") ?: 0}"
+        "greater_than_equal", "less_than_equal" -> "range:$field"
+        else -> "invalid:$field"
+    }
+}
 
 /**
  * The backend's API. The backend is a Google Apps Script web app, which cannot read request headers or set a status,
  * so every call is one POST of an envelope {"method", "path", "token", "body"} (the path carries the query string),
  * and every answer is HTTP 200 with {"status", "body"}: `status` is the call's real status. Apps Script answers the
  * POST with a redirect to script.googleusercontent.com, to be fetched with GET; the dev backend answers the same way.
+ * A write that creates something carries a request id: the server answers a repeat of it as it did the first time.
  */
 class Api(private val prefs: Prefs) {
 
-    suspend fun get(path: String) = call("GET", path, null)
-    suspend fun post(path: String, body: JSONObject = JSONObject()) = call("POST", path, body)
-    suspend fun put(path: String, body: JSONObject) = call("PUT", path, body)
+    suspend fun get(path: String) = call("GET", path, null, null)
 
-    private suspend fun call(method: String, path: String, body: JSONObject?): JSONObject = withContext(Dispatchers.IO) { request(method, path, body) }
+    /** [requestId] for a write that creates something: the same id for each try of the same action. */
+    suspend fun post(path: String, body: JSONObject = JSONObject(), requestId: String? = null) = call("POST", path, body, requestId)
+    suspend fun put(path: String, body: JSONObject, requestId: String? = null) = call("PUT", path, body, requestId)
+
+    /** Tries again, waiting a little longer each time, while the server is busy (its lock was taken, so nothing was
+     *  done) and, for a write with a request id, which the server writes once, while the connection fails. */
+    private suspend fun call(method: String, path: String, body: JSONObject?, requestId: String?): JSONObject = withContext(Dispatchers.IO) {
+        var wait = FIRST_WAIT_MS
+        while (wait <= LAST_WAIT_MS) {
+            try {
+                return@withContext request(method, path, body, requestId)
+            } catch (e: ApiError) {
+                if (e.code != "busy" && !(e.code == "network" && requestId != null)) throw e
+            }
+            delay(wait + Random.nextLong(wait / 2))
+            wait *= 2
+        }
+        request(method, path, body, requestId) // the last try: its error is the caller's
+    }
 
     /** A GET on the calling thread, for the companion's tools, which run on Gemma's own thread. */
-    fun getNow(path: String): JSONObject = request("GET", path, null)
+    fun getNow(path: String): JSONObject = request("GET", path, null, null)
 
-    private fun request(method: String, path: String, body: JSONObject?): JSONObject {
+    private fun request(method: String, path: String, body: JSONObject?, requestId: String?): JSONObject {
         val envelope = JSONObject().put("method", method).put("path", path).put("token", prefs.token ?: "").put("body", body ?: JSONObject.NULL)
+        if (requestId != null) envelope.put("request_id", requestId)
         val reply = try {
             JSONObject(exchange(envelope.toString()))
         } catch (e: IOException) {
@@ -68,7 +108,11 @@ class Api(private val prefs: Prefs) {
         }
         val answer = reply.optJSONObject("body") ?: JSONObject()
         if (reply.optInt("status") !in 200..299) {
-            throw ApiError(answer.optString("detail").takeIf { it.isNotEmpty() && !it.startsWith("[") } ?: "generic")
+            throw ApiError(when (val detail = answer.opt("detail")) {
+                is JSONArray -> problemCode(detail)
+                is String -> detail.ifEmpty { "generic" }
+                else -> "generic"
+            })
         }
         return answer
     }
@@ -102,15 +146,31 @@ class Api(private val prefs: Prefs) {
 
     private companion object {
         const val MAX_REDIRECTS = 3
+        const val FIRST_WAIT_MS = 1_000L // then 2 s and 4 s, and a last try: four in all
+        const val LAST_WAIT_MS = 4_000L
     }
 }
 
 // ---------- models, parsed from the server's JSON ----------
+// Much of it comes from cells the owner types in the Sheet (the batches, the library, the curricula), any of which
+// may be left empty: those are read with [text] and [intOrNull], so one odd row never stops a screen.
 
 fun JSONObject.str(key: String): String? = if (isNull(key)) null else getString(key)
 fun JSONObject.dbl(key: String): Double? = if (isNull(key)) null else getDouble(key)
+
+/** Text, "" when null or missing. */
+fun JSONObject.text(key: String): String = if (isNull(key)) "" else optString(key)
+
+/** A whole number, or null when it is null, missing or not one. */
+fun JSONObject.intOrNull(key: String): Int? = when (val v = opt(key)) {
+    is Number -> v.toInt()
+    is String -> v.trim().toIntOrNull()
+    else -> null
+}
+
 fun <T> JSONArray.map(transform: (JSONObject) -> T): List<T> = (0 until length()).map { transform(getJSONObject(it)) }
 fun JSONArray.strings(): List<String> = (0 until length()).map { getString(it) }
+private fun JSONObject.list(key: String): JSONArray = optJSONArray(key) ?: JSONArray()
 
 /** A user; a student's [batch] (a key) and since when, once the teacher has placed them. */
 data class User(val id: Int, val name: String, val phone: String, val role: String, val status: String, val batch: String?, val batchSince: Instant?) {
@@ -118,7 +178,7 @@ data class User(val id: Int, val name: String, val phone: String, val role: Stri
     val isApproved get() = status == "approved"
 
     companion object {
-        fun from(o: JSONObject) = User(o.getInt("id"), o.getString("name"), o.getString("phone"), o.getString("role"), o.getString("status"),
+        fun from(o: JSONObject) = User(o.getInt("id"), o.text("name"), o.text("phone"), o.text("role"), o.text("status"),
             o.str("batch"), o.str("batch_since")?.let(Instant::parse))
     }
 }
@@ -126,7 +186,7 @@ data class User(val id: Int, val name: String, val phone: String, val role: Stri
 /** A batch: its name and words in the chosen language, and its start in India ("07:00"). */
 data class BatchInfo(val key: String, val name: String, val about: String, val time: String?) {
     companion object {
-        fun from(o: JSONObject) = BatchInfo(o.getString("key"), o.getString("name"), o.getString("about"), o.str("time"))
+        fun from(o: JSONObject) = BatchInfo(o.text("key"), o.text("name"), o.text("about"), o.str("time"))
     }
 }
 
@@ -147,9 +207,9 @@ data class ClassSession(
 
     companion object {
         fun from(o: JSONObject) = ClassSession(
-            o.getInt("id"), Instant.parse(o.getString("starts_at")), o.getInt("duration_min"), BatchInfo.from(o.getJSONObject("batch")),
-            o.str("meet_link"), o.getBoolean("has_link"), o.optBoolean("checked_in"), o.optBoolean("own_link"), o.optInt("joined"),
-            o.optString("curriculum").ifEmpty { null },
+            o.getInt("id"), Instant.parse(o.getString("starts_at")), o.intOrNull("duration_min") ?: 55, BatchInfo.from(o.getJSONObject("batch")),
+            o.str("meet_link"), o.optBoolean("has_link"), o.optBoolean("checked_in"), o.optBoolean("own_link"), o.optInt("joined"),
+            o.str("curriculum")?.ifEmpty { null },
         )
     }
 }
@@ -173,8 +233,9 @@ data class LibraryItem(val key: String, val type: String, val sanskrit: String, 
     private fun fold(text: String) = Normalizer.normalize(text.trim().lowercase(), Normalizer.Form.NFD).replace(Regex("\\p{Mn}+"), "")
 }
 
-/** One item of a curriculum: so many breaths, seconds, minutes, rounds or strokes, and how to do it. */
-data class PlanItem(val item: String, val dose: Int, val unit: String, val cue: String)
+/** One item of a curriculum: so many breaths, seconds, minutes, rounds or strokes, and how to do it. [dose] is null
+ *  when the owner left it empty or wrote words; the unit or the cue then says it alone. */
+data class PlanItem(val item: String, val dose: Int?, val unit: String, val cue: String)
 
 data class Curriculum(val key: String, val name: String, val about: String, val items: List<PlanItem>)
 
@@ -184,13 +245,12 @@ data class Curricula(val library: Map<String, LibraryItem>, val curricula: List<
 
     companion object {
         fun from(o: JSONObject) = Curricula(
-            o.getJSONArray("library").map {
-                LibraryItem(it.getString("key"), it.getString("type"), it.getString("sanskrit"), it.getString("name"), it.getString("english"),
-                    it.getJSONArray("aliases").let { a -> List(a.length()) { i -> a.getString(i) } })
+            o.list("library").map {
+                LibraryItem(it.text("key"), it.text("type"), it.text("sanskrit"), it.text("name"), it.text("english"), it.list("aliases").strings())
             }.associateBy { it.key },
-            o.getJSONArray("curricula").map { c ->
-                Curriculum(c.getString("key"), c.getString("name"), c.getString("about"),
-                    c.getJSONArray("items").map { PlanItem(it.getString("item"), it.getInt("dose"), it.getString("unit"), it.getString("cue")) })
+            o.list("curricula").map { c ->
+                Curriculum(c.text("key"), c.text("name"), c.text("about"),
+                    c.list("items").map { PlanItem(it.text("item"), it.intOrNull("dose"), it.text("unit"), it.text("cue")) })
             },
         )
     }
@@ -212,8 +272,6 @@ data class Trend(val early: Double, val recent: Double) {
 }
 
 private fun JSONObject.date(key: String): LocalDate? = str(key)?.let(LocalDate::parse)
-
-private fun JSONObject.intOrNull(key: String): Int? = if (isNull(key)) null else getInt(key)
 
 /** One item of a student's practice list (GET /me/asanas): how often in class and solo, the trend, strain or pain, the
  *  teacher's word. */
@@ -241,14 +299,16 @@ data class ItemHistory(val item: String, val inClass: Int, val solo: Int, val fi
     }
 }
 
-/** Practice on one's own, kept in memory until Finish: what was said about each item, the one in front of the student
- *  ([at]), each item's stopwatch time ([heldMs]), and since when the stopwatch has been running. Times are
- *  SystemClock.elapsedRealtime() milliseconds. [curriculum] is the sequence repeated, for its doses and cues. */
+/** Practice on one's own, kept on the phone until Finish: what was said about each item, the one in front of the
+ *  student ([at]), each item's stopwatch time ([heldMs], an hour at most), and since when the stopwatch has been
+ *  running. Times are SystemClock.elapsedRealtime() milliseconds. [curriculum] is the sequence repeated, for its doses
+ *  and cues. */
 data class SoloRun(val startedAt: Long, val curriculum: String?, val said: List<ItemFeedback>, val heldMs: List<Long>, val at: Int = 0,
     val runningSince: Long? = null) {
     val current get() = said[at]
 
-    fun held(now: Long) = heldMs[at] + (runningSince?.let { now - it } ?: 0)
+    /** The stopwatch stops at 60:00, as long as the server keeps. */
+    fun held(now: Long) = (heldMs[at] + (runningSince?.let { now - it } ?: 0)).coerceAtMost(MAX_HOLD_MS)
 
     fun toggled(now: Long) = if (runningSince == null) copy(runningSince = now) else stopped(now)
 
@@ -261,9 +321,31 @@ data class SoloRun(val startedAt: Long, val curriculum: String?, val said: List<
     /** What to send at Finish: each item with its stopwatch time, those with something timed or said. */
     fun entries() = said.mapIndexed { i, f -> f.copy(heldSeconds = (heldMs[i] / 1000).toInt()) }.filter { it.said }
 
+    /** The same run with its times moved by [ms]: after the phone restarted, elapsedRealtime counts from the new start. */
+    fun shifted(ms: Long) = copy(startedAt = startedAt + ms, runningSince = runningSince?.plus(ms))
+
+    /** The run as the phone keeps it, every note as typed so far. */
+    fun saved(): String = JSONObject().put("started_at", startedAt).put("curriculum", curriculum ?: JSONObject.NULL).put("at", at)
+        .put("running_since", runningSince ?: JSONObject.NULL).put("held_ms", JSONArray(heldMs))
+        .put("said", JSONArray(said.map { JSONObject().put("item", it.item).put("reaction", it.reaction ?: JSONObject.NULL).put("pain", it.pain).put("note", it.note) }))
+        .toString()
+
     companion object {
+        const val MAX_HOLD_MS = 3_600_000L
+
         fun start(items: List<String>, curriculum: String?, now: Long) =
             SoloRun(now, curriculum, items.map { ItemFeedback(it, null, false, "") }, items.map { 0L })
+
+        /** A run [saved] wrote, or null if the text is not one. */
+        fun restore(text: String): SoloRun? = try {
+            val o = JSONObject(text)
+            val said = o.getJSONArray("said").map { ItemFeedback(it.getString("item"), it.intOrNull("reaction"), it.optBoolean("pain"), it.text("note")) }
+            val held = o.getJSONArray("held_ms").let { a -> List(a.length()) { a.getLong(it) } }
+            SoloRun(o.getLong("started_at"), o.str("curriculum"), said, held, o.getInt("at"), if (o.isNull("running_since")) null else o.getLong("running_since"))
+                .takeIf { said.isNotEmpty() && held.size == said.size && it.at in said.indices }
+        } catch (e: JSONException) {
+            null
+        }
     }
 }
 
@@ -280,22 +362,23 @@ data class ClassReview(val curriculum: String?, val joined: Int, val answered: I
             o.getJSONArray("items").map { i ->
                 ItemReview(
                     i.getString("item"), (0 until 4).map { i.getJSONArray("reactions").getInt(it) },
-                    i.getJSONArray("pain").map { it.getString("name") to it.str("note") },
-                    i.getJSONArray("notes").map { it.getString("name") to it.getString("text") },
+                    i.list("pain").map { it.str("name") to it.str("note") },
+                    i.list("notes").map { it.str("name") to it.text("text") },
                 )
             },
         )
     }
 }
 
-/** One item of a class review: how many said each reaction (not yet … at ease), who felt strain or pain, the notes. */
-data class ItemReview(val item: String, val reactions: List<Int>, val pain: List<Pair<String, String?>>, val notes: List<Pair<String, String>>)
+/** One item of a class review: how many said each reaction (not yet … at ease), who felt strain or pain, the notes. A
+ *  name is null for a student no longer in the Sheet. */
+data class ItemReview(val item: String, val reactions: List<Int>, val pain: List<Pair<String?, String?>>, val notes: List<Pair<String?, String>>)
 
 data class Studio(val tagline: String, val teacherName: String, val teacherTitle: String, val teacherBio: String) {
     companion object {
         fun from(o: JSONObject): Studio {
-            val t = o.getJSONObject("teacher")
-            return Studio(o.getString("tagline"), t.getString("name"), t.getString("title"), t.getString("bio"))
+            val t = o.optJSONObject("teacher") ?: JSONObject()
+            return Studio(o.text("tagline"), t.text("name"), t.text("title"), t.text("bio"))
         }
     }
 }
@@ -325,17 +408,24 @@ data class StudioWords(
     }
 }
 
-/** [batch]: the student's batch, once placed; [sessions]: its coming classes. [afterCheckin]: the class whose after-class
- *  window is open; [afterSaid]: what the student said about it, if anything. */
-data class Home(val user: User, val batch: BatchInfo?, val studio: Studio, val sessions: List<ClassSession>, val afterCheckin: ClassSession?,
+/** [batch]: the student's batch, once placed; [sessions]: its coming classes. [afterClass]: the class whose after-class
+ *  window is open, whether or not the student checked in to it (its `checkedIn`); [afterSaid]: what the student said
+ *  about it, if anything. */
+data class Home(val user: User, val batch: BatchInfo?, val studio: Studio, val sessions: List<ClassSession>, val afterClass: ClassSession?,
     val afterSaid: Said?, val groupLink: String?) {
+    /** This home as it is once the student has checked in to [sessionId], or not. */
+    fun checkedIn(sessionId: Int, yes: Boolean) = copy(sessions = sessions.map { if (it.id == sessionId) it.copy(checkedIn = yes) else it })
+
     companion object {
         fun from(o: JSONObject): Home {
-            val after = if (o.isNull("after_checkin")) null else o.getJSONObject("after_checkin")
+            // after_class may be a class the student did not check in to; a server without it gives after_checkin alone.
+            val any = o.has("after_class")
+            val after = o.optJSONObject(if (any) "after_class" else "after_checkin")
             return Home(
-                User.from(o.getJSONObject("user")), if (o.isNull("batch")) null else BatchInfo.from(o.getJSONObject("batch")),
-                Studio.from(o.getJSONObject("studio")), o.getJSONArray("sessions").map(ClassSession::from),
-                after?.let(ClassSession::from), after?.takeUnless { it.isNull("said") }?.getJSONObject("said")?.let(Said::from), o.str("group_link"),
+                User.from(o.getJSONObject("user")), o.optJSONObject("batch")?.let(BatchInfo::from),
+                Studio.from(o.getJSONObject("studio")), o.list("sessions").map(ClassSession::from),
+                after?.let(ClassSession::from)?.let { if (any) it else it.copy(checkedIn = true) },
+                after?.optJSONObject("said")?.let(Said::from), o.str("group_link"),
             )
         }
     }
@@ -344,8 +434,8 @@ data class Home(val user: User, val batch: BatchInfo?, val studio: Studio, val s
 /** What a student said after a class: the mood, if given, and each item's answer. */
 data class Said(val mood: Int?, val items: List<ItemFeedback>) {
     companion object {
-        fun from(o: JSONObject) = Said(o.intOrNull("mood"), o.getJSONArray("items").map {
-            ItemFeedback(it.getString("item"), it.intOrNull("reaction"), it.getInt("pain") == 1, it.str("note").orEmpty())
+        fun from(o: JSONObject) = Said(o.intOrNull("mood"), o.list("items").map {
+            ItemFeedback(it.text("item"), it.intOrNull("reaction"), it.intOrNull("pain") == 1, it.text("note"))
         })
     }
 }
@@ -356,11 +446,12 @@ data class Stats(val classesJoined: Int, val streakDays: Int, val moodChange: Do
     }
 }
 
-/** A class the student joined, from GET /me/practice: when, its name, and the moods (1 to 5). */
-data class JoinedClass(val at: Instant, val name: String, val curriculum: String?, val moodBefore: Int, val moodAfter: Int?) {
+/** A class the student joined, from GET /me/practice: when, its name, and the moods (1 to 5). No mood before when the
+ *  student said how it went without checking in first. */
+data class JoinedClass(val at: Instant, val name: String, val curriculum: String?, val moodBefore: Int?, val moodAfter: Int?) {
     companion object {
         fun from(o: JSONObject) =
-            JoinedClass(Instant.parse(o.getString("at")), o.getString("class"), o.str("curriculum"), o.getInt("mood_before"), o.intOrNull("mood_after"))
+            JoinedClass(Instant.parse(o.getString("at")), o.text("class"), o.str("curriculum"), o.intOrNull("mood_before"), o.intOrNull("mood_after"))
     }
 }
 
@@ -371,7 +462,8 @@ data class SoloSession(val at: Instant, val minutes: Int, val items: List<String
     }
 }
 
-data class TeacherSettings(val groupLink: String?, val groupCode: String)
+/** The class group's link, if the teacher gave one, and the group code (null if the owner cleared it in the Sheet). */
+data class TeacherSettings(val groupLink: String?, val groupCode: String?)
 
 /** A batch with its everyday Meet link, for its classes without their own. */
 data class BatchLink(val info: BatchInfo, val meetLink: String?)
@@ -381,12 +473,12 @@ data class TeacherHome(val sessions: List<ClassSession>, val batches: List<Batch
 
     companion object {
         fun from(o: JSONObject): TeacherHome {
-            val s = o.getJSONObject("settings")
+            val s = o.optJSONObject("settings") ?: JSONObject()
             return TeacherHome(
-                o.getJSONArray("sessions").map(ClassSession::from),
-                o.getJSONArray("batches").map { BatchLink(BatchInfo.from(it), it.str("meet_link")) },
-                TeacherSettings(s.str("group_link"), s.getString("group_code")),
-                o.getInt("pending_students"),
+                o.list("sessions").map(ClassSession::from),
+                o.list("batches").map { BatchLink(BatchInfo.from(it), it.str("meet_link")) },
+                TeacherSettings(s.str("group_link"), s.str("group_code")),
+                o.optInt("pending_students"),
             )
         }
     }
@@ -394,7 +486,7 @@ data class TeacherHome(val sessions: List<ClassSession>, val batches: List<Batch
 
 data class Student(val user: User, val joined: Int, val intake: Intake?) {
     companion object {
-        fun from(o: JSONObject) = Student(User.from(o), o.getInt("joined"), if (o.isNull("intake")) null else Intake.from(o.getJSONObject("intake")))
+        fun from(o: JSONObject) = Student(User.from(o), o.optInt("joined"), o.optJSONObject("intake")?.let(Intake::from))
     }
 }
 
@@ -408,8 +500,8 @@ data class Intake(val age: Int, val heightCm: Int, val weightKg: Int, val food: 
 
     companion object {
         fun from(o: JSONObject) = Intake(
-            o.getInt("age"), o.getInt("height_cm"), o.getInt("weight_kg"), o.getString("food"), o.str("meals"), o.getJSONArray("pain").strings(),
-            o.str("pain_note"), o.getJSONArray("ratings").map { IntakeRating(it.getString("item"), it.intOrNull("reaction"), it.getInt("pain") == 1) },
+            o.optInt("age"), o.optInt("height_cm"), o.optInt("weight_kg"), o.text("food"), o.str("meals"), o.list("pain").strings(),
+            o.str("pain_note"), o.list("ratings").map { IntakeRating(it.text("item"), it.intOrNull("reaction"), it.intOrNull("pain") == 1) },
             o.str("suggested_batch"),
         )
     }
@@ -432,9 +524,9 @@ data class Insights(
         fun from(o: JSONObject) = Insights(
             o.getJSONObject("students").getInt("approved"), o.dbl("mood_change"), o.getInt("mood_pairs"),
             o.getJSONArray("sessions").map {
-                SessionInsight(it.getInt("id"), Instant.parse(it.getString("starts_at")), it.getString("class"), it.getInt("joined"), it.dbl("mood_before"), it.dbl("mood_after"))
+                SessionInsight(it.getInt("id"), Instant.parse(it.getString("starts_at")), it.text("class"), it.optInt("joined"), it.dbl("mood_before"), it.dbl("mood_after"))
             },
-            o.getJSONArray("feedback").map { Feedback(it.getString("name"), it.getString("text")) },
+            o.list("feedback").map { Feedback(it.text("name"), it.text("text")) },
         )
     }
 }
@@ -451,6 +543,6 @@ data class Note(val id: Int, val text: String, val savedAt: Instant, val sharedI
 /** A note a student shared with the teacher, as the teacher's Students screen shows it (GET /teacher/shared). */
 data class SharedNote(val student: String, val text: String, val sharedAt: Instant) {
     companion object {
-        fun from(o: JSONObject) = SharedNote(o.getString("name"), o.getString("text"), Instant.parse(o.getString("created_at")))
+        fun from(o: JSONObject) = SharedNote(o.text("name"), o.text("text"), Instant.parse(o.getString("created_at")))
     }
 }

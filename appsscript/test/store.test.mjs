@@ -26,6 +26,43 @@ test('the envelope: query in the path or apart, the token with or without "Beare
   assert.equal(post(b, JSON.stringify({ method: 'GET', path: '/me/practice', query: { days: 30 }, token: s.token })).body.detail, 'pending');
 });
 
+test('a write sent again with the same request id is answered as the first time, and written once', () => {
+  const b = freshBackend();
+  const { t, code } = teacherAndCode(b);
+  const s = signup(b, '9000000002', { code });
+  const rows = (tab) => b.ss.getSheetByName(tab).rows().length - 1;
+  const twice = (method, path, token, body, requestId) => [1, 2].map(() => b.call(method, path, { token, body, requestId }));
+
+  const solo = { minutes: 10, entries: [{ item: 'vajrasana', hold_s: 60, reaction: 3 }] };
+  const [first, again] = twice('POST', '/me/solo', s.token, solo, 'solo-1');
+  assert.deepEqual([first, again], [first, first]);
+  assert.deepEqual([rows('solo_sessions'), rows('practice')], [1, 1]);
+
+  const feedback = { item: 'vajrasana', text: 'Keep the knees together' };
+  const [said, saidAgain] = twice('POST', '/teacher/students/' + s.user.id + '/feedback', t.token, feedback, 'note-1');
+  assert.deepEqual([said.body, saidAgain.body], [{ ok: true, id: 1 }, { ok: true, id: 1 }]);
+  assert.equal(rows('asana_feedback'), 1);
+
+  const move = { batch: 'intermediate', note: 'Ready for longer holds' };
+  const [moved, movedAgain] = twice('PUT', '/teacher/students/' + s.user.id + '/batch', t.token, move, 'move-1');
+  assert.deepEqual(movedAgain, moved);
+  assert.equal(rows('batch_changes'), 1);
+
+  b.call('POST', '/me/solo', { token: s.token, body: solo, requestId: 'solo-2' });
+  b.call('POST', '/me/solo', { token: s.token, body: solo });
+  assert.equal(rows('solo_sessions'), 3, 'a new id, or none, is a new practice');
+  const other = signup(b, '9000000003', { code });
+  b.call('POST', '/me/solo', { token: other.token, body: solo, requestId: 'solo-1' });
+  assert.equal(rows('solo_sessions'), 4, 'the id is kept per login');
+  assert.equal(b.call('POST', '/me/solo', { token: s.token, body: { minutes: 1, entries: [{ item: 'tadasana' }] }, requestId: 'empty' }).body.detail,
+    'nothing_said');
+  b.call('POST', '/me/solo', { token: s.token, body: solo, requestId: 'empty' });
+  assert.equal(rows('solo_sessions'), 5, 'a refusal is not kept: the same id can try again');
+  b.state.offsetMs += 11 * 60000;
+  b.call('POST', '/me/solo', { token: s.token, body: solo, requestId: 'solo-1' });
+  assert.equal(rows('solo_sessions'), 6, 'kept ten minutes');
+});
+
 test('an unknown path is a 404, a wrong method a 405', () => {
   const b = freshBackend();
   assert.deepEqual(b.call('GET', '/nope'), { status: 404, body: { detail: 'Not Found' } });

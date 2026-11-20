@@ -39,6 +39,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import com.sattchittanand.yoga.AppViewModel
 import com.sattchittanand.yoga.ClassSession
 import com.sattchittanand.yoga.R
@@ -60,7 +63,9 @@ fun rememberNow(): Instant {
     return now
 }
 
-/** The student's day: how the last class went, the next class and its sequence, the week ahead, and the studio. */
+/** The student's day: how the last class went, the next class and its sequence, the week ahead, and the studio. While
+ *  the next class is within the hour or under way, the tab is read again every two minutes, so a link the teacher has
+ *  just shared appears; coming back to the app reads it again too ([AppViewModel.onResume]). */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TodayScreen(vm: AppViewModel) {
@@ -69,8 +74,20 @@ fun TodayScreen(vm: AppViewModel) {
     val words = vm.words()
     var afterClass by rememberSaveable { mutableStateOf(false) }
     var aboutMe by rememberSaveable { mutableStateOf(false) }
+    val next = home.sessions.firstOrNull()
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    LaunchedEffect(next?.id) {
+        if (next == null) return@LaunchedEffect
+        lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) { // only while the app is in front
+            while (true) {
+                delay(2 * 60_000)
+                val at = Instant.now()
+                if (at >= next.startsAt.minusSeconds(60 * 60) && at < next.endsAt) vm.refreshHome()
+            }
+        }
+    }
     if (aboutMe || vm.askIntake) return IntakeScreen(vm) { aboutMe = false; vm.askIntake = false }
-    val after = home.afterCheckin
+    val after = home.afterClass
     if (afterClass && after != null) {
         BackHandler { afterClass = false }
         AfterClassScreen(vm, after, home.afterSaid) { afterClass = false }
@@ -83,9 +100,11 @@ fun TodayScreen(vm: AppViewModel) {
             home.batch?.let { Text(stringResource(R.string.your_batch, it.name), style = MaterialTheme.typography.titleMedium, color = Palette.moss) }
 
             if (after != null && home.afterSaid == null) {
+                // One who did not check in may have joined from the class's message: asked whether they came.
                 SectionCard(tint = Palette.saffronLight) {
-                    Text(stringResource(R.string.how_did_it_go), style = MaterialTheme.typography.titleMedium)
-                    Text(after.batch.name, style = MaterialTheme.typography.bodyMedium, color = Palette.muted)
+                    Text(stringResource(if (after.checkedIn) R.string.how_did_it_go else R.string.were_you_in_class), style = MaterialTheme.typography.titleMedium)
+                    Text("${after.batch.name} · ${dayLabel(after.startsAt)} · ${timeLabel(after.startsAt)}", style = MaterialTheme.typography.bodyMedium,
+                        color = Palette.muted)
                     Button(onClick = { afterClass = true }) { Text(stringResource(R.string.tell_teacher, LocalTeacher.current)) }
                 }
             } else if (after != null) { // said already: it can be changed until 12 hours after class
@@ -99,7 +118,7 @@ fun TodayScreen(vm: AppViewModel) {
             }
             if (!home.user.isApproved) PendingCard { aboutMe = true }
 
-            home.sessions.firstOrNull()?.let { NextClassCard(vm, it, now) }
+            next?.let { NextClassCard(vm, it, now) }
 
             home.groupLink?.let { link ->
                 val context = LocalContext.current
@@ -134,6 +153,9 @@ fun TodayScreen(vm: AppViewModel) {
     }
 }
 
+/** The next class. Its check-in (the mood before) is offered from an hour before it, with or without a link: Join asks
+ *  it, then opens the class at once while the check-in goes in the background; with no link yet, the faces are shown
+ *  as they are. */
 @Composable
 private fun NextClassCard(vm: AppViewModel, s: ClassSession, now: Instant) {
     val context = LocalContext.current
@@ -141,6 +163,7 @@ private fun NextClassCard(vm: AppViewModel, s: ClassSession, now: Instant) {
     val live = now >= s.startsAt && now < s.endsAt
     // The "before" check-in opens an hour before class, as the server allows; earlier, Join just opens the link.
     val checkinOpen = now >= s.startsAt.minusSeconds(60 * 60) && now <= s.endsAt
+    val link = s.meetLink
     SectionCard(tint = Palette.moss) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Label(stringResource(R.string.next_class), Palette.mossLight)
@@ -158,14 +181,20 @@ private fun NextClassCard(vm: AppViewModel, s: ClassSession, now: Instant) {
         }
         if (s.checkedIn) Pill(stringResource(R.string.checked_in), Palette.mossLight, Palette.moss)
 
-        val link = s.meetLink
+        if (askMood || (link == null && checkinOpen && !s.checkedIn)) {
+            SectionCard(tint = Palette.paper) {
+                Text(stringResource(R.string.how_feel_before), style = MaterialTheme.typography.titleMedium)
+                MoodPicker(null) { mood ->
+                    vm.checkIn(s.id, mood)
+                    askMood = false
+                    link?.let { openLink(context, it) }
+                }
+                if (link != null) TextButton(onClick = { askMood = false; openLink(context, link) }) { Text(stringResource(R.string.skip)) }
+            }
+        }
         when {
             link == null -> Text(stringResource(R.string.link_soon), style = MaterialTheme.typography.bodyMedium, color = Palette.mossLight)
-            askMood -> SectionCard(tint = Palette.paper) {
-                Text(stringResource(R.string.how_feel_before), style = MaterialTheme.typography.titleMedium)
-                MoodPicker(null) { mood -> vm.checkInBefore(s.id, mood) { askMood = false; openLink(context, link) } }
-                TextButton(onClick = { askMood = false; openLink(context, link) }) { Text(stringResource(R.string.skip)) }
-            }
+            askMood -> {}
             else -> Button(
                 onClick = { if (s.checkedIn || !checkinOpen) openLink(context, link) else askMood = true },
                 colors = ButtonDefaults.buttonColors(containerColor = Palette.saffron),

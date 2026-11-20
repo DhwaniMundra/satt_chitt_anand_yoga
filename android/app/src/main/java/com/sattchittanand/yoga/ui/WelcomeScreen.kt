@@ -43,7 +43,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.sattchittanand.yoga.AppViewModel
 import com.sattchittanand.yoga.BuildConfig
+import com.sattchittanand.yoga.Limits
 import com.sattchittanand.yoga.R
+import com.sattchittanand.yoga.limitedTo
 
 /** The server address, folded away under a small link: a debug build can be pointed at a laptop on the Wi-Fi. */
 @Composable
@@ -142,10 +144,12 @@ fun WelcomeScreen(vm: AppViewModel, onLanguage: (String) -> Unit) {
             }
         }
         if (signup) {
-            OutlinedTextField(name, { name = it }, label = { Text(stringResource(R.string.name)) }, singleLine = true, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(name, { name = it.limitedTo(Limits.NAME) }, label = { Text(stringResource(R.string.name)) }, singleLine = true,
+                modifier = Modifier.fillMaxWidth())
         }
         OutlinedTextField(
             phone, { phone = it }, label = { Text(stringResource(R.string.phone)) }, singleLine = true,
+            supportingText = { Text(stringResource(R.string.phone_hint)) },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone), modifier = Modifier.fillMaxWidth(),
         )
         OutlinedTextField(

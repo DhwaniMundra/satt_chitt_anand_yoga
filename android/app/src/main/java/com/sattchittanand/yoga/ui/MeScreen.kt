@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
@@ -34,8 +35,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.sattchittanand.yoga.AppViewModel
+import com.sattchittanand.yoga.Limits
 import com.sattchittanand.yoga.Note
 import com.sattchittanand.yoga.R
 
@@ -63,15 +67,50 @@ fun MeScreen(vm: AppViewModel, onLanguage: (String) -> Unit) {
 
         SectionCard {
             Text(stringResource(R.string.feedback_title), style = MaterialTheme.typography.titleMedium)
-            OutlinedTextField(feedback, { feedback = it }, placeholder = { Text(stringResource(R.string.feedback_hint)) }, minLines = 3, modifier = Modifier.fillMaxWidth())
+            LimitedField(feedback, { feedback = it }, Limits.FEEDBACK, placeholder = { Text(stringResource(R.string.feedback_hint)) }, minLines = 3)
             Button(onClick = { vm.sendFeedback(feedback, thanks) { feedback = "" } }, enabled = feedback.isNotBlank() && !vm.busy) {
                 Text(stringResource(R.string.send))
             }
         }
 
+        ChangePassword(vm)
         OutlinedButton(onClick = vm::logout, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.logout)) }
         Spacer(Modifier.height(8.dp))
     }
+}
+
+/** The student's own new password: the current one, then the new one twice. Folded away until asked for. */
+@Composable
+private fun ChangePassword(vm: AppViewModel) {
+    var open by rememberSaveable { mutableStateOf(false) }
+    if (!open) return OutlinedButton(onClick = { open = true }, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.change_password)) }
+    var current by rememberSaveable { mutableStateOf("") }
+    var new by rememberSaveable { mutableStateOf("") }
+    var again by rememberSaveable { mutableStateOf("") }
+    val changed = stringResource(R.string.password_changed)
+    val differ = again.isNotEmpty() && again != new
+    SectionCard {
+        Text(stringResource(R.string.change_password), style = MaterialTheme.typography.titleMedium)
+        PasswordField(current, { current = it }, R.string.current_password)
+        PasswordField(new, { new = it }, R.string.password)
+        PasswordField(again, { again = it }, R.string.new_password_again, if (differ) R.string.passwords_differ else null)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(onClick = { vm.changePassword(current, new, changed) { open = false } },
+                enabled = current.isNotEmpty() && new.length >= Limits.PASSWORD_MIN && again == new && !vm.busy) {
+                Text(stringResource(R.string.save))
+            }
+            TextButton(onClick = { open = false }) { Text(stringResource(R.string.cancel)) }
+        }
+    }
+}
+
+@Composable
+private fun PasswordField(value: String, onChange: (String) -> Unit, label: Int, problem: Int? = null) {
+    OutlinedTextField(
+        value, onChange, label = { Text(stringResource(label)) }, singleLine = true, modifier = Modifier.fillMaxWidth(), isError = problem != null,
+        visualTransformation = PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+        supportingText = if (problem == null) null else ({ Text(stringResource(problem)) }),
+    )
 }
 
 /** The student's health notes, kept on this phone: written here, or saved by the companion ("Remember that…"). */
@@ -119,7 +158,7 @@ private fun HealthNotes(vm: AppViewModel) {
             }
         }
         HorizontalDivider(color = Palette.line)
-        OutlinedTextField(draft, { draft = it }, placeholder = { Text(stringResource(R.string.note_hint)) }, minLines = 2, modifier = Modifier.fillMaxWidth())
+        LimitedField(draft, { draft = it }, Limits.HEALTH_NOTE, placeholder = { Text(stringResource(R.string.note_hint)) }, minLines = 2)
         Button(onClick = { vm.addNote(draft); draft = "" }, enabled = draft.isNotBlank()) { Text(stringResource(R.string.save)) }
     }
 }

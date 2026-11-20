@@ -44,6 +44,11 @@ Open the Sheet → Extensions → Apps Script, select everything in `Code.gs`, p
 version** → Deploy. The URL stays the same. Running `setup` again is always safe: it adds what is missing and leaves
 the data, the codes, the batches, the curriculum and an existing Dashboard alone.
 
+A Sheet made before v0.9.1 needs `setup` run once after pasting: it adds the `app_link` row to `settings` (optional:
+paste a download link for the app into its value, and the invite says where to get the app) and makes the `time`
+column of `batches` plain text, so a time typed there stays as typed. A time Sheets had already taken as a time of day
+is written back as the text it showed. The app of v0.9 works with this backend as it is.
+
 A Sheet made before v1.0 needs these steps once, after pasting the new `Code.gs`:
 1. Run `setup`. It adds the `batches` and `batch_changes` tabs, the hidden `intake` and `intake_ratings` tabs, and the
    new columns, and leaves the data alone.
@@ -70,8 +75,13 @@ phone app ◀──── HTTP 200 {"status": 401, "body": {...}} ────�
   it, in step with its own writes. Columns are found by their header names.
 - **Writes take the script lock** (`LockService.getScriptLock()`, waiting up to 20 s, else `503 busy`). A route that
   writes holds it from start to finish, so what it reads and what it writes are consistent. Sign-up, login and a
-  password reset do their slow password hash *before* taking the lock. `/home` and `/teacher/home` take it only on the
-  first visit of a day, to add that day's classes. Writes are flushed before the lock is let go.
+  password reset do their slow password hash *before* taking the lock. A check-in, which many students send as class
+  starts, reads everything else before the lock and, under it, only the check-ins tab, read afresh, and its one write.
+  `/home` and `/teacher/home` take it only on the first visit of a day, to add that day's classes. Writes are flushed
+  before the lock is let go.
+- **A write sent twice is written once.** The app sends a `request_id` with each write that creates something (a
+  practice on one's own, feedback, a batch move), the same for each try of the same action. The answer is kept for ten
+  minutes in `CacheService`, by the login token's hash and the id, and a repeat gets it back instead of writing again.
 - **Ids** are the largest id + 1, worked out under the lock.
 - **Batches and their classes**: students are placed in batches (Beginner, Intermediate, Advanced, Pain management
   as seeded), each meeting on its own days at its own time with its own Meet link, as the `batches` tab says. The
@@ -100,6 +110,7 @@ a POST to the web app URL whose body is one JSON object, and every answer is HTT
 | `query` | object, optional | Query parameters, e.g. `{"lang": "hi", "days": 30}`. Values are read as text; they win over the same name in `path`. |
 | `token` | string, optional | The login token from sign-up or login, with or without `Bearer `. Empty or absent when signed out. |
 | `body` | object or `null`, optional | The JSON body of the route. |
+| `request_id` | string, optional | For a write: the same id for each try of the same action, so it is written once (above). |
 
 **Answer:**
 
@@ -110,7 +121,8 @@ a POST to the web app URL whose body is one JSON object, and every answer is HTT
 `status` is the HTTP status of the answer and `body` its JSON: on success the route's object (`status` 200), on an
 error `{"detail": "<code>"}` with the same codes the app already translates (`bad_login`, `pending`, `no_session`,
 `checkin_closed`, ...), or for invalid inputs `status` 422 with `detail` a list of problems
-`[{"type", "loc", "msg", "input"}]` (the app shows a list as a generic error). Besides the routes' own errors:
+`[{"type", "loc", "msg", "input"}]` (the app names the field from `loc`). Text lengths are counted in code points, as
+the app counts them. Besides the routes' own errors:
 
 | status | body | when |
 |---|---|---|
@@ -140,38 +152,39 @@ curl -sL "$URL" -H 'Content-Type: text/plain' \
 |---|---|---|---|
 | `GET /health` | anyone | | `{ok, assistant: "off", model: null}` |
 | `GET /studio?lang=` | anyone | | the studio in `en`, `hi` or `mr`: name, tagline, teacher, `batches: [{key, name, about, days, time}]` |
-| `POST /auth/signup` | anyone | yes | `{name, phone, password, role, code, lang}` → `{token, user}`. The phone is normalised (a bare 10-digit number is Indian). One teacher, with the teacher code (any case; 5 wrong in 15 minutes lock it). A student needs the group code, from the class's WhatsApp invite (any case; 5 wrong for a number in 15 minutes lock it), and waits, pending, until the teacher places them in a batch. Errors: `bad_phone`, `teacher_exists`, `bad_teacher_code`, `too_many_attempts`, `bad_group_code`, `phone_taken` |
+| `POST /auth/signup` | anyone | yes | `{name, phone, password, role, code, lang}` → `{token, user}`. The phone is normalised (a bare 10-digit number is Indian, "+91 0…" is the same as "0…", a number from abroad starts with + and its country code). One teacher, with the teacher code (any case; 5 wrong in 15 minutes lock it). A student needs the group code, which the teacher gives with the invite (any case, and spaces, stars or a full stop around it ignored; 5 wrong for a number in 15 minutes lock it), and waits, pending, until the teacher places them in a batch. Errors: `bad_phone`, `teacher_exists`, `bad_teacher_code`, `too_many_attempts`, `bad_group_code`, `phone_taken` |
 | `POST /auth/login` | anyone | yes (a token) | `{phone, password}` → `{token, user}`; `bad_login`; 5 failures for a number in 15 minutes → `too_many_attempts` |
 | `POST /auth/logout` | anyone | yes | ends this token → `{ok: true}` |
-| `GET /me` | signed in | | `{user, stats: {classes_joined, streak_days, mood_change, mood_pairs}}` |
+| `GET /me` | signed in | | `{user, stats: {classes_joined, streak_days, mood_change, mood_pairs}}`. `streak_days` is the run of classes in a row the student came to: the classes of the batch they were in at the time of each, and any other they joined; a class still to come or under way does not break it, nor one nobody came to |
 | `POST /me` | signed in | yes | `{name?, lang?}` → `{user}` |
+| `POST /me/password` | signed in | yes | `{current_password, new_password}` (6 to 200) → `{ok}`: the current password is checked under the login's brake (5 wrong in 15 minutes, counted with the logins); this login stays signed in and every other is signed out; `bad_password`, `too_many_attempts` |
 | `GET /me/intake` | signed in | | `{intake}`: the student's own answers about themselves, or null before they fill them |
-| `PUT /me/intake` | student | yes | `{age, height_cm, weight_kg, food, meals?, pain?, pain_note?, ratings: [{item, reaction, pain}]}` → `{intake}`: filled after sign-up (pending) or later; a second send replaces the first. `food` one of `vegetarian`, `eggetarian`, `non_vegetarian`, `vegan`; `pain` areas like `knee, back` from knee, back, neck, shoulder, hip, other (`bad_pain_area`); `ratings` for the assessment asanas of `content/studio.json` only (`unknown_item`); `students_only`. The intake comes back with `suggested_batch`: any pain, Pain management; four or more poses of the self-assessment steady or at ease, Intermediate; else Beginner, never Advanced |
+| `PUT /me/intake` | student | yes | `{age, height_cm, weight_kg, food, meals?, pain?, pain_note?, ratings: [{item, reaction, pain}]}` → `{intake}`: age 5 to 100, height 80 to 230 cm, weight 15 to 250 kg, meals and the pain note up to 600; filled after sign-up (pending) or later; a second send replaces the first. `food` one of `vegetarian`, `eggetarian`, `non_vegetarian`, `vegan`; `pain` areas like `knee, back` from knee, back, neck, shoulder, hip, other (`bad_pain_area`); `ratings` for the assessment asanas of `content/studio.json` only (`unknown_item`); `students_only`. The intake comes back with `suggested_batch`: any pain, Pain management; four or more poses of the self-assessment steady or at ease, Intermediate; else Beginner, never Advanced |
 | `GET /me/practice?days=&lang=` | approved student, teacher | | the student's classes over the last `days` (1 to 90, default 7) with the sums done: `{period_days, classes_joined, average_mood_before, average_mood_after, by_class, classes, solo, items_in_class, items_on_own}`, moods from 1 (very low) to 5 (great), each class's `date` its India date (`2026-11-16`), `at` its start (ISO time, for the phone to name the day in its own time zone) and its `curriculum`; `solo` lists the sessions on one's own, `[{date, at, minutes, items}]`, the item names in `lang`; `items_in_class` and `items_on_own` the five items practised most in the period in class and on one's own, kept apart, `[{asana, times, average_reaction, pain_times}]`, each average reaction from 1 (not yet) to 4 (at ease); `pending` |
-| `POST /me/solo` | approved student | yes | practice on one's own: `{minutes, entries: [{item, hold_s, reaction, pain, note}]}` → `{ok, id, saved}`. The server dates it (it ends now and began `minutes` ago, up to 240); `hold_s` is the stopwatch's seconds (up to 3600); an item with nothing timed or said is not kept; `nothing_said` when none is left, `unknown_item` |
+| `POST /me/solo` | approved student | yes | practice on one's own: `{minutes, entries: [{item, hold_s, reaction, pain, note}]}` → `{ok, id, saved}`. The server dates it (it ends now and began `minutes` ago, up to 240); `hold_s` is the stopwatch's seconds (a longer hold than 3600 is kept as 3600); a note is up to 1000; an item with nothing timed or said is not kept; `nothing_said` when none is left, `unknown_item` |
 | `GET /me/asanas` | approved student, teacher | | `{items: [{item, in_class, solo, last, reaction_trend, pain_times, teacher_said}]}`: each item the student practised, in class or on their own, or had feedback on: those with strain or pain first, then those with the teacher's feedback (the latest first), then the most practised; `teacher_said` is the date of the latest feedback |
 | `GET /me/asanas/{item}` | approved student, teacher | | one item's history, worked out in code: `{item, in_class, solo, first, last, reaction_trend: {early_average, recent_average, each}, holds: {recent_seconds, longest_seconds}, strain_or_pain: {times, last}, teacher_said: {date, text}, your_notes: [{date, text}], entries: [{date, at, kind, hold_s, reaction, pain, note}], feedback: [{date, at, text}]}`, `kind` being `class` or `solo`, `date` the India date and `at` the moment. The trend sets the first `each` reactions against the latest `each` (up to three), in class and on one's own together; `holds` are the stopwatch's, on one's own |
-| `POST /me/shared` | approved student | yes | `{text}` (1 to 500) → `{ok, id}`; the same words again return the same id; `pending`, `empty_note` |
-| `GET /home?lang=` | signed in | the day's classes, once | `{user, batch, studio, sessions, after_checkin, group_link}`: `sessions` are the student's batch's coming classes (none before they are placed), each `{id, starts_at, duration_min, batch: {key, name, about, days, time}, meet_link, has_link, checked_in, curriculum}`, links only for approved students. `after_checkin` is the last class the student checked in to whose after-class window is open (from 10 minutes before its end to 12 hours after), with `said`: null before the student answers, then `{mood, items: [{item, reaction, pain, note}]}`, so the app can change it (a second send replaces the first) |
-| `GET /curricula?lang=` | signed in | | `{library: [{key, type, level, sanskrit, name, english, aliases}], curricula: [{key, name, level, about, items: [{item, dose, unit, cue}]}]}`, from the curriculum tabs, names, about and cues in `lang` |
-| `POST /sessions/{session_id}/checkin` | approved student | yes | `{phase: before\|after, mood: 1..5}` → `{ok, stats}`. "before" from an hour before class to its end; "after" from 10 minutes before the end to 12 hours after, once checked in before; `pending`, `no_session`, `checkin_closed` |
-| `POST /sessions/{session_id}/practice` | approved student | yes | `{entries: [{item, reaction: 1..4\|null, pain: 0\|1, note?}]}` (at most 60) → `{ok, saved}`: how each item went, replacing what was sent before for this class; entries with nothing said are not kept. Open when the "after" check-in is; `checkin_closed`, `unknown_item`, `pending`, `no_session` |
+| `POST /me/shared` | approved student | yes | `{text}` (1 to 1000) → `{ok, id}`; the same words again return the same id; `pending`, `empty_note` |
+| `GET /home?lang=` | signed in | the day's classes, once | `{user, batch, studio, sessions, after_checkin, after_class, group_link}`: `sessions` are the student's batch's coming classes (none before they are placed), each `{id, starts_at, duration_min, batch: {key, name, about, days, time}, meet_link, has_link, checked_in, curriculum}`, links only for approved students. `after_class` is the latest class of the student's batch, or one they checked in to, whose after-class window is open (from 10 minutes before its end to 12 hours after), with `checked_in` and `said`: null before the student answers, then `{mood, items: [{item, reaction, pain, note}]}`, so the app can change it (a second send replaces the first). `after_checkin` is the same for the classes checked in to only, for the app of v0.9. `group_link` is the class group's, if the teacher gave one |
+| `GET /curricula?lang=` | signed in | | `{library: [{key, type, level, sanskrit, name, english, aliases}], curricula: [{key, name, level, about, items: [{item, dose, unit, cue}]}]}`, from the curriculum tabs, names, about and cues in `lang`; `dose` is a whole number ("5 breaths" in the cell is 5), or null for an empty or worded cell |
+| `POST /sessions/{session_id}/checkin` | approved student | yes | `{phase: before\|after, mood: 1..5}` → `{ok, stats}`. "before" from an hour before class to its end, for the student's own batch (`other_batch`); "after" from 10 minutes before the end to 12 hours after, for a class checked in to or of the student's batch: without a check-in before, it records that they came, with no mood before. `pending`, `no_session`, `checkin_closed` |
+| `POST /sessions/{session_id}/practice` | approved student | yes | `{entries: [{item, reaction: 1..4\|null, pain: 0\|1, note?}]}` (at most 60, notes up to 1000) → `{ok, saved}`: how each item went, replacing what was sent before for this class; entries with nothing said are not kept. Open when the "after" check-in is, and records coming in the same way; `checkin_closed`, `unknown_item`, `pending`, `no_session` |
 | `POST /feedback` | signed in | yes | `{screen, text}` → `{ok}` |
 | `GET /teacher/home?lang=` | teacher | the day's classes, once | `{sessions, batches, settings, pending_students}`: `sessions` are the classes of the next day that has some left (today, or tomorrow once today's are over), every batch's, each with `own_link`, `joined` and `curriculum`; `batches` with their everyday `meet_link` |
-| `PUT /teacher/batches/{key}` | teacher | yes | `{meet_link}` → `{ok, meet_link}`: the batch's everyday link, for its classes without their own; `bad_meet_link`, `no_batch` |
-| `PUT /teacher/sessions/{session_id}?lang=` | teacher | yes | `{meet_link}` (Meet or Zoom; `https://` added) → `{text, url, group_link}`; `bad_meet_link`, `no_session` |
-| `GET /teacher/sessions/{session_id}/share?lang=` | teacher | | the WhatsApp message `{text, url, group_link}`; `no_link`, `no_session` |
+| `PUT /teacher/batches/{key}` | teacher | yes | `{meet_link}` → `{ok, meet_link}`: the batch's everyday link, for its classes without their own, checked and made plain as below; empty or null removes it; `bad_meet_link`, `no_batch` |
+| `PUT /teacher/sessions/{session_id}?lang=` | teacher | yes | `{meet_link}` → `{text}`, the class's message. A video call link, made plain: Google Meet (`https://meet.google.com/abc-defg-hij`, query, slash and capitals dropped; `g.co/meet/…` too), Zoom (`/j/<id>`, keeping `pwd`, or `/my/<name>`, on any `zoom.us` address), Microsoft Teams (`teams.microsoft.com`, `teams.live.com`) or Jitsi (`meet.jit.si/<room>`); `https://` added, words around it skipped; `bad_meet_link`, `no_session` |
+| `GET /teacher/sessions/{session_id}/share?lang=` | teacher | | the class's message `{text}`, plain text for any app; `no_link`, `no_session` |
 | `PUT /teacher/sessions/{session_id}/curriculum` | teacher | yes | `{curriculum}` → `{ok, curriculum}`. A class without its own follows its batch's default curriculum (the `batches` tab), else the first in the `curricula` tab; `no_curriculum`, `no_session` |
-| `GET /teacher/sessions/{session_id}/practice` | teacher | | how the class went: `{id, starts_at, curriculum, joined, answered, items: [{item, reactions: [not yet, with effort, steady, at ease], pain: [{name, note}], notes: [{name, text}]}]}`, items with strain or pain first, then the plan's order |
-| `PUT /teacher/settings` | teacher | yes | `{group_link?}`, checked before it is saved → `{group_link, group_code}` |
+| `GET /teacher/sessions/{session_id}/practice?lang=` | teacher | | how the class went: `{id, starts_at, curriculum, joined, answered, items: [{item, reactions: [not yet, with effort, steady, at ease], pain: [{name, note}], notes: [{name, text}]}]}`, items with strain or pain first, then the plan's order; a student whose row was deleted is "A former student", in `lang` |
+| `PUT /teacher/settings` | teacher | yes | `{group_link?}` → `{group_link, group_code}`: the class group's link, optional. Any https link (a Telegram or Signal group, say; a WhatsApp invite is kept without its query), checked before it is saved (`bad_group_link`); empty or null removes it; left out, it stays |
 | `POST /teacher/group_code` | teacher | yes | a new group code → `{group_code}` |
-| `GET /teacher/invite?lang=` | teacher | | `{text, url, group_link}` |
+| `GET /teacher/invite?lang=` | teacher | | `{text}`: the invite, plain text for any app, with the group code and, once the owner sets `app_link` in the settings tab, where to get the app |
 | `GET /teacher/students` | teacher | | `{students: [user + joined, created_at, intake]}`, pending first, then newest; `intake` as `/me/intake` gives it, with `suggested_batch` |
-| `PUT /teacher/students/{user_id}/batch` | teacher | yes | `{batch, note?}` → `{ok, student}`: places the student in the batch ("Approve into a batch" for a pending one, "Move to batch" after a review), approved from then; logged in `batch_changes`; `no_batch`, `no_student` |
+| `PUT /teacher/students/{user_id}/batch` | teacher | yes | `{batch, note?}` (the note up to 600) → `{ok, student}`: places the student in the batch ("Approve into a batch" for a pending one, "Move to batch" after a review), approved from then; logged in `batch_changes`; `no_batch`, `no_student` |
 | `POST /teacher/students/{user_id}/status` | teacher | yes | `{status: approved\|rejected}` → `{ok}`: removes a student, or takes a removed one back into their batch; `needs_batch` for one never placed, `no_student` |
 | `GET /teacher/students/{user_id}/asanas`, `…/asanas/{item}` | teacher | | the same as `/me/asanas` and `/me/asanas/{item}`, for that student; `no_student` |
 | `POST /teacher/students/{user_id}/feedback` | teacher | yes | `{item, text}` → `{ok, id}`: the teacher's word on one item, which the student sees with its history; `unknown_item`, `no_student` |
-| `POST /teacher/students/{user_id}/password` | teacher | yes | a new 8-letter password, the student signed out everywhere → `{password}`; `no_student` |
+| `POST /teacher/students/{user_id}/password` | teacher | yes | a new 8-letter password, the student signed out everywhere → `{password}`, for the teacher to pass on (the student can change it from the Me tab); `no_student` |
 | `GET /teacher/insights?lang=` | teacher | | the last 14 days of classes (named in `lang`), mood change, student counts, the last 20 feedback notes; `questions.count` is 0 |
 | `GET /teacher/shared` | teacher | | `{shared: [{id, user_id, name, text, created_at}]}`, newest first, at most 50 |
 
@@ -186,7 +199,7 @@ add columns of her own (to the right is tidiest); `setup()` adds back any column
 |---|---|---|
 | `Dashboard` | formulas | first tab; see below |
 | `users` | id, name, phone, role, status, pw_hash, lang, created_at, batch, batch_since | role `student`/`teacher`; status `pending`/`approved`/`rejected`; `batch` a key of `batches`, empty until placed |
-| `batches` | key, name, name_hi, name_mr, curriculum, days, time, duration_min, meet_link, about, about_hi, about_mr | seeded once from `content/studio.json`, then the owner's to edit: `days` like `mon, wed, fri`, `time` like `17:30` in India, `curriculum` its classes' default, `meet_link` its everyday link |
+| `batches` | key, name, name_hi, name_mr, curriculum, days, time, duration_min, meet_link, about, about_hi, about_mr | seeded once from `content/studio.json`, then the owner's to edit: `days` like `mon, wed, fri`, `time` like `17:30` or `5:30 pm` in India (a plain text column, read as typed), `curriculum` its classes' default, `meet_link` its everyday link |
 | `batch_changes` | id, student_id, from, to, note, created_at | each placement and each move between batches, with the teacher's note: the review history |
 | `class_sessions` | id, batch, starts_at, duration_min, meet_link, curriculum, updated_at | one per class of each batch, made a week ahead; `meet_link` and `curriculum` when the teacher set them for this class |
 | `checkins` | user_id, session_id, phase, mood, created_at, class, class_date | phase `before`/`after`, mood 1 to 5. `class` and `class_date` copy the class's batch name and India date, for queries; the code goes by session_id |
@@ -195,13 +208,13 @@ add columns of her own (to the right is tidiest); `setup()` adds back any column
 | `asana_feedback` | id, student_id, item, text, created_at | the teacher's feedback to one student on one item |
 | `library` | key, type, level, sanskrit, name, english, aliases, source | the asanas, pranayama and meditation the curricula draw on; type `asana`/`pranayama`/`meditation`, level 1 to 3, aliases comma-separated |
 | `curricula` | key, name, name_hi, name_mr, level, about, about_hi, about_mr, source | the curricula the teacher picks from; the first is the default |
-| `curriculum_items` | curriculum, position, item, dose, unit, cue, cue_hi, cue_mr | each curriculum's items in order; unit `breaths`, `seconds`, `minutes`, `rounds` or `strokes` |
+| `curriculum_items` | curriculum, position, item, dose, unit, cue, cue_hi, cue_mr | each curriculum's items in order; `dose` a whole number (words after it are ignored; an empty one shows the unit alone); unit `breaths`, `seconds`, `minutes`, `rounds` or `strokes` |
 | `feedback` | id, user_id, screen, text, created_at | |
 | `shared_notes` | id, user_id, text, created_at | notes students chose to share with the teacher |
 | `intake` (hidden) | user_id, age, height_cm, weight_kg, food, meals, pain, pain_note, updated_at | each student's answers about themselves, for the teacher to place them: health data, on the Dashboard only as counts |
 | `intake_ratings` (hidden) | user_id, item, reaction, pain | the intake's self-assessment, one row per asana answered |
 | `tokens` (hidden) | token_hash, user_id, created_at | SHA-256 of each login token |
-| `settings` (hidden) | key, value, about | teacher_code, group_code, group_link |
+| `settings` (hidden) | key, value, about | teacher_code, group_code, group_link (optional, set from the app), app_link (optional, typed here: where students get the app, for the invite) |
 
 How values are stored: text with a leading apostrophe, so Sheets keeps `+919876543210`, a code like `2E5K7Q` or a
 name starting with `=` exactly as typed (never a number, a date or a formula); times as date cells shown in India
@@ -327,24 +340,27 @@ done
 ```
 
 - [`bundle.test.mjs`](test/bundle.test.mjs): `dist/` is the build of `src/` and the content files; the one scope;
-  `setup()`; the main path.
+  `setup()`, and run again on a Sheet in use; the main path.
 - [`api.test.mjs`](test/api.test.mjs): every route's rules: one teacher and the teacher code in any case, the group
-  code, pending and approved, phone numbers however typed, links cleaned, the group link setting, check-in
-  windows, the streak, lockouts and their expiry, password resets, the invite, the week of classes.
+  code (pasted with stars or a full stop too), pending and approved, phone numbers however typed (from abroad, and
+  "+91 0…"), the call links people paste, the optional group link of any kind, check-in windows, saying how class
+  went without a check-in, the streak in classes (a Mon, Wed, Fri batch, a move), the check-in's lock, lockouts and
+  their expiry, password resets and changes, the invite, the week of classes and their curricula, a time typed in the
+  batches tab (a time of day dated 1899), a deleted student in a class review.
 - [`practice.test.mjs`](test/practice.test.mjs): `/me/practice` (the sums, the days clamp, languages, rounding as
   Python's `round()`), `/me/shared` and `/teacher/shared`.
 - [`curriculum.test.mjs`](test/curriculum.test.mjs): the curriculum tabs seeded once, `/curricula` in each
-  language, each class's curriculum and its default, the after-class practice send (its window, its checks,
-  replacing), and the teacher's review of a class.
+  language, a dose typed as words or left empty, each class's curriculum and its default, the after-class practice
+  send (its window, its checks, replacing), and the teacher's review of a class.
 - [`history.test.mjs`](test/history.test.mjs): a student's history per item (the trend, strain or pain, the notes,
   the list), and the teacher's feedback on an item.
-- [`intake.test.mjs`](test/intake.test.mjs): the intake: filling and changing it, the batch it points to, the checks,
-  and that only the student and the teacher read it.
-- [`solo.test.mjs`](test/solo.test.mjs): practice on one's own: what is kept, the holds, the history mixing classes
-  and sessions on one's own, the practice summary, and the rules.
-- [`store.test.mjs`](test/store.test.mjs): the envelope, validation shapes, text kept as typed, hashed tokens and
-  passwords, columns by name, ids, the lock (busy, always let go), a failure inside a route, growing tabs, the cache
-  and its invalidation, the Dashboard's formulas.
+- [`intake.test.mjs`](test/intake.test.mjs): the intake: filling and changing it, the batch it points to, the checks
+  (a pain note in Hindi, counted in code points), and that only the student and the teacher read it.
+- [`solo.test.mjs`](test/solo.test.mjs): practice on one's own: what is kept, the holds (one over an hour kept as an
+  hour), the history mixing classes and sessions on one's own, the practice summary, and the rules.
+- [`store.test.mjs`](test/store.test.mjs): the envelope, a write repeated with its request id, validation shapes, text
+  kept as typed, hashed tokens and passwords, columns by name, ids, the lock (busy, always let go), a failure inside a
+  route, growing tabs, the cache and its invalidation, the Dashboard's formulas.
 - [`snapshot.test.mjs`](test/snapshot.test.mjs): a regression snapshot, 105 requests and their recorded answers
   ([`test/snapshot/`](test/snapshot/)); every status and every body must match. After a deliberate change to the
   answers, `node appsscript/test/snapshot/record.mjs` records them again; read its diff before committing.
@@ -358,7 +374,8 @@ teacher has signed up, run it at most once a quarter of an hour.
 
 - [`src/`](src/): `Main.gs` (the envelope, the router, the request context and the lock), `Validate.gs` (input
   checks), `Store.gs` (tabs, encoding, the cache), `Auth.gs` (passwords, tokens, codes, phone numbers, lockouts,
-  who is asking), `Studio.gs` (batches and their classes, India time, the week, the sums, WhatsApp messages), `Routes.gs` (one
+  who is asking), `Studio.gs` (batches and their classes, India time, the week, the sums, call and group links, the
+  messages for the class), `Routes.gs` (one
   function per route), `Practice.gs` (the curriculum, each class's plan, how each item went, practice on one's own,
   each student's history per item, the teacher's feedback), `Intake.gs` (a student's answers about themselves and the
   batch they point to), `Setup.gs` (`setup()`, the
