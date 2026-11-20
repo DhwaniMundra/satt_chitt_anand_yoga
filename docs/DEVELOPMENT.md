@@ -69,14 +69,14 @@ checks are coarse: read every answer before trusting a pass.
 
 ## Tour it and make the media
 
-Raw screenshots and recordings stay in `.local/visualization/` (git ignores it): in `viz_<major>/`, each version's
-screenshots are in `screens/<version>/`, each tour shot with its UI dump beside it (`<name>.xml`, every element's
-bounds), and its recordings and the videos made from them in `tours/`. Only what the README and the iteration log show
-goes in `docs/media/`.
+Raw screenshots and recordings stay in `.local/visualization/` (git ignores it): `viz_v0/` holds the prototypes
+(v0.1 to v0.7) and `viz_v0.9/` the practice tracker. In each, a version's screenshots are in `screens/<version>/`,
+each tour shot with its UI dump beside it (`<name>.xml`, every element's bounds), and its recordings and the videos
+made from them in `tours/`. Only what the README and the iteration log show goes in `docs/media/`.
 
 ```bash
-python3 scripts/capture_tour.py v1.0                       # one version's screenshots and recordings (6 GB emulator)
-python3 scripts/two_phone_test.py v1.0-two-phones PILOT1   # two 2 GB emulators, one dev backend, an empty Sheet
+python3 scripts/capture_tour.py v0.9.1                     # one version's screenshots and recordings (6 GB emulator)
+python3 scripts/two_phone_test.py v0.9.1-two-phones PILOT1 # two 2 GB emulators, one dev backend, an empty Sheet
 scripts/setup_media.sh                                     # once: tools/media-venv
 tools/media-venv/bin/python scripts/make_figures.py        # hero, GIF strips, contact sheets
 tools/media-venv/bin/python scripts/make_diagrams.py       # the diagrams
@@ -106,5 +106,5 @@ emulator: `SCA_AVD=sca_phone_2 SCA_PORT=5556 scripts/run_emulator.sh`.
    `sdkmanager "platform-tools" "emulator" "platforms;android-36" "build-tools;36.0.0" "system-images;android-36;google_apis_playstore;x86_64"`.
 3. With `ANDROID_AVD_HOME=tools/avd`: `avdmanager create avd -n sca_phone -k "system-images;android-36;google_apis_playstore;x86_64" -d pixel_6`,
    the same for `sca_phone_2`, and `sca_phone_big` with `hw.ramSize=6144` in its `config.ini`, for Gemma.
-4. Gemma itself is downloaded by the app, in Ask. For the evaluations on the laptop in `docs/evals/` before v1.0,
+4. Gemma itself is downloaded by the app, in Ask. For the evaluations on the laptop in `docs/evals/` before v0.9,
    `gemma-4-E2B-it.litertlm` and `gemma-4-E4B-it.litertlm` from Hugging Face (`litert-community`) go in `models/`.

@@ -29,7 +29,7 @@ Contents: [Set up](#set-up-5-minutes) · [How it works](#how-it-works) · [The e
    installed in, and no other file. If Google shows "Google hasn't verified this app", that is expected for a script
    of one's own: click **Advanced** → **Go to … (unsafe)** → Allow. The execution log then shows the **teacher
    sign-up code** (give it to the teacher; it works once) and the group code. Both stay in the hidden `settings` tab.
-5. **Deploy.** Deploy → New deployment → the gear next to "Select type" → **Web app**. Description: "v1.0".
+5. **Deploy.** Deploy → New deployment → the gear next to "Select type" → **Web app**. Description: "v0.9.1".
    Execute as: **Me**. Who has access: **Anyone**. Click Deploy (allow again if asked) and copy the **Web app URL**
    (it ends in `/exec`). Opening it in a browser shows `{"status":200,"body":{"ok":true,...}}`.
 
@@ -62,7 +62,7 @@ changed to earlier than now leaves today's class where it was), and that day get
 only from a day its batch no longer meets, under the same conditions. While a batch's time is no time (being retyped,
 say), its classes are left as they are.
 
-A Sheet made before v1.0 needs these steps once, after pasting the new `Code.gs`:
+A Sheet made before v0.9 needs these steps once, after pasting the new `Code.gs`:
 1. Run `setup`. It adds the `batches` and `batch_changes` tabs, the hidden `intake` and `intake_ratings` tabs, and the
    new columns, and leaves the data alone.
 2. Delete by hand what batches replaced: the `classes` tab, the `class_key` column of `class_sessions`, and the

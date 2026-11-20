@@ -1,5 +1,10 @@
 # Two-phone test: v0.9-two-phones
 
+The v0.9 code after its release for testing: the whole loop between the teacher and the students, on phones
+without WhatsApp, on the debug build and on the release build. The first, shorter test of the same code before
+the release is [`two_phones_v0.9_first`](two_phones_v0.9_first.md); what this one found was fixed in v0.9.1
+([`two_phones_v0.9.1`](two_phones_v0.9.1.md)).
+
 - **Server:** the dev backend at http://10.0.2.2:8000 (the laptop as the emulators see it), on an empty Sheet for each build
 - **Phones:** emulator-5554 (teacher), emulator-5556 (students), Android 16 emulators with 2 GB and no WhatsApp, so each share button opens Android's share sheet
 - **Started:** 2026-11-20 07:51 India time. The teacher's Today tab shows the rest of the day's classes, one card per batch, so how many depends on the hour
@@ -184,4 +189,4 @@
 - ✅ her health note, kept on this phone, is still there
 - ✅ marked shared
 
-Test people only (98000001xx). The screenshots, with the screen and UI dump of each failed check (fail_<n>.png and .xml), and the recording are kept locally in .local/visualization/viz_v1/ (screens/v0.9-two-phones/ and tours/).
+Test people only (98000001xx). The screenshots, with the screen and UI dump of each failed check (fail_<n>.png and .xml), and the recording are kept locally in .local/visualization/viz_v0.9/ (screens/v0.9-two-phones/ and tours/).

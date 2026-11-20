@@ -11,10 +11,10 @@ Variants:
 - `base_t05`: v0.3 prompt, sampling T=0.5 top-k 40 top-p 0.95
 - `rules_rep`: Marathi rules + repetition penalty
 - `rules_noch`: Marathi rules + ban token 'च्छ'
-- `mrnotes`: Marathi notes v1 + rule 6 v1
-- `mrnotes_norule`: Marathi notes v1, no rule 6
-- `mrnotes_noch`: Marathi notes v1 + ban 'च्छ'
-- `mrn2`: Marathi notes v2 (all 25 sections) + rule 6 v2
+- `mrnotes`: Marathi notes, draft 1 + rule 6, draft 1
+- `mrnotes_norule`: Marathi notes, draft 1, no rule 6
+- `mrnotes_noch`: Marathi notes, draft 1 + ban 'च्छ'
+- `mrn2`: Marathi notes, draft 2 (all 25 sections) + rule 6, draft 2
 - `mrn2_sup`: mrn2 + foreign-script ban (identical output to mrn2)
 
 

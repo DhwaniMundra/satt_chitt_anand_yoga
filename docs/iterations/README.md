@@ -22,7 +22,7 @@ flowchart LR
    side by side.
 3. **Evaluate the companion.** `scripts/eval_phone.py` asks Gemma, in the app on the phone, a fixed set of
    questions in English, Hindi and Marathi, runs coarse automatic checks, and writes every answer to `docs/evals/`.
-   (Up to v0.6 the evaluations ran on the laptop's server, which v1.0 retired.) The checks only catch obvious
+   (Up to v0.6 the evaluations ran on the laptop's server, which v0.9 retired.) The checks only catch obvious
    failures; a person reads every answer.
 4. **Critique.** Look at every screenshot and read every answer as a student would. Each problem becomes a finding
    with the image or answer that shows it.
@@ -42,13 +42,14 @@ The people, check-ins and comments in the screenshots are demo data.
 | [v0.5](v0.5.md) | Ask becomes a practice companion: Gemma with tools over the student's own classes, moods and notes; E2B chosen for phones | [screens](../media/iterations/v0.5.jpg), [`companion_v0.5_e2b`](../evals/companion_v0.5_e2b.md), [`companion_v0.5_e4b`](../evals/companion_v0.5_e4b.md) |
 | [v0.6](v0.6.md) | Gemma on the phone: an opt-in download; the chat and health notes stay on the phone | [`companion_probe`](../evals/companion_probe.md), [`companion_v0.6_e2b`](../evals/companion_v0.6_e2b.md) |
 | [v0.7](v0.7.md) | A live backend on Google Sheets: an Apps Script web app the studio owns | [`appsscript/README.md`](../../appsscript/README.md) |
-| [v1.0](v1.0.md) | A practice tracker: asanas in class and on one's own, the teacher's feedback, batches and the intake; Gemma asks about each asana; the release | [screens](../media/iterations/v1.0.jpg), [`companion_v1_phone`](../evals/companion_v1_phone.md), [two phones](../evals/two_phones_v1.0.md) |
+| [v0.9](v0.9.md) | A practice tracker: asanas in class and on one's own, the teacher's feedback, batches and the intake; Gemma answers about each asana; the release for testing | [screens](../media/iterations/v0.9.jpg), [`companion_v0.9_phone`](../evals/companion_v0.9_phone.md), [two phones before the release](../evals/two_phones_v0.9_first.md), [two phones without WhatsApp](../evals/two_phones_v0.9.md) |
+| [v0.9.1](v0.9.1.md) | Works without WhatsApp; attendance without a check-in; the streak counted in classes; the fixes from two reviews | [two phones, 131 of 131](../evals/two_phones_v0.9.1.md) |
 
 ## Who did what
 
 Dhwani Mundra wrote the brief (`instructions.md`, kept private) and directed every round in a Claude Code session:
 what to build, what to fix, how the app and the repository should be organised, and what to leave out. Claude Code,
 an AI coding agent, wrote the code and ran the tours and evaluations. In v0.4 two further agents worked from written
-briefs (a code review, Marathi experiments); their reports were checked before anything was applied. For v1.0 one
-Claude Code agent built each feature as a pull request, and the session Dhwani directed reviewed and merged it, or
+briefs (a code review, Marathi experiments); their reports were checked before anything was applied. From v0.9 on, one
+Claude Code agent built each feature on its own branch, and the session Dhwani directed reviewed and merged it, or
 sent it back with findings. Product decisions are recorded in [`../decisions.md`](../decisions.md).

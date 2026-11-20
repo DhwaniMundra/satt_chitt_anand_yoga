@@ -1,4 +1,4 @@
-# Practice companion evaluation: companion_v1_phone
+# Practice companion evaluation: companion_v0.9_phone
 
 - **Model:** gemma-4-E2B-it in the app (LiteRT-LM on the CPU), on the 6 GB Android emulator
 - **Students:** demo students Asha Kulkarni (Intermediate batch) and Kavita Joshi (Pain management batch), synthetic data on the dev backend
@@ -59,7 +59,7 @@ it. The answer leaves out the teacher's tip, calls the strain she marked "a note
 the last two times as "moving between effort and steady" rather than steady, then with effort. Asked "How is my Surya
 Namaskar going, and what did Ramit ji say?", it gives the tip word for word but still calls the strain a note, gives
 the last two times as "between effort and steady", and puts the aching "after round three", where her note has the
-ache in the plank and the rest after round three. The prompt was not tuned for this; v1 stays as it is.
+ache in the plank and the rest after round three. The prompt was not tuned for this; v0.9 stays as it is.
 
 The five held-out questions below were written after the last change and asked once, to see the companion on
 questions it was not tuned on. All five are right on reading. One is thin: asked about Bhujangasana by its Hindi name

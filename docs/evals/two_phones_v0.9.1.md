@@ -139,4 +139,4 @@
 - ✅ the teacher's app is back in English
 - ✅ and the student's
 
-Test people only (98000001xx). The screenshots, with the screen and UI dump of each failed check (fail_<n>.png and .xml), and the recording are kept locally in .local/visualization/viz_v1/ (screens/v0.9.1-two-phones/ and tours/).
+Test people only (98000001xx). The screenshots, with the screen and UI dump of each failed check (fail_<n>.png and .xml), and the recording are kept locally in .local/visualization/viz_v0.9/ (screens/v0.9.1-two-phones/ and tours/).

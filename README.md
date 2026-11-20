@@ -3,7 +3,7 @@
 A practice tracker for an online yoga studio: students say how each asana went, in class and on their own, and the
 teacher reads it to guide them.
 
-**[Watch the 2:43 film of how it works](https://github.com/DhwaniMundra/satt_chitt_anand_yoga/releases/download/v0.9/release_v1_720p.mp4)**
+**[Watch the 2:43 film of how it works](https://github.com/DhwaniMundra/satt_chitt_anand_yoga/releases/download/v0.9.1/satt_chitt_anand_film_720p.mp4)**
 
 <!-- Dhwani: your own sentences go here. -->
 
@@ -17,10 +17,10 @@ anywhere else, and the app keeps what a chat cannot, a record of each student's 
 ## What it does
 
 <p>
-  <img src="docs/media/v1/today.png" width="24%" alt="A student's Today tab: her batch and its next class">
-  <img src="docs/media/v1/after_class.png" width="24%" alt="After class: a reaction for each item, strain or pain, a note">
-  <img src="docs/media/v1/item_history.png" width="24%" alt="One asana's history, with the teacher's feedback">
-  <img src="docs/media/v1/ask.png" width="24%" alt="Ask: Gemma on the phone answers about the student's own asana">
+  <img src="docs/media/screens/today.png" width="24%" alt="A student's Today tab: her batch and its next class">
+  <img src="docs/media/screens/after_class.png" width="24%" alt="After class: a reaction for each item, strain or pain, a note">
+  <img src="docs/media/screens/item_history.png" width="24%" alt="One asana's history, with the teacher's feedback">
+  <img src="docs/media/screens/ask.png" width="24%" alt="Ask: Gemma on the phone answers about the student's own asana">
 </p>
 
 **For a student**
@@ -36,10 +36,10 @@ anywhere else, and the app keeps what a chat cannot, a record of each student's 
   in English, Hindi or Marathi: "How is my Setu Bandhasana going?", "When is my next class?"
 
 <p>
-  <img src="docs/media/v1/students.png" width="24%" alt="Students: a new student's answers and the batch they point to">
-  <img src="docs/media/v1/feedback.png" width="24%" alt="The teacher's feedback on a student's asana">
-  <img src="docs/media/v1/review.png" width="24%" alt="How a class went: strain or pain first">
-  <img src="docs/media/v1/insights.png" width="24%" alt="Insights: mood before and after each class">
+  <img src="docs/media/screens/students.png" width="24%" alt="Students: a new student's answers and the batch they point to">
+  <img src="docs/media/screens/feedback.png" width="24%" alt="The teacher's feedback on a student's asana">
+  <img src="docs/media/screens/review.png" width="24%" alt="How a class went: strain or pain first">
+  <img src="docs/media/screens/insights.png" width="24%" alt="Insights: mood before and after each class">
 </p>
 
 **For the teacher**
@@ -74,13 +74,13 @@ flowchart LR
 - Only the student and the teacher see what a student says about themselves; the Sheet's Dashboard shows it only as
   counts.
 - Every answer Gemma gave in the evaluation was read against the data
-  ([`companion_v1_phone`](docs/evals/companion_v1_phone.md)). Its Marathi is the weak spot; a Marathi reader checks it.
+  ([`companion_v0.9_phone`](docs/evals/companion_v0.9_phone.md)). Its Marathi is the weak spot; a Marathi reader checks it.
 
 ## How it was made
 
-In rounds, from v0.1 to v1.0, which is out for testing as [v0.9.1](https://github.com/DhwaniMundra/satt_chitt_anand_yoga/releases/tag/v0.9.1). Each round, a script walks through the app on an Android
+In rounds, from v0.1 to [v0.9.1](https://github.com/DhwaniMundra/satt_chitt_anand_yoga/releases/tag/v0.9.1), the version out for testing. Each round, a script walks through the app on an Android
 emulator, and the companion is asked the same questions in three languages. Then every screen and every answer is read,
-and what reading finds is fixed, with a test where one fits. One finding of v1.0: Gemma reported an average reaction of
+and what reading finds is fixed, with a test where one fits. One finding of v0.9: Gemma reported an average reaction of
 2.0 ("with effort") as "not yet", so the tools now hand it the words, worked out in code.
 
 The record: [iteration log](docs/iterations/README.md) · [evaluations, every answer](docs/evals/) ·
