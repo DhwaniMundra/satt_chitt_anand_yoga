@@ -90,10 +90,12 @@ fun TeacherTodayScreen(vm: AppViewModel, onLanguage: (String) -> Unit, openStude
 @Composable
 private fun SessionCard(vm: AppViewModel, s: ClassSession, open: Boolean, batchLink: String?, toggle: () -> Unit) {
     val context = LocalContext.current
-    val own = if (s.ownLink) s.meetLink.orEmpty() else ""
-    var link by rememberSaveable(s.id) { mutableStateOf(own) }
-    val changed = link.isNotBlank() && link.trim() != own
+    // What the teacher has typed since the link was last saved; until then, and once saved, the server's link.
+    var edit by rememberSaveable(s.id) { mutableStateOf<String?>(null) }
+    val link = edit ?: if (s.ownLink) s.meetLink.orEmpty() else ""
+    val changed = edit?.isNotBlank() == true
     val saved = stringResource(R.string.saved)
+    val save = { share: ((String) -> Unit)? -> vm.saveLink(s.id, link.trim(), saved, { edit = null }, share) }
     SectionCard(Modifier.clickable(onClick = toggle), tint = if (open) Palette.paper else Palette.cream) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
@@ -114,17 +116,16 @@ private fun SessionCard(vm: AppViewModel, s: ClassSession, open: Boolean, batchL
         if (open) {
             Plan(vm, s)
             OutlinedTextField(
-                link, { link = it }, label = { Text(stringResource(R.string.meet_link)) },
+                link, { edit = it }, label = { Text(stringResource(R.string.meet_link)) },
                 placeholder = { Text("meet.google.com/abc-defg-hij") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
             )
             vm.error?.takeIf { it == "bad_meet_link" }?.let { Text(errorText(it), color = MaterialTheme.colorScheme.error) }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = { vm.saveLink(s.id, link.trim(), saved, null) }, enabled = changed && !vm.busy,
-                    modifier = Modifier.weight(1f).height(52.dp)) {
+                OutlinedButton(onClick = { save(null) }, enabled = changed && !vm.busy, modifier = Modifier.weight(1f).height(52.dp)) {
                     Text(stringResource(R.string.save))
                 }
                 Button(
-                    onClick = { if (changed) vm.saveLink(s.id, link.trim(), saved) { shareText(context, it) } else vm.shareSession(s.id) { shareText(context, it) } },
+                    onClick = { if (changed) save { shareText(context, it) } else vm.shareSession(s.id) { shareText(context, it) } },
                     enabled = (changed || s.hasLink) && !vm.busy,
                     colors = ButtonDefaults.buttonColors(containerColor = Palette.saffron),
                     modifier = Modifier.weight(1f).height(52.dp),

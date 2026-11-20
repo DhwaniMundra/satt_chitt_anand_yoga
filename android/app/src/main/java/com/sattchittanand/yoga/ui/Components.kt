@@ -365,8 +365,8 @@ fun errorText(code: String): String {
     )
 }
 
-/** A text field that stops at [limit] code points, as the server counts them (so a Devanagari note is not cut short
- *  by surprise), and shows the count once it is near. */
+/** A text field that stops at [limit] code points, where the server stops (so a long note is never refused), and
+ *  shows the count once it is near. */
 @Composable
 fun LimitedField(
     value: String,

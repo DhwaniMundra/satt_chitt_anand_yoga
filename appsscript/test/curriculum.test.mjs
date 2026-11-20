@@ -55,17 +55,19 @@ test('the curricula in the student\'s language, items in order', () => {
   assert.ok(shirshasana('mr').cue.startsWith('फक्त ' + TEACHER.mr + ' यांच्यासोबत.'));
 });
 
-test('a dose the owner types as words, or leaves empty, is a number or nothing: one odd row breaks nothing', () => {
+test('a dose the owner types as words, as a decimal or not at all is a whole number, 0 for none: one odd row breaks nothing', () => {
   const b = freshBackend();
   const { t } = teacherAndCode(b);
   const sheet = b.ss.getSheetByName('curriculum_items');
   const dose = sheet.rows()[0].indexOf('dose') + 1;
-  const values = ['5 breaths', '', 'slowly', 2.5, "'12"];
+  const values = ['5 breaths', '', 'slowly', 2.5, "'12", 4.4, "'2.5 min", "'१० श्वास", "'5-6", -3];
   values.forEach((v, i) => sheet.getRange(i + 2, dose).setValue(v));
   b.context.onEdit({});
   const r = b.call('GET', '/curricula', { token: t.token });
   assert.equal(r.status, 200);
-  assert.deepEqual(r.body.curricula[0].items.slice(0, 5).map((i) => i.dose), [5, null, null, null, 12]);
+  assert.deepEqual(r.body.curricula[0].items.slice(0, values.length).map((i) => i.dose), [5, 0, 0, 3, 12, 4, 3, 10, 5, 0]);
+  const all = r.body.curricula.flatMap((c) => c.items.map((i) => i.dose));
+  assert.ok(all.every(Number.isInteger), 'every dose a whole number, for the apps that read it as one');
   assert.equal(r.body.curricula[0].items[0].unit, 'minutes', 'the unit as the Sheet has it');
 });
 

@@ -98,7 +98,9 @@ function handle_(request) {
   }
 }
 
-/** [method, path pattern, handler, LOCK_ when the handler writes and has no slow step to keep outside the lock]. */
+/** [method, path pattern, handler, LOCK_ when the handler writes and holds the lock throughout]. A writing route
+ * without LOCK_ takes the lock itself around its writes, to keep a slow step (a password hash) or its reads (a
+ * check-in) out of it. */
 function routes_() {
   return [
     ['GET', '/health', health_],

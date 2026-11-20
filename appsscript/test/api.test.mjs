@@ -192,7 +192,9 @@ test('the call links people paste are taken, made plain', () => {
     ['Join: https://meet.google.com/abc-defg-hij.', meet], ['https://g.co/meet/abc-defg-hij', meet], ['g.co/meet/yoga-morning', 'https://g.co/meet/yoga-morning'],
     ['https://us02web.zoom.us/j/12345678901?pwd=AbCd.1', 'https://us02web.zoom.us/j/12345678901?pwd=AbCd.1'],
     ['https://zoom.us/j/123?pwd=a&uname=x', 'https://zoom.us/j/123?pwd=a'], ['zoom.us/j/98765432100', 'https://zoom.us/j/98765432100'],
+    ['https://us02web.zoom.us/j/1234567890?pwd=a%3Db', 'https://us02web.zoom.us/j/1234567890?pwd=a%3Db'],
     ['https://zoom.us/my/ramit', 'https://zoom.us/my/ramit'], ['https://us06web.zoom.us/my/ramit.yoga', 'https://us06web.zoom.us/my/ramit.yoga'],
+    ['https://teams.microsoft.com/meet/2345678?p=abc&x=1', 'https://teams.microsoft.com/meet/2345678?p=abc'],
     ['https://teams.microsoft.com/l/meetup-join/19%3ameeting_ab%40thread.v2/0?context=%7b%22Tid%22%3a%22x%22%7d',
       'https://teams.microsoft.com/l/meetup-join/19%3ameeting_ab%40thread.v2/0?context=%7b%22Tid%22%3a%22x%22%7d'],
     ['teams.live.com/meet/9876543210?p=AbC', 'https://teams.live.com/meet/9876543210?p=AbC'],
@@ -212,13 +214,14 @@ test('the class group link is optional: any group, any https link, and cleared b
     ['chat.whatsapp.com/AbC123', 'https://chat.whatsapp.com/AbC123'], ['https://chat.whatsapp.com/AbC123?mode=r_c', 'https://chat.whatsapp.com/AbC123'],
     ['https://chat.whatsapp.com/invite/AbC123', 'https://chat.whatsapp.com/AbC123'], ['https://t.me/joinchat/AbC123', 'https://t.me/joinchat/AbC123'],
     ['telegram.me/sattchitt', 'https://telegram.me/sattchitt'], ['https://signal.group/#CjQKIAb_c-D', 'https://signal.group/#CjQKIAb_c-D'],
-    ['https://example.com', 'https://example.com'], ['http://classroom.example.org/c/yoga?x=1', 'https://classroom.example.org/c/yoga?x=1'],
+    ['https://example.com', 'https://example.com'], ['Join our group: t.me/joinchat/xyz', 'https://t.me/joinchat/xyz'],
+    ['Hi Mr.Sharma, our group https://t.me/x', 'https://t.me/x'], ['http://classroom.example.org/c/yoga?x=1', 'https://classroom.example.org/c/yoga?x=1'],
   ];
   for (const [pasted, kept] of cases) {
     assert.deepEqual(save({ group_link: pasted }).body, { group_link: kept, group_code: setting(b, 'group_code') }, pasted);
     assert.equal(setting(b, 'group_link'), kept);
   }
-  for (const bad of ['not a link', 'chat.whatsapp.com/', 'javascript:alert(1)']) {
+  for (const bad of ['not a link', 'chat.whatsapp.com/', 'javascript:alert(1)', 'Mr.Sharma', 'e.g.', '7.00', 'example.com', 'https://7.00/x']) {
     assert.deepEqual(save({ group_link: bad }), { status: 400, body: { detail: 'bad_group_link' } }, bad);
     assert.equal(setting(b, 'group_link'), 'https://classroom.example.org/c/yoga?x=1', 'a refused link changes nothing');
   }
@@ -763,4 +766,87 @@ test('a class review names a student whose row was deleted "a former student", i
   assert.deepEqual(review('en'), { item: 'tadasana', reactions: [0, 1, 0, 0], pain: [{ name: 'A former student', note: 'knee' }], notes: [] });
   assert.equal(review('hi').pain[0].name, 'एक पूर्व विद्यार्थी');
   assert.equal(review('mr').pain[0].name, 'एक माजी विद्यार्थी');
+});
+
+test('a time Sheets kept as a number reads as typed (7.15 is 07:15), and setup writes it back as text', () => {
+  const b = freshBackend();
+  const sheet = b.ss.getSheetByName('batches');
+  const column = sheet.rows()[0].indexOf('time') + 1;
+  const cells = () => sheet.rows().slice(1).map((r) => r[column - 1]);
+  const times = () => b.call('GET', '/studio').body.batches.map((x) => x.time);
+  ['7.15', '17.3', '8', '6.30'].forEach((typed, i) => sheet.getRange(i + 2, column).setValue(typed)); // into Automatic cells
+  b.context.onEdit({});
+  assert.deepEqual(cells(), [7.15, 17.3, 8, 6.3], 'Sheets keeps them as numbers');
+  assert.deepEqual(times(), ['07:15', '17:30', '08:00', '06:30']);
+  b.context.setup();
+  assert.deepEqual(cells(), ['07:15', '17:30', '08:00', '06:30']);
+  assert.deepEqual(times(), ['07:15', '17:30', '08:00', '06:30']);
+  for (const [n, text] of [[0.75, '18:00'], [0.2916666667, '07:00'], [7.75, '07:45'], [12, '12:00'], [7.05, '07:05']]) {
+    assert.equal(b.evaluate('clockText_(' + n + ')'), text, String(n));
+  }
+});
+
+test('one class per batch per day: a changed time moves the coming classes in their rows, keeping their links, and leaves one checked in to', () => {
+  const b = freshBackend({ now: WEDNESDAY_6AM });
+  const { t, code } = teacherAndCode(b);
+  const s = signup(b, '9000000002', { code });
+  const sheet = b.ss.getSheetByName('batches');
+  const cell = sheet.getRange(2, sheet.rows()[0].indexOf('time') + 1);
+  cell.setValue("'07:08"); // the Beginner classes the app of v0.9 made from a 07:00 time cell read as 07:08
+  b.context.onEdit({});
+  const beginner = () => b.ss.getSheetByName('class_sessions').rows().slice(1).filter((r) => r[1] === 'beginner')
+    .map((r) => ({ id: r[0], at: new Date(r[2].getTime() + 330 * MIN).toISOString().slice(0, 16), link: r[4], curriculum: r[5] }));
+  b.call('GET', '/teacher/home', { token: t.token });
+  const made = beginner();
+  assert.deepEqual(made.map((c) => c.at.slice(11)), ['07:08', '07:08', '07:08', '07:08', '07:08', '07:08']);
+  const [today, tomorrow, third] = made.map((c) => c.id);
+  b.call('PUT', '/teacher/sessions/' + tomorrow, { token: t.token, body: { meet_link: 'meet.google.com/abc-defg-hij' } });
+  b.call('PUT', '/teacher/sessions/' + third + '/curriculum', { token: t.token, body: { curriculum: 'pain_management' } });
+  b.state.offsetMs = 10 * MIN; // 06:10: today's check-in is open
+  assert.equal(b.call('POST', '/sessions/' + today + '/checkin', { token: s.token, body: { phase: 'before', mood: 3 } }).status, 200);
+  cell.setValue(new Date(Date.parse('1899-12-30T01:38:50Z'))); // 07:00, now read as Sheets shows it
+  b.context.onEdit({});
+  b.call('GET', '/teacher/home', { token: t.token });
+  const now = beginner();
+  assert.deepEqual(now.map((c) => c.id), made.map((c) => c.id), 'the same rows: no class removed, none added');
+  assert.deepEqual(now.map((c) => c.at.slice(11)), ['07:08', '07:00', '07:00', '07:00', '07:00', '07:00'], 'the one checked in to stays');
+  assert.deepEqual([now[1].link, now[2].curriculum], ['https://meet.google.com/abc-defg-hij', 'pain_management']);
+  const home = b.call('GET', '/home', { token: s.token }).body.sessions;
+  assert.deepEqual([home[0].id, home[0].checked_in, home[1].meet_link], [today, true, 'https://meet.google.com/abc-defg-hij']);
+  assert.equal(new Set(home.map((x) => x.starts_at.slice(0, 10))).size, home.length, 'one a day');
+});
+
+test('after class, a class is offered to the batch the student was in at its time: none from before they were placed, the old batch\'s after a move', () => {
+  const b = freshBackend();
+  const { t, code } = teacherAndCode(b);
+  b.state.offsetMs = -3 * 60 * MIN;
+  const r = b.call('POST', '/auth/signup', { body: { name: 'New', phone: '9000000004', password: 'secret1', code } }).body;
+  const move = (batch) => b.call('PUT', '/teacher/students/' + r.user.id + '/batch', { token: t.token, body: { batch } });
+  assert.equal(move('beginner').status, 200); // placed three hours ago
+  b.state.offsetMs = 0;
+  const early = classStarted(b, 240); // began before the placement
+  const old = classStarted(b, 120); // the Beginner class after it
+  b.state.offsetMs = -30 * MIN;
+  assert.equal(move('intermediate').status, 200);
+  b.state.offsetMs = 0;
+  const after = (id) => b.call('POST', '/sessions/' + id + '/checkin', { token: r.token, body: { phase: 'after', mood: 4 } });
+  const said = (id) => b.call('POST', '/sessions/' + id + '/practice', { token: r.token, body: { entries: [{ item: 'tadasana', reaction: 3 }] } });
+  const offered = b.call('GET', '/home', { token: r.token }).body.after_class;
+  assert.deepEqual([offered.batch.key, offered.id === early], ['beginner', false], 'a class of the batch before the move, after the placement');
+  assert.equal(after(old).status, 200, 'the old batch\'s class, from before the move');
+  assert.deepEqual([after(early).body.detail, said(early).body.detail], ['checkin_closed', 'checkin_closed'], 'not theirs: before they were placed');
+});
+
+test('two accounts stored for one number, with and without the 0 after +91: each logs in as it was typed', () => {
+  const b = freshBackend();
+  const { code } = teacherAndCode(b);
+  const first = signup(b, '9876543210', { code });
+  const twin = b.call('POST', '/auth/signup', { body: { name: 'Twin', phone: '9000000077', password: 'twin123', code } }).body.user;
+  const users = b.ss.getSheetByName('users');
+  users.getRange(users.rows().findIndex((r) => r[0] === twin.id) + 1, 3).setValue("'+9109876543210"); // as stored when typed with the 0
+  b.context.onEdit({});
+  const login = (phone, password) => b.call('POST', '/auth/login', { body: { phone, password } }).body.user;
+  assert.equal(login('+91 098765 43210', 'twin123').id, twin.id);
+  assert.equal(login('98765 43210', 'secret1').id, first.user.id);
+  assert.equal(login('+91 98765 43210', 'secret1').id, first.user.id);
 });

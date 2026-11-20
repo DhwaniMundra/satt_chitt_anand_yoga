@@ -2,8 +2,8 @@
 //
 // A failed check is a 422 whose detail is a list of problems, [{"type", "loc", "msg", "input"}]; the app names the
 // field from `loc`. The other errors carry a code it translates. Text is not coerced: a number where text is expected
-// is an error. Integers may come as "3". Lengths are counted in code points, as the app counts them: a Devanagari
-// vowel sign is one.
+// is an error. Integers may come as "3". Lengths are counted in code points, as the app counts them; they differ
+// from JavaScript's length only for characters outside the BMP, such as an emoji, which is one code point.
 
 const LANGS_ = ['en', 'hi', 'mr'];
 

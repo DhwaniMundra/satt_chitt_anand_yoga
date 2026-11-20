@@ -55,13 +55,14 @@ export function signup(b, phone, { role = 'student', code = '', name, batch = 'b
   return { token: r.body.token, user: r.body.user };
 }
 
-/** A student placed in `batch` by a hand edit of the users tab, as the teacher's placement leaves them; the user. */
+/** A student placed in `batch` by a hand edit of the users tab, as the teacher's placement leaves them, 90 days ago,
+ * so the classes a test makes in the past are their batch's; the user. */
 export function place(b, userId, batch) {
   const sheet = b.ss.getSheetByName('users');
   const header = sheet.rows()[0];
   const row = sheet.rows().findIndex((r) => r[0] === userId) + 1;
   sheet.getRange(row, header.indexOf('batch') + 1).setValue("'" + batch);
-  sheet.getRange(row, header.indexOf('batch_since') + 1).setValue(new Date(b.clock()));
+  sheet.getRange(row, header.indexOf('batch_since') + 1).setValue(new Date(b.clock() - 90 * DAY));
   sheet.getRange(row, header.indexOf('status') + 1).setValue("'approved");
   b.context.onEdit({});
   return userRow(b, userId);

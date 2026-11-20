@@ -72,6 +72,17 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** When everything was last read from the server (elapsedRealtime), so coming back to the app soon after reads
      *  nothing again. */
     private var refreshedAt = 0L
+    /** Check-ins sent in the background that the server has not confirmed: kept on the phone, shown as done on the
+     *  Today tab, and sent again at each start and return to the app until they land. */
+    private var pending = PendingCheckin.restore(prefs.checkins.takeIf { prefs.token != null })
+        set(value) {
+            field = value
+            prefs.checkins = PendingCheckin.saved(value)
+        }
+    private val sending = mutableSetOf<Int>()
+    /** Why the server refused a check-in sent in the background, until the student has read it: apart from [error],
+     *  which every call clears. */
+    var checkInError by mutableStateOf<String?>(null)
 
     init {
         if (prefs.token == null) loadStudio() else launchCall { refreshAll() }
@@ -129,16 +140,17 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (user?.id != account.id) openStore(account)
         user = account
         stats = Stats.from(me.getJSONObject("stats"))
-        if (account.isTeacher) {
-            teacherHome = TeacherHome.from(api.get("/teacher/home?lang=${prefs.lang}"))
-        } else {
-            home = Home.from(api.get("/home?lang=${prefs.lang}"))
-        }
+        if (account.isTeacher) readTeacherHome() else readHome()
         if (curricula == null) curricula = Curricula.from(api.get("/curricula?lang=${prefs.lang}"))
         refreshedAt = SystemClock.elapsedRealtime()
     }
 
     fun refresh() = launchCall { refreshAll() }
+
+    /** The student's Today tab from the server, with the check-ins it has not confirmed yet shown as done. */
+    private suspend fun readHome() {
+        home = pending.fold(Home.from(api.get("/home?lang=${prefs.lang}"))) { h, p -> h.checkedIn(p.sessionId, true) }
+    }
 
     /** The student's Today tab read again in one call, quietly (no spinner, no error shown): while a class is near, or
      *  after the server said the student is now in another batch. */
@@ -146,7 +158,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (user?.isTeacher != false) return
         viewModelScope.launch {
             try {
-                home = Home.from(api.get("/home?lang=${prefs.lang}"))
+                readHome()
             } catch (_: ApiError) {
             } catch (_: JSONException) {
             }
@@ -181,9 +193,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun changePassword(current: String, new: String, changed: String, done: () -> Unit) = launchCall {
         val body = JSONObject().put("current_password", current).put("new_password", new)
         try {
-            once("password:" + (current + "\n" + new).hashCode()) { api.post("/me/password", body, it) }
+            // Not tried again by itself: a second try overlapping the first would find the current password changed.
+            once("password:" + (current + "\n" + new).hashCode()) { api.post("/me/password", body, it, retry = false) }
         } catch (e: ApiError) {
-            throw if (e.code == "Not Found") ApiError("old_server") else e // a backend without the route answers 404
+            throw if (e.code == "Not Found") ApiError("old_server") else e // no /me/password on this server
         }
         notice = changed
         done()
@@ -202,7 +215,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         askIntake = false
         user = null; home = null; stats = null; teacherHome = null; insights = null; review = null
         practice = emptyList(); soloSessions = emptyList(); solo = null; students = emptyList(); notes = emptyList(); sharedNotes = emptyList()
-        items = emptyList(); itemHistory = null; intake = null; intakeRead = false
+        items = emptyList(); itemHistory = null; intake = null; intakeRead = false; pending = emptyList(); checkInError = null
         chat.clear()
         store = null // the chat and notes stay on the phone, under this account, for its next sign-in
         loadStudio()
@@ -244,19 +257,44 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     // ---------- student ----------
 
-    /** The mood before class. The Today tab shows the check-in at once and the student goes into class: it is sent in
-     *  the background, tried again while the server is busy or out of reach, and undone on the tab if it never gets
-     *  through. */
+    /** The mood before class. The Today tab shows the check-in at once and the student goes into class: it is kept on
+     *  the phone and sent in the background ([sendCheckins]) until the server has it. */
     fun checkIn(sessionId: Int, mood: Int) {
+        pending = pending.filter { it.sessionId != sessionId } + PendingCheckin(sessionId, mood, UUID.randomUUID().toString())
         home = home?.checkedIn(sessionId, true)
-        viewModelScope.launch {
-            try {
-                val reply = api.post("/sessions/$sessionId/checkin", JSONObject().put("phase", "before").put("mood", mood), UUID.randomUUID().toString())
-                stats = Stats.from(reply.getJSONObject("stats"))
-            } catch (e: ApiError) {
-                home = home?.checkedIn(sessionId, false)
-                failed(e)
-            } catch (_: JSONException) {
+        checkInError = null
+        sendCheckins()
+    }
+
+    /** Sends each check-in the server has not confirmed, with its request id, tried again while the connection fails
+     *  and then at the next start or return to the app. One the server refuses is dropped and undone on the Today
+     *  tab, and [checkInError] says why; one that came too late is dropped quietly, as the class can still be said
+     *  after it. */
+    private fun sendCheckins() {
+        pending.filter { it.sessionId !in sending }.forEach { p ->
+            sending += p.sessionId
+            viewModelScope.launch {
+                try {
+                    val reply = api.post("/sessions/${p.sessionId}/checkin", JSONObject().put("phase", "before").put("mood", p.mood), p.requestId)
+                    pending = pending - p
+                    stats = Stats.from(reply.getJSONObject("stats"))
+                } catch (e: ApiError) {
+                    if (e.code != "network" && e.code != "busy") {
+                        pending = pending - p
+                        if (pending.none { it.sessionId == p.sessionId }) home = home?.checkedIn(p.sessionId, false)
+                        when (e.code) {
+                            "signed_out" -> signOutLocally()
+                            "checkin_closed" -> {}
+                            "other_batch" -> { checkInError = e.code; refreshHome() }
+                            else -> checkInError = e.code
+                        }
+                    }
+                } catch (_: JSONException) {
+                    pending = pending - p
+                } finally {
+                    sending -= p.sessionId
+                }
+                if (pending.any { it.sessionId == p.sessionId && it != p }) sendCheckins() // a new mood picked meanwhile
             }
         }
     }
@@ -271,7 +309,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Sends the practice on one's own, if anything was timed or said, and closes it; on an error it stays open to send
-     *  again, with the same request id. */
+     *  again: with the same request id if nothing was changed since, with a new one if something was. */
     fun finishSolo(saved: String) = launchCall {
         val now = SystemClock.elapsedRealtime()
         val run = solo?.stopped(now) ?: return@launchCall
@@ -279,8 +317,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val entries = run.entries()
         if (entries.isNotEmpty()) {
             val minutes = ((now - run.startedAt + 59_999) / 60000).toInt().coerceIn(1, 240) // whole minutes, rounded up
-            val body = JSONObject().put("minutes", minutes).put("entries", JSONArray(entries.map { it.json() }))
-            once("solo:${run.startedAt}") { api.post("/me/solo", body, it) }
+            val said = JSONArray(entries.map { it.json() })
+            once("solo:${run.startedAt}:$said") { api.post("/me/solo", JSONObject().put("minutes", minutes).put("entries", said), it) }
             notice = saved
         }
         solo = null
@@ -318,7 +356,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         } catch (e: ApiError) {
             throw if (e.code == "checkin_closed") ApiError("after_closed") else e
         }
-        home = Home.from(api.get("/home?lang=${prefs.lang}"))
+        readHome()
         done()
     }
 
@@ -377,10 +415,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         teacherHome = TeacherHome.from(api.get("/teacher/home?lang=${prefs.lang}"))
     }
 
-    /** Saves one class's own link. Then [share], if given, gets the class's message for the share sheet; if not, the
-     *  snackbar says [saved]. */
-    fun saveLink(sessionId: Int, link: String, saved: String, share: ((String) -> Unit)?) = launchCall {
+    /** Saves one class's own link; [done] runs once it is saved. Then [share], if given, gets the class's message for
+     *  the share sheet; if not, the snackbar says [saved]. */
+    fun saveLink(sessionId: Int, link: String, saved: String, done: () -> Unit, share: ((String) -> Unit)?) = launchCall {
         val reply = api.put("/teacher/sessions/$sessionId?lang=${prefs.lang}", JSONObject().put("meet_link", link))
+        done()
         readTeacherHome()
         if (share != null) share(reply.getString("text")) else notice = saved
     }
@@ -466,8 +505,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         readTeacherHome()
     }
 
+    /** A new password for a student; a retry after a lost reply gets the same one back. */
     fun resetPassword(userId: Int, show: (String) -> Unit) = launchCall {
-        show(api.post("/teacher/students/$userId/password").getString("password"))
+        show(once("reset:$userId") { api.post("/teacher/students/$userId/password", JSONObject(), it) }.getString("password"))
     }
 
     fun setCurriculum(sessionId: Int, curriculum: String) = launchCall {
@@ -511,10 +551,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         loadSharedNotes() // the "Notes shared" tile
     }
 
-    /** Coming back to the app (from Meet, say) reloads, so the after-class question appears when it is due; not again
-     *  within half a minute (a rotation, a glance at another app). */
+    /** Coming back to the app (from Meet, say) sends the check-ins still waiting, and reloads, so the after-class
+     *  question appears when it is due; it reloads not again within half a minute (a rotation, a glance at another
+     *  app). */
     fun onResume() {
         val stale = SystemClock.elapsedRealtime() - refreshedAt > RESUME_REFRESH_MS
+        if (signedIn) sendCheckins()
         if (signedIn && !busy && stale) refresh() // signed in, or signed in but the studio was out of reach: try again
         gemma.refresh(loadModel = false) // a download that went on, or finished, while the app was away
     }

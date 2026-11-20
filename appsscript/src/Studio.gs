@@ -32,10 +32,15 @@ function istDate_(ms) {
   return new Date(ms + IST_OFFSET_MS_).toISOString().slice(0, 10);
 }
 
+/** A number of two digits at least: 7 is "07". */
+function pad2_(n) {
+  return (n < 10 ? '0' : '') + n;
+}
+
 /** strftime("%-I:%M %p") in India time: "8:00 AM". */
 function istClock_(ms) {
   const p = istParts_(ms);
-  return (p.hour % 12 || 12) + ':' + (p.minute < 10 ? '0' : '') + p.minute + ' ' + (p.hour < 12 ? 'AM' : 'PM');
+  return (p.hour % 12 || 12) + ':' + pad2_(p.minute) + ' ' + (p.hour < 12 ? 'AM' : 'PM');
 }
 
 /** One language out of a {"en": ..., "hi": ..., "mr": ...} dict, falling back to English. */
@@ -44,33 +49,36 @@ function pick_(text, lang) {
 }
 
 /** A link's parts, with or without its https:// (or http://): the host in small letters, the path ("/" when none),
- * the query string and the fragment as written, and the query's values by name; null if it is not a web link. */
+ * the query string and the fragment as written, the query's values by name, and whether it began with http(s)://;
+ * null if it is not a web link. */
 function linkParts_(text) {
-  const m = /^(?:https?:\/\/)?([a-z0-9-]+(?:\.[a-z0-9-]+)+)(\/[^?#\s]*)?(?:\?([^#\s]*))?(?:#(\S*))?$/i.exec(text);
+  const m = /^(https?:\/\/)?([a-z0-9-]+(?:\.[a-z0-9-]+)+)(\/[^?#\s]*)?(?:\?([^#\s]*))?(?:#(\S*))?$/i.exec(text);
   if (!m) return null;
   const values = {};
-  (m[3] || '').split('&').forEach((pair) => {
+  (m[4] || '').split('&').forEach((pair) => {
     const eq = pair.indexOf('=');
     if (eq > 0) values[pair.slice(0, eq)] = pair.slice(eq + 1);
   });
-  return { host: m[1].toLowerCase(), path: m[2] || '/', query: m[3] || '', fragment: m[4] || '', values: values };
+  return { scheme: Boolean(m[1]), host: m[2].toLowerCase(), path: m[3] || '/', query: m[4] || '', fragment: m[5] || '', values: values };
 }
 
 /** The first word of what was pasted that `clean` makes a link of, the punctuation around it aside ("Join:
- * https://meet.google.com/abc-defg-hij."), else 400 `detail`. */
+ * https://meet.google.com/abc-defg-hij."), a word with its http(s):// before any without; else 400 `detail`. */
 function firstLink_(raw, clean, detail) {
-  const words = String(raw).trim().split(/\s+/);
-  for (let i = 0; i < words.length; i++) {
-    const parts = linkParts_(words[i].replace(/^[("'<[]+|[)"'>\].,;:!?]+$/g, ''));
-    const link = parts && clean(parts);
+  const parts = String(raw).trim().split(/\s+/)
+    .map((word) => linkParts_(word.replace(/^[("'<[]+|[)"'>\].,;:!?]+$/g, '')))
+    .filter(Boolean);
+  const ordered = parts.filter((p) => p.scheme).concat(parts.filter((p) => !p.scheme));
+  for (let i = 0; i < ordered.length; i++) {
+    const link = clean(ordered[i]);
     if (link) return link;
   }
   throw new HttpError_(400, detail);
 }
 
 /** A link to a video call, made plain: Google Meet (its code in small letters; g.co/meet/ too), Zoom (a meeting, /j/
- * with its pwd, or a personal room, /my/, on any zoom.us address), Microsoft Teams or Jitsi Meet, always https. Else
- * 400 bad_meet_link. */
+ * with its pwd as given, or a personal room, /my/, on any zoom.us address), Microsoft Teams (a meetup-join link as
+ * given, or /meet/<id> with its p) or Jitsi Meet, always https. Else 400 bad_meet_link. */
 function cleanMeetLink_(raw) {
   return firstLink_(raw, (p) => {
     const path = p.path.replace(/\/+$/, '');
@@ -80,12 +88,13 @@ function cleanMeetLink_(raw) {
       return MEET_CODE_.test(m[1]) ? 'https://meet.google.com/' + m[1].toLowerCase() : 'https://g.co/meet/' + m[1];
     }
     if (/^([\w-]+\.)*zoom\.us$/.test(p.host)) {
-      const pwd = /^[\w.-]+$/.test(p.values.pwd || '') ? '?pwd=' + p.values.pwd : '';
+      const pwd = p.values.pwd ? '?pwd=' + p.values.pwd : '';
       if ((m = /^\/j\/(\d+)$/.exec(path))) return 'https://' + p.host + '/j/' + m[1] + pwd;
       if ((m = /^\/my\/([\w.-]+)$/.exec(path))) return 'https://' + p.host + '/my/' + m[1];
     }
-    if ((p.host === 'teams.microsoft.com' && /^\/l\/meetup-join\/./.test(path)) || (p.host === 'teams.live.com' && /^\/meet\/./.test(path))) {
-      return 'https://' + p.host + p.path + (p.query ? '?' + p.query : '');
+    if (p.host === 'teams.microsoft.com' || p.host === 'teams.live.com') {
+      if (/^\/l\/meetup-join\/./.test(path)) return 'https://' + p.host + p.path + (p.query ? '?' + p.query : '');
+      if ((m = /^\/meet\/(\d+)$/.exec(path))) return 'https://' + p.host + '/meet/' + m[1] + (p.values.p ? '?p=' + p.values.p : '');
     }
     if (p.host === 'meet.jit.si' && (m = /^\/([\w-]+)$/.exec(path))) return 'https://meet.jit.si/' + m[1];
     return null;
@@ -93,9 +102,12 @@ function cleanMeetLink_(raw) {
 }
 
 /** The class group's link: a WhatsApp group invite (its code alone, the rest of the address dropped), or any other
- * https link as written (a Telegram or Signal group, say), always https. Else 400 bad_group_link. */
+ * link as written (a Telegram or Signal group, say), always https. Its address ends in a name of letters (".com",
+ * ".me"); without http(s)://, it needs a path too ("t.me/x"), so words like "Mr.Sharma", "e.g." or "7.00" are no
+ * link. Else 400 bad_group_link. */
 function cleanGroupLink_(raw) {
   return firstLink_(raw, (p) => {
+    if (!/\.[a-z]{2,}$/.test(p.host) || (!p.scheme && p.path === '/')) return null;
     if (p.host === 'chat.whatsapp.com') {
       const m = /^\/(?:invite\/)?([A-Za-z0-9]+)\/?$/.exec(p.path);
       return m ? 'https://chat.whatsapp.com/' + m[1] : null;
@@ -136,10 +148,8 @@ function startMinutes_(time) {
 /** A batch for the app, in `lang`: its key, name, words, days and start ("07:00"). */
 function batchJson_(batch, key, lang) {
   if (!batch) return { key: key, name: key || '', about: '', days: [], time: null };
-  const h = Math.floor(batch.start_min / 60);
-  const m = batch.start_min % 60;
   return { key: batch.key, name: pick_(batch.name, lang), about: pick_(batch.about, lang), days: batch.days,
-    time: (h < 10 ? '0' : '') + h + ':' + (m < 10 ? '0' : '') + m };
+    time: pad2_(Math.floor(batch.start_min / 60)) + ':' + pad2_(batch.start_min % 60) };
 }
 
 /** A session for the app. The link is shown only to approved members; without its own link a session uses its batch's
@@ -184,36 +194,46 @@ function weekStarts_(now, batches) {
   return out;
 }
 
-/** Makes the next 7 days' classes match the batches: adds each one missing and removes one outside the schedule (after
- * the owner changed a batch's days or time) that has not begun and nobody has checked in to. Takes the lock only
- * when there is something to change. */
+/** Makes the next 7 days' classes match the batches, one class per batch per day. A day without its class gets one.
+ * A class whose time or length no longer matches the batch's (the owner changed it) is moved in its row, keeping its
+ * id, its own link and its curriculum, if it has not begun and nobody has checked in to it; otherwise it stays as it
+ * is, and the day gets no second class. A class is removed only on a day its batch no longer meets, under the same
+ * conditions. Takes the lock only when there is something to change. */
 function ensureWeek_(ctx) {
   const wanted = weekStarts_(ctx.now, batches_(ctx));
-  const keyOf = (r) => r.batch + '@' + r.starts_at;
-  const want = {};
-  wanted.forEach((w) => {
-    want[keyOf(w)] = true;
-  });
-  const horizon = istMidnight_(istDay_(ctx.now) + 7);
+  const today = istDay_(ctx.now);
+  const dayOf = (r) => r.batch + '@' + istDay_(r.starts_at);
   const changes = (table) => {
-    const present = {};
-    table.rows.forEach((r) => {
-      present[keyOf(r)] = true;
-    });
     const joined = {};
     ctx.db.t('checkins').rows.forEach((c) => {
       joined[c.session_id] = true;
     });
-    return {
-      missing: wanted.filter((w) => !present[keyOf(w)]),
-      stale: table.rows.filter((r) => r.starts_at > ctx.now && r.starts_at < horizon && !want[keyOf(r)] && !joined[r.id]),
-    };
+    const free = (r) => r.starts_at > ctx.now && !joined[r.id];
+    const byDay = {};
+    table.rows.forEach((r) => {
+      const day = istDay_(r.starts_at);
+      if (day >= today && day < today + 7) (byDay[dayOf(r)] || (byDay[dayOf(r)] = [])).push(r);
+    });
+    const todo = { missing: [], moved: [], stale: [] };
+    const want = {};
+    wanted.forEach((w) => {
+      want[dayOf(w)] = true;
+      const rows = byDay[dayOf(w)] || [];
+      const row = rows[0];
+      if (!row) todo.missing.push(w);
+      else if (rows.length === 1 && free(row) && (row.starts_at !== w.starts_at || row.duration_min !== w.duration_min)) todo.moved.push([row, w]);
+    });
+    Object.keys(byDay).forEach((key) => {
+      if (!want[key]) todo.stale = todo.stale.concat(byDay[key].filter(free));
+    });
+    return todo;
   };
   let todo = changes(ctx.db.t('class_sessions'));
-  if (!todo.missing.length && !todo.stale.length) return;
+  if (!todo.missing.length && !todo.moved.length && !todo.stale.length) return;
   ctx.lock(() => {
     const table = ctx.db.t('class_sessions');
     todo = changes(table);
+    todo.moved.forEach(([row, w]) => table.update(row, { starts_at: w.starts_at, duration_min: w.duration_min, updated_at: ctx.now }));
     if (todo.stale.length) table.remove(todo.stale);
     let id = table.nextId();
     table.insert(todo.missing.map((w) => ({
@@ -271,11 +291,18 @@ function moodChange_(checkins) {
   return [pairs ? sum / pairs : null, pairs];
 }
 
-/** The batch a student was in at a moment, from their placements and moves in batch_changes; for a student placed
- * by hand in the Sheet, with no change logged, the batch they are in now. */
+/** The batch a student was in at a moment (null before they were placed), from their placements and moves in
+ * batch_changes; for a student placed by hand in the Sheet, with no change logged, their batch from its batch_since
+ * on (from always, if that is empty). */
 function batchAt_(ctx, user) {
   const changes = ctx.db.t('batch_changes').rows.filter((c) => c.student_id === user.id).sort((a, b) => a.created_at - b.created_at);
-  return (at) => changes.reduce((batch, c) => (c.created_at <= at ? c.to : batch), changes.length ? changes[0].from : user.batch);
+  if (!changes.length) return (at) => (user.batch_since === null || at >= user.batch_since ? user.batch : null);
+  return (at) => changes.reduce((batch, c) => (c.created_at <= at ? c.to : batch), changes[0].from);
+}
+
+/** Whether a class is of the batch the student was in at its time: theirs to say how it went, checked in or not. */
+function ownClass_(ctx, user, session) {
+  return batchAt_(ctx, user)(session.starts_at) === session.batch;
 }
 
 /** Classes joined, the run of classes in a row the student came to, and the average mood change. The run goes back
