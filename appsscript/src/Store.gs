@@ -232,9 +232,12 @@ class Table_ {
     });
   }
 
-  /** Deletes rows, one deleteRows for each run of neighbours, from the bottom up. */
+  /** Deletes rows, one deleteRows for each run of neighbours, from the bottom up. Sheets keeps at least one row below
+   * the frozen header, so a tab about to lose every row it has gets an empty one added at its end first. */
   remove(rows) {
     const gone = rows.map((r) => r._row).sort((a, b) => b - a);
+    if (!gone.length) return;
+    if (gone.length >= this.sheet.getMaxRows() - 1) this.sheet.insertRowsAfter(this.sheet.getMaxRows(), 1);
     runs_(gone.slice().reverse(), (n) => n).reverse().forEach((run) => this.sheet.deleteRows(run[0], run.length));
     this.rows = this.rows.filter((r) => gone.indexOf(r._row) < 0);
     this.rows.forEach((r) => {
@@ -259,7 +262,7 @@ function runs_(list, key) {
  * login token, a check-in, a practice entry). They come from a counter in the script properties that never goes back:
  * the larger of it and the tab's largest id, + 1. So an id is never given twice: not to the next person after the
  * owner removes someone (whose token a phone may still hold), nor when this request's read of the tab missed a row
- * another request had just written. A Sheet without the counter (made before v1.0) starts it from its largest id. */
+ * another request had just written. A Sheet without the counter yet starts it from its largest id. */
 function newIds_(ctx, name, n) {
   if (!ctx.locked) throw new Error('newIds_ outside the lock');
   const props = PropertiesService.getScriptProperties();

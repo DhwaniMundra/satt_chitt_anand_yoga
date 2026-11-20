@@ -1620,6 +1620,10 @@ const CURRICULUM = {
 
 const METHODS_ = ['GET', 'POST', 'PUT', 'DELETE'];
 const LOCK_ = true; // the route writes: it runs under the script lock from start to finish
+// The route takes the lock itself, around its writes, and under it looks for the answer a copy of the request (the same
+// request id) kept, and keeps its own before letting the lock go (replayed_, keepAnswer_): a write that is not the same
+// twice, so two copies arriving together must write once (a sign-up, a login, a new password).
+const OWN_REPLAY_ = 'own replay';
 const REPLAY_S_ = 600; // how long the answer to a write with a request id is kept for a repeat of it
 const AUTH_PATHS_ = ['/auth/signup', '/auth/login']; // answered again by the phone number and the request id
 
@@ -1709,15 +1713,15 @@ function handle_(request) {
   }
 }
 
-/** [method, path pattern, handler, LOCK_ when the handler writes and holds the lock throughout]. A writing route
- * without LOCK_ takes the lock itself around its writes, to keep a slow step (a password hash) or its reads (a
- * check-in, an intake) out of it; what it writes it reads for the first time under the lock wherever it can. */
+/** [method, path pattern, handler, LOCK_ when the handler writes and holds the lock throughout, or OWN_REPLAY_]. A
+ * writing route without LOCK_ takes the lock itself around its writes, to keep a slow step (a password hash) or its
+ * reads (a check-in, an intake) out of it; what it writes it reads for the first time under the lock wherever it can. */
 function routes_() {
   return [
     ['GET', '/health', health_],
     ['GET', '/studio', studio_],
-    ['POST', '/auth/signup', signup_],
-    ['POST', '/auth/login', login_],
+    ['POST', '/auth/signup', signup_, OWN_REPLAY_],
+    ['POST', '/auth/login', login_, OWN_REPLAY_],
     ['POST', '/auth/logout', logout_],
     ['GET', '/me', me_],
     ['POST', '/me', updateMe_, LOCK_],
@@ -1728,7 +1732,7 @@ function routes_() {
     ['GET', '/me/asanas', myItems_],
     ['GET', '/me/asanas/{item}', myItem_],
     ['POST', '/me/shared', shareNote_, LOCK_],
-    ['POST', '/me/password', changePassword_],
+    ['POST', '/me/password', changePassword_, OWN_REPLAY_],
     ['GET', '/home', home_],
     ['GET', '/curricula', curricula_],
     ['POST', '/sessions/{session_id}/checkin', checkin_],
@@ -1746,7 +1750,7 @@ function routes_() {
     ['GET', '/teacher/students', students_],
     ['POST', '/teacher/students/{user_id}/status', setStatus_, LOCK_],
     ['PUT', '/teacher/students/{user_id}/batch', placeInBatch_, LOCK_],
-    ['POST', '/teacher/students/{user_id}/password', resetPassword_],
+    ['POST', '/teacher/students/{user_id}/password', resetPassword_, OWN_REPLAY_],
     ['GET', '/teacher/students/{user_id}/asanas', studentItems_],
     ['GET', '/teacher/students/{user_id}/asanas/{item}', studentItem_],
     ['POST', '/teacher/students/{user_id}/feedback', itemFeedback_, LOCK_],
@@ -1760,7 +1764,7 @@ function route_(request) {
   let pathMatched = false;
   const all = routes_();
   for (let i = 0; i < all.length; i++) {
-    const [method, pattern, handler, lock] = all[i];
+    const [method, pattern, handler, mode] = all[i];
     const want = pattern.split('/');
     if (want.length !== parts.length) continue;
     const params = {};
@@ -1777,16 +1781,18 @@ function route_(request) {
     pathMatched = true;
     if (method !== request.method) continue;
     const ctx = new Context_(request, params);
+    if (mode === OWN_REPLAY_) return replayed_(request) || keepingRefusals_(request, () => handler(ctx));
     const run = () => once_(request, () => handler(ctx));
-    return lock ? ctx.lock(run) : run();
+    return mode === LOCK_ ? ctx.lock(run) : run();
   }
   if (pathMatched) throw new HttpError_(405, 'Method Not Allowed');
   throw new HttpError_(404, 'Not Found');
 }
 
 /** Runs a write once per request id: a repeat (a retry after a timeout) gets the answer kept from the first time, for
- * REPLAY_S_, instead of writing again. Only answers that succeeded are kept. A route that holds the lock throughout
- * looks inside it, so two copies arriving together write once; sign-up and login look again under their own lock. */
+ * REPLAY_S_, instead of writing again. Only answers that succeeded are kept, but for sign-up and login
+ * (keepingRefusals_). A route that holds the lock throughout looks inside it, so two copies arriving together write
+ * once; an OWN_REPLAY_ route looks again under its own lock. */
 function once_(request, fn) {
   return replayed_(request) || keepAnswer_(request, fn());
 }
@@ -1810,14 +1816,27 @@ function replayKey_(request) {
   return request.token ? 'req:' + sha256Hex_(request.token) + ':' + request.requestId : null;
 }
 
-/** The answer kept for a repeat of this request, or null. */
+/** The answer kept for a repeat of this request, or null; a refusal kept for it is thrown again. */
 function replayed_(request) {
   const key = replayKey_(request);
-  const kept = key ? cache_().get(key) : null;
-  return kept ? JSON.parse(kept) : null;
+  const kept = key ? JSON.parse(cache_().get(key) || 'null') : null;
+  if (kept && kept.$refused) throw new HttpError_(kept.$refused, kept.detail);
+  return kept;
 }
 
-/** Keeps `answer` for a repeat of this request (sign-up and login do so under their lock, before letting it go);
+/** Sign-up and login keep a refusal for a repeat too (a 4xx, but too_many_attempts, which passes with time; never busy
+ * or a 5xx, which may go another way next time), so a retry after a lost answer is not counted as another wrong try. */
+function keepingRefusals_(request, fn) {
+  try {
+    return fn();
+  } catch (err) {
+    const refusal = err instanceof HttpError_ && err.status >= 400 && err.status < 500 && err.status !== 429;
+    if (refusal && AUTH_PATHS_.indexOf(request.path) >= 0) keepAnswer_(request, { $refused: err.status, detail: err.detail });
+    throw err;
+  }
+}
+
+/** Keeps `answer` for a repeat of this request (an OWN_REPLAY_ route does so under its lock, before letting it go);
  * returns it. */
 function keepAnswer_(request, answer) {
   const key = replayKey_(request);
@@ -1840,11 +1859,11 @@ class Context_ {
 
   /** Runs `fn` holding the script lock; re-entrant. It flushes first: Apps Script may answer a read of a tab from what
    * this execution read of it before (it fetches more than it is asked for, to answer the reads that follow), so a tab
-   * read before the lock could come back under it without the rows another request wrote while this one waited (in
-   * the live test of v0.9.1, six sign-ups at once got the ids 2, 2, 2, 2, 3, 3); a flush sends the next reads to the
-   * Sheet. The tabs read before the lock are then read again (unless `keepReads`, for a lock that writes no tab or
-   * reads for the first time the ones it writes), and writes are flushed before the lock is let go. A route that
-   * writes a tab reads it for the first time under the lock wherever it can, so as not to rest on the flush alone. */
+   * read before the lock could come back under it without the rows another request wrote while this one waited (and
+   * sign-ups at once would take the same id); a flush sends the next reads to the Sheet. The tabs read before the
+   * lock are then read again (unless `keepReads`, for a lock that writes no tab or reads for the first time the ones
+   * it writes), and writes are flushed before the lock is let go. A route that writes a tab reads it for the first
+   * time under the lock wherever it can, so as not to rest on the flush alone. */
   lock(fn, keepReads) {
     if (this.locked) return fn();
     const lock = LockService.getScriptLock();
@@ -2310,9 +2329,12 @@ class Table_ {
     });
   }
 
-  /** Deletes rows, one deleteRows for each run of neighbours, from the bottom up. */
+  /** Deletes rows, one deleteRows for each run of neighbours, from the bottom up. Sheets keeps at least one row below
+   * the frozen header, so a tab about to lose every row it has gets an empty one added at its end first. */
   remove(rows) {
     const gone = rows.map((r) => r._row).sort((a, b) => b - a);
+    if (!gone.length) return;
+    if (gone.length >= this.sheet.getMaxRows() - 1) this.sheet.insertRowsAfter(this.sheet.getMaxRows(), 1);
     runs_(gone.slice().reverse(), (n) => n).reverse().forEach((run) => this.sheet.deleteRows(run[0], run.length));
     this.rows = this.rows.filter((r) => gone.indexOf(r._row) < 0);
     this.rows.forEach((r) => {
@@ -2337,7 +2359,7 @@ function runs_(list, key) {
  * login token, a check-in, a practice entry). They come from a counter in the script properties that never goes back:
  * the larger of it and the tab's largest id, + 1. So an id is never given twice: not to the next person after the
  * owner removes someone (whose token a phone may still hold), nor when this request's read of the tab missed a row
- * another request had just written. A Sheet without the counter (made before v1.0) starts it from its largest id. */
+ * another request had just written. A Sheet without the counter yet starts it from its largest id. */
 function newIds_(ctx, name, n) {
   if (!ctx.locked) throw new Error('newIds_ outside the lock');
   const props = PropertiesService.getScriptProperties();
@@ -2584,8 +2606,8 @@ function phoneKey_(phone) {
   return 'phone:' + phone;
 }
 
-/** Under the lock: whether `phone` (normalised) is kept for an account. One the users tab shows with another number
- * (changed by hand) does not count. */
+/** Under the lock, once the users tab has shown no account with `phone` (normalised): whether the number is kept for
+ * one. An account the users tab shows (with another number, changed by hand) does not keep it. */
 function phoneHeld_(ctx, phone, users) {
   const raw = PropertiesService.getScriptProperties().getProperty(phoneKey_(phone));
   let held = null;
@@ -2595,9 +2617,7 @@ function phoneHeld_(ctx, phone, users) {
     return false;
   }
   if (!held) return false;
-  const row = users.rows.filter((u) => u.id === held.id)[0];
-  if (row) return phoneOf_(row) === phone;
-  if (ctx.now - held.at >= PHONE_TRUST_MS_) return false;
+  if (users.rows.some((u) => u.id === held.id) || ctx.now - held.at >= PHONE_TRUST_MS_) return false;
   console.error('signup: account %s keeps this number, but the users tab as read under the lock has no row with its id; refused as taken',
     held.id);
   return true;
@@ -2630,9 +2650,8 @@ function forgetPhones_(people, everything) {
 
 // ---------- who is asking ----------
 
-/** The users row with this id, or null. Two rows sharing an id give null, and the execution log says so: ids from
- * newIds_ never repeat, but a row copied by hand, or the duplicates an older backend wrote, must not let one person's
- * token or a lookup reach another. */
+/** The users row with this id, or null. Two rows sharing an id (a row copied by hand, say: ids from newIds_ never
+ * repeat) give null, and the execution log says so, so one person's token or a lookup never reaches another. */
 function userById_(users, id) {
   const found = users.filter((u) => u.id === id);
   if (found.length > 1) console.error('users: %s rows share the id %s; none of them is used', found.length, id);
@@ -3599,8 +3618,10 @@ function saveIntake_(ctx) {
 
 // ---------- public ----------
 
+/** ok, with two fields no other answer has, so the app can tell the health check from a call's own answer: what the
+ * redirect's one-time target gives when it is fetched a second time. */
 function health_() {
-  return { ok: true };
+  return { ok: true, assistant: 'off', model: null };
 }
 
 function studio_(ctx) {
@@ -3710,11 +3731,19 @@ function changePassword_(ctx) {
     if (attemptsBlocked_(key)) throw new HttpError_(429, 'too_many_attempts');
     attemptsFail_(key);
   }, true);
-  if (!checkPassword_(body.current_password, user.pw_hash)) throw new HttpError_(400, 'bad_password');
+  if (!checkPassword_(body.current_password, user.pw_hash)) {
+    // A copy of this change may have changed it after this one looked for its answer: that copy kept its answer
+    // before its write could be read.
+    const kept = replayed_(ctx.request);
+    if (kept) return kept;
+    throw new HttpError_(400, 'bad_password');
+  }
   const pwHash = hashPassword_(body.new_password);
   const mine = sha256Hex_(ctx.token);
   return ctx.lock(() => {
     attemptsClear_(key);
+    const kept = replayed_(ctx.request); // a copy of this change, with its request id, that had the lock first
+    if (kept) return kept;
     const users = ctx.db.t('users');
     const me = userById_(users.rows, user.id);
     if (!me) throw new HttpError_(401, 'signed_out');
@@ -3722,7 +3751,7 @@ function changePassword_(ctx) {
     const tokens = ctx.db.t('tokens');
     tokens.remove(tokens.rows.filter((r) => r.user_id === user.id && r.token_hash !== mine));
     ctx.db.changedCache = true;
-    return { ok: true };
+    return keepAnswer_(ctx.request, { ok: true });
   });
 }
 
@@ -3977,20 +4006,23 @@ function placeInBatch_(ctx) {
 }
 
 /** A new temporary password for a student who forgot theirs, for the teacher to pass on however the class keeps in
- * touch; the student can change it from the Me tab. Signs the student out everywhere. */
+ * touch; the student can change it from the Me tab. Signs the student out everywhere. A copy of the request (the
+ * teacher's second confirm, or a retry, with the same request id) gets the same password, even arriving together. */
 function resetPassword_(ctx) {
   teacher_(ctx);
   const { path } = ctx.check({ path: PATH_USER_ });
   const password = newCode_(8);
   const pwHash = hashPassword_(password);
   return ctx.lock(() => {
+    const kept = replayed_(ctx.request); // a copy of this request that had the lock first
+    if (kept) return kept;
     const users = ctx.db.t('users');
     const student = studentRow_(ctx, path.user_id);
     users.update(student, { pw_hash: pwHash });
     const tokens = ctx.db.t('tokens');
     tokens.remove(tokens.rows.filter((r) => r.user_id === student.id));
     ctx.db.changedCache = true;
-    return { password: password };
+    return keepAnswer_(ctx.request, { password: password });
   });
 }
 
@@ -4382,7 +4414,7 @@ function removal_(db, pick, everything) {
   return { people: people, rows: rows };
 }
 
-/** A removal as counts: {people, names, teacher (one of them is the teacher), rows: {tab: count}, total}. */
+/** A removal as counts: {people, teacher (one of them is the teacher), rows: {tab: count}, total}. */
 function removalCounts_(removal) {
   const rows = {};
   let total = 0;
@@ -4390,22 +4422,7 @@ function removalCounts_(removal) {
     rows[name] = removal.rows[name].length;
     total += rows[name];
   });
-  return { people: removal.people.length, names: removal.people.map((u) => u.name), teacher: removal.people.some((u) => u.role === 'teacher'),
-    rows: rows, total: total };
-}
-
-/** Deletes whole rows of a tab, bottom up, a run of neighbours at a time. Sheets keeps at least one row below the
- * frozen header, so a tab losing every row it has gets an empty row added at its end first. */
-function deleteSheetRows_(sheet, rows) {
-  const numbers = rows.map((r) => r._row).sort((a, b) => b - a);
-  if (!numbers.length) return;
-  if (numbers.length >= sheet.getMaxRows() - 1) sheet.insertRowsAfter(sheet.getMaxRows(), 1);
-  for (let i = 0; i < numbers.length;) {
-    let j = i;
-    while (j + 1 < numbers.length && numbers[j + 1] === numbers[j] - 1) j++;
-    sheet.deleteRows(numbers[j], j - i + 1);
-    i = j + 1;
-  }
+  return { people: removal.people.length, teacher: removal.people.some((u) => u.role === 'teacher'), rows: rows, total: total };
 }
 
 /** Runs `fn` under the script lock with the Sheet read afresh (a flush first, as Context_.lock does), then flushes and
@@ -4435,8 +4452,8 @@ function removePeople_(db, pick, everything) {
   return menuLock_(db, () => {
     const removal = removal_(db, pick, everything);
     forgetPhones_(removal.people, everything);
-    personTabs_().forEach(([name]) => deleteSheetRows_(db.t(name).sheet, removal.rows[name]));
-    deleteSheetRows_(db.t('users').sheet, removal.people);
+    personTabs_().forEach(([name]) => db.t(name).remove(removal.rows[name]));
+    db.t('users').remove(removal.people);
     return removalCounts_(removal);
   });
 }

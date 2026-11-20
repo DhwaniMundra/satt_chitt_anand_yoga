@@ -6,8 +6,10 @@
 
 // ---------- public ----------
 
+/** ok, with two fields no other answer has, so the app can tell the health check from a call's own answer: what the
+ * redirect's one-time target gives when it is fetched a second time. */
 function health_() {
-  return { ok: true };
+  return { ok: true, assistant: 'off', model: null };
 }
 
 function studio_(ctx) {
@@ -117,11 +119,19 @@ function changePassword_(ctx) {
     if (attemptsBlocked_(key)) throw new HttpError_(429, 'too_many_attempts');
     attemptsFail_(key);
   }, true);
-  if (!checkPassword_(body.current_password, user.pw_hash)) throw new HttpError_(400, 'bad_password');
+  if (!checkPassword_(body.current_password, user.pw_hash)) {
+    // A copy of this change may have changed it after this one looked for its answer: that copy kept its answer
+    // before its write could be read.
+    const kept = replayed_(ctx.request);
+    if (kept) return kept;
+    throw new HttpError_(400, 'bad_password');
+  }
   const pwHash = hashPassword_(body.new_password);
   const mine = sha256Hex_(ctx.token);
   return ctx.lock(() => {
     attemptsClear_(key);
+    const kept = replayed_(ctx.request); // a copy of this change, with its request id, that had the lock first
+    if (kept) return kept;
     const users = ctx.db.t('users');
     const me = userById_(users.rows, user.id);
     if (!me) throw new HttpError_(401, 'signed_out');
@@ -129,7 +139,7 @@ function changePassword_(ctx) {
     const tokens = ctx.db.t('tokens');
     tokens.remove(tokens.rows.filter((r) => r.user_id === user.id && r.token_hash !== mine));
     ctx.db.changedCache = true;
-    return { ok: true };
+    return keepAnswer_(ctx.request, { ok: true });
   });
 }
 
@@ -384,20 +394,23 @@ function placeInBatch_(ctx) {
 }
 
 /** A new temporary password for a student who forgot theirs, for the teacher to pass on however the class keeps in
- * touch; the student can change it from the Me tab. Signs the student out everywhere. */
+ * touch; the student can change it from the Me tab. Signs the student out everywhere. A copy of the request (the
+ * teacher's second confirm, or a retry, with the same request id) gets the same password, even arriving together. */
 function resetPassword_(ctx) {
   teacher_(ctx);
   const { path } = ctx.check({ path: PATH_USER_ });
   const password = newCode_(8);
   const pwHash = hashPassword_(password);
   return ctx.lock(() => {
+    const kept = replayed_(ctx.request); // a copy of this request that had the lock first
+    if (kept) return kept;
     const users = ctx.db.t('users');
     const student = studentRow_(ctx, path.user_id);
     users.update(student, { pw_hash: pwHash });
     const tokens = ctx.db.t('tokens');
     tokens.remove(tokens.rows.filter((r) => r.user_id === student.id));
     ctx.db.changedCache = true;
-    return { password: password };
+    return keepAnswer_(ctx.request, { password: password });
   });
 }
 

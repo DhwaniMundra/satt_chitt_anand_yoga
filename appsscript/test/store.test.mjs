@@ -13,7 +13,7 @@ test('the envelope: what a bad one gets', () => {
   assert.equal(post(b, JSON.stringify({ method: 'PATCH', path: '/me' })).body.detail, 'bad_envelope');
   assert.equal(post(b, JSON.stringify({ method: 'GET', path: 'home' })).body.detail, 'bad_envelope');
   assert.equal(JSON.parse(b.context.doPost({}).getContent()).status, 400); // no body at all
-  assert.deepEqual(post(b, JSON.stringify({ method: 'get', path: '/health' })), { status: 200, body: { ok: true } });
+  assert.deepEqual(post(b, JSON.stringify({ method: 'get', path: '/health' })), { status: 200, body: { ok: true, assistant: 'off', model: null } });
 });
 
 test('the envelope: query in the path or apart, the token with or without "Bearer"', () => {
@@ -339,4 +339,44 @@ test('a hand-typed row is read like the app’s own', () => {
   const sheet = b.ss.getSheetByName('feedback');
   sheet.getRange(sheet.getLastRow() + 2, 1).setValue(''); // a blank row in between is skipped
   assert.equal(b.call('GET', '/teacher/insights', { token: t.token }).body.feedback[0].text, 'typed in by hand');
+});
+
+// Sheets keeps at least one row below a tab's frozen header: deleting every row a full tab has would fail, so a write
+// that does gets an empty row added first. The tokens tab is full here: its grid ends at its last row.
+const fullTokens = (b) => {
+  const tokens = b.ss.getSheetByName('tokens');
+  tokens.maxRows = tokens.getLastRow();
+  return tokens;
+};
+
+test('a full tokens tab: a reset, the next sign-up, and its logout, which deletes the tab\'s every row', () => {
+  const b = freshBackend();
+  const { code } = teacherAndCode(b);
+  signup(b, '9000000002', { code, name: 'Asha' });
+  const tokens = fullTokens(b);
+  b.evaluate('resetStudio_(new Db_())');
+  assert.equal(tokens.rows().length, 1, 'the header alone');
+  const teacher = signup(b, '9000000009', { role: 'teacher', code: 'TEACH123' });
+  fullTokens(b);
+  assert.deepEqual(b.call('POST', '/auth/logout', { token: teacher.token }), { status: 200, body: { ok: true } });
+  assert.equal(b.call('GET', '/me', { token: teacher.token }).status, 401);
+  assert.equal(tokens.rows().length, 1);
+  assert.ok(tokens.getMaxRows() >= 2, 'a row kept below the header');
+});
+
+test('a new password for a student whose sign-ins are every row of a full tokens tab', () => {
+  const b = freshBackend();
+  const { t, code } = teacherAndCode(b);
+  const s = signup(b, '9000000002', { code, name: 'Asha' });
+  b.call('POST', '/auth/login', { body: { phone: '9000000002', password: 'secret1' } });
+  b.call('GET', '/me', { token: t.token }); // the teacher's sign-in, cached, then its row deleted by hand
+  const tokens = b.ss.getSheetByName('tokens');
+  const header = tokens.rows()[0];
+  tokens.deleteRow(tokens.rows().findIndex((r) => r[header.indexOf('user_id')] === t.user.id) + 1);
+  fullTokens(b);
+  const reset = b.call('POST', '/teacher/students/' + s.user.id + '/password', { token: t.token });
+  assert.equal(reset.status, 200, JSON.stringify(reset));
+  assert.equal(tokens.rows().length, 1, 'her sign-ins gone, the header kept');
+  assert.equal(b.call('GET', '/me', { token: s.token }).status, 401);
+  assert.equal(b.call('POST', '/auth/login', { body: { phone: '9000000002', password: reset.body.password } }).status, 200);
 });

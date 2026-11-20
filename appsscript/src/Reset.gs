@@ -58,7 +58,7 @@ function removal_(db, pick, everything) {
   return { people: people, rows: rows };
 }
 
-/** A removal as counts: {people, names, teacher (one of them is the teacher), rows: {tab: count}, total}. */
+/** A removal as counts: {people, teacher (one of them is the teacher), rows: {tab: count}, total}. */
 function removalCounts_(removal) {
   const rows = {};
   let total = 0;
@@ -66,22 +66,7 @@ function removalCounts_(removal) {
     rows[name] = removal.rows[name].length;
     total += rows[name];
   });
-  return { people: removal.people.length, names: removal.people.map((u) => u.name), teacher: removal.people.some((u) => u.role === 'teacher'),
-    rows: rows, total: total };
-}
-
-/** Deletes whole rows of a tab, bottom up, a run of neighbours at a time. Sheets keeps at least one row below the
- * frozen header, so a tab losing every row it has gets an empty row added at its end first. */
-function deleteSheetRows_(sheet, rows) {
-  const numbers = rows.map((r) => r._row).sort((a, b) => b - a);
-  if (!numbers.length) return;
-  if (numbers.length >= sheet.getMaxRows() - 1) sheet.insertRowsAfter(sheet.getMaxRows(), 1);
-  for (let i = 0; i < numbers.length;) {
-    let j = i;
-    while (j + 1 < numbers.length && numbers[j + 1] === numbers[j] - 1) j++;
-    sheet.deleteRows(numbers[j], j - i + 1);
-    i = j + 1;
-  }
+  return { people: removal.people.length, teacher: removal.people.some((u) => u.role === 'teacher'), rows: rows, total: total };
 }
 
 /** Runs `fn` under the script lock with the Sheet read afresh (a flush first, as Context_.lock does), then flushes and
@@ -111,8 +96,8 @@ function removePeople_(db, pick, everything) {
   return menuLock_(db, () => {
     const removal = removal_(db, pick, everything);
     forgetPhones_(removal.people, everything);
-    personTabs_().forEach(([name]) => deleteSheetRows_(db.t(name).sheet, removal.rows[name]));
-    deleteSheetRows_(db.t('users').sheet, removal.people);
+    personTabs_().forEach(([name]) => db.t(name).remove(removal.rows[name]));
+    db.t('users').remove(removal.people);
     return removalCounts_(removal);
   });
 }

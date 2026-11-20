@@ -8,11 +8,11 @@
 // the other waits until it lets go, as a real request would.
 //
 // Stale reads (loadBackend({ staleReads: { flushRefreshes } }), or SCA_STALE_READS=1 for the whole suite): how we
-// believe SpreadsheetApp behaves when two executions overlap, from the live test of v0.9.1 (six sign-ups at once got
-// the ids 2, 2, 2, 2, 3, 3 in six rows, while the intake, which reads only under the lock, stayed right). An
-// execution's first read of a tab's cells takes a copy of all of them (Apps Script's look-ahead cache fetches more
-// than it is asked for, to answer the reads that follow); every later getValues() of that tab in the same execution
-// is answered from the copy, which follows the execution's own writes but not anyone else's. The tab's size
+// believe SpreadsheetApp behaves when two executions overlap: a tab read before the lock can miss rows another
+// execution wrote (sign-ups sent at once to the web app then share an id), while one read only under the lock stays
+// right. An execution's first read of a tab's cells takes a copy of all of them (Apps Script's look-ahead cache fetches
+// more than it is asked for, to answer the reads that follow); every later getValues() of that tab in the same
+// execution is answered from the copy, which follows the execution's own writes but not anyone else's. The tab's size
 // (getLastRow, getDataRange's dimensions) is always read afresh. So a tab read before the lock and again under it
 // comes back with the rows another execution added meanwhile as empty rows, which the backend skips, and with rows
 // another execution deleted still in place: the next id is one already given, a number already signed up is free, and

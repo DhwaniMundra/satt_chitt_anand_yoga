@@ -1,4 +1,5 @@
-// A live check of sign-ups sent at once, against the deployed web app: what the live test of v0.9.1 found broken.
+// A live check of sign-ups sent at once, against the deployed web app: ids, one account per number, and the answer
+// to a sign-up sent again.
 //
 //   SCA_WEBAPP_URL=<the web app URL> SCA_GROUP_CODE=<the group code> node appsscript/scripts/concurrency.mjs [N]
 //

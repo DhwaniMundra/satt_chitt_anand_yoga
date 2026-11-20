@@ -76,10 +76,10 @@ test('setup run again on a Sheet in use adds the app_link row and changes nothin
   assert.equal(b.call('GET', '/studio').body.batches[0].time, '06:45');
 });
 
-test('a GET answers the health check in the envelope', () => {
+test('a GET answers the health check in the envelope, with fields no other answer has', () => {
   const b = testBackend();
   const out = b.context.doGet({ parameter: {} });
-  assert.deepEqual(JSON.parse(out.getContent()), { status: 200, body: { ok: true } });
+  assert.deepEqual(JSON.parse(out.getContent()), { status: 200, body: { ok: true, assistant: 'off', model: null } });
 });
 
 test('sign up, log in and the Today screen', () => {

@@ -145,8 +145,8 @@ function phoneKey_(phone) {
   return 'phone:' + phone;
 }
 
-/** Under the lock: whether `phone` (normalised) is kept for an account. One the users tab shows with another number
- * (changed by hand) does not count. */
+/** Under the lock, once the users tab has shown no account with `phone` (normalised): whether the number is kept for
+ * one. An account the users tab shows (with another number, changed by hand) does not keep it. */
 function phoneHeld_(ctx, phone, users) {
   const raw = PropertiesService.getScriptProperties().getProperty(phoneKey_(phone));
   let held = null;
@@ -156,9 +156,7 @@ function phoneHeld_(ctx, phone, users) {
     return false;
   }
   if (!held) return false;
-  const row = users.rows.filter((u) => u.id === held.id)[0];
-  if (row) return phoneOf_(row) === phone;
-  if (ctx.now - held.at >= PHONE_TRUST_MS_) return false;
+  if (users.rows.some((u) => u.id === held.id) || ctx.now - held.at >= PHONE_TRUST_MS_) return false;
   console.error('signup: account %s keeps this number, but the users tab as read under the lock has no row with its id; refused as taken',
     held.id);
   return true;
@@ -191,9 +189,8 @@ function forgetPhones_(people, everything) {
 
 // ---------- who is asking ----------
 
-/** The users row with this id, or null. Two rows sharing an id give null, and the execution log says so: ids from
- * newIds_ never repeat, but a row copied by hand, or the duplicates an older backend wrote, must not let one person's
- * token or a lookup reach another. */
+/** The users row with this id, or null. Two rows sharing an id (a row copied by hand, say: ids from newIds_ never
+ * repeat) give null, and the execution log says so, so one person's token or a lookup never reaches another. */
 function userById_(users, id) {
   const found = users.filter((u) => u.id === id);
   if (found.length > 1) console.error('users: %s rows share the id %s; none of them is used', found.length, id);

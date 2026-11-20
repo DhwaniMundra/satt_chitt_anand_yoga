@@ -1,11 +1,11 @@
-// Two requests at once, as the live test of v0.9.1 sent them: sign-ups, logouts, the first visits of a day, a login
-// that overlaps a removal, a password change and intakes, each with another request run in its middle (meanwhile() in
-// fakes.mjs) and the Sheet read as we believe Apps Script reads it when executions overlap (the stale-read mode in
-// fakes.mjs: a tab read twice in one execution comes back the second time as it was the first). Each runs in two
-// models: `believed`, where a flush makes the next reads go to the Sheet, and `worst`, where it refreshes nothing and
-// only a tab first read under the lock is read right. Then the guards that hold whatever a read misses: ids that never
-// repeat, one account per number, a shared id refused, sign-up and login answered again for their request id, and an
-// intake's short hold on the lock.
+// Two requests at once, as a class sends them: sign-ups, logouts, the first visits of a day, a login that overlaps a
+// removal, a password change, a new password for a student and intakes, each with another request run in its middle
+// (meanwhile() in fakes.mjs) and the Sheet read as we believe Apps Script reads it when executions overlap (the
+// stale-read mode in fakes.mjs: a tab read twice in one execution comes back the second time as it was the first).
+// Each runs in two models: `believed`, where a flush makes the next reads go to the Sheet, and `worst`, where it
+// refreshes nothing and only a tab first read under the lock is read right. Then the guards that hold whatever a read
+// misses: ids that never repeat, one account per number, a shared id refused, the writes answered again for their
+// request id (two copies arriving together too), and an intake's short hold on the lock.
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { addRow, DAY, freshBackend, MIN, setting, signup, teacherAndCode } from './helpers.mjs';
@@ -284,12 +284,75 @@ test('a sign-up sent again with its request id gets the first answer: the same a
   assert.equal(join(b, '9000000002', 'Asha', { requestId: 'r-1' }).body.detail, 'phone_taken', 'kept ten minutes');
 });
 
-test('only a sign-up that succeeded is kept for its request id', () => {
+test('a sign-up refused is answered again the same for its request id, and a new id is asked afresh', () => {
   const b = freshBackend();
   teacherAndCode(b);
   assert.equal(join(b, '9000000002', 'Asha', { requestId: 'r-1', code: 'WRONG2' }).body.detail, 'bad_group_code');
-  assert.equal(join(b, '9000000002', 'Asha', { requestId: 'r-1' }).status, 200);
+  assert.equal(join(b, '9000000002', 'Asha', { requestId: 'r-1' }).body.detail, 'bad_group_code', 'the same id is the same sign-up');
+  assert.equal(join(b, '9000000002', 'Asha', { requestId: 'r-2' }).status, 200);
 });
+
+test('a login refused is answered again for its request id without counting another wrong try; busy is never kept', () => {
+  const b = freshBackend();
+  teacherAndCode(b);
+  signup(b, '9000000002', { name: 'Asha' });
+  const login = (requestId, password) => b.call('POST', '/auth/login', { requestId, body: { phone: '9000000002', password } });
+  for (let i = 0; i < 8; i++) assert.deepEqual(login('l-1', 'wrong!'), { status: 401, body: { detail: 'bad_login' } }, 'try ' + (i + 1));
+  assert.equal(login('l-2', 'secret1').status, 200, 'one wrong try counted, not eight');
+  b.state.lockFree = false;
+  assert.equal(login('l-3', 'secret1').body.detail, 'busy');
+  b.state.lockFree = true;
+  assert.equal(login('l-3', 'secret1').status, 200, 'busy passes, so it is not kept');
+  for (let i = 0; i < 5; i++) login('l-4' + i, 'wrong!');
+  assert.equal(login('l-5', 'secret1').body.detail, 'too_many_attempts');
+  b.state.offsetMs += 16 * MIN;
+  assert.equal(login('l-5', 'secret1').status, 200, 'too_many_attempts passes with time, so it is not kept');
+});
+
+test('a new password for a student sent again with its request id gets the same password, which works', () => {
+  const b = freshBackend();
+  const { t, code } = teacherAndCode(b);
+  const s = signup(b, '9000000002', { code, name: 'Asha' });
+  const reset = (requestId) => b.call('POST', '/teacher/students/' + s.user.id + '/password', { token: t.token, requestId });
+  const first = reset('p-1');
+  assert.deepEqual(reset('p-1'), first);
+  const login = (password) => b.call('POST', '/auth/login', { body: { phone: '9000000002', password } }).status;
+  assert.equal(login(first.body.password), 200);
+  assert.notEqual(reset('p-2').body.password, first.body.password, 'a new id is a new password');
+});
+
+for (const model of Object.keys(MODELS)) {
+  test(`two copies of a new password at once give one password, and it works (${model})`, () => {
+    const { b, other, t, code } = studio(model);
+    const s = signup(b, '9000000002', { code, name: 'Asha' });
+    const reset = (backend) => backend.call('POST', '/teacher/students/' + s.user.id + '/password', { token: t.token, requestId: 'p-1' });
+    let second;
+    // The teacher's second confirm, with the first's request id, arrives just before the first takes the lock.
+    b.meanwhile({ lock: 1 }, () => { second = reset(other); });
+    const first = reset(b);
+    assert.equal(first.status, 200, JSON.stringify(first));
+    assert.deepEqual(second, first);
+    assert.equal(b.call('POST', '/auth/login', { body: { phone: '9000000002', password: first.body.password } }).status, 200);
+    assert.deepEqual(reset(b), first, 'and a third copy after them');
+  });
+
+  for (const moment of [{ lock: 1 }, { lock: 2 }, { read: 'tokens' }]) {
+    test(`two copies of a password change at once change it once and get one answer (${model}, the other at ${JSON.stringify(moment)})`, () => {
+      const { b, other } = studio(model);
+      const asha = signup(b, '9000000002', { name: 'Asha' });
+      const token = b.call('POST', '/auth/login', { body: { phone: '9000000002', password: 'secret1' } }).body.token;
+      const change = (backend) => backend.call('POST', '/me/password', { token, requestId: 'c-1',
+        body: { current_password: 'secret1', new_password: 'secret2' } });
+      let second;
+      b.meanwhile(moment, () => { second = change(other); });
+      const first = change(b);
+      assert.deepEqual([first, second], [{ status: 200, body: { ok: true } }, { status: 200, body: { ok: true } }]);
+      assert.equal(me(b, token).status, 200, 'this login stays signed in');
+      assert.equal(me(b, asha.token).status, 401, 'the sign-up\'s login is signed out');
+      assert.equal(b.call('POST', '/auth/login', { body: { phone: '9000000002', password: 'secret2' } }).status, 200);
+    });
+  }
+}
 
 test('a login sent again with its request id gets the first token and writes one', () => {
   const b = freshBackend();

@@ -136,12 +136,18 @@ phone app ◀──── HTTP 200 {"status": 401, "body": {...}} ────�
   check-ins tab and its one write. An intake save holds it for two reads and two or three writes, no row deleted.
   `/home` and `/teacher/home` take it only to make the week (below). Writes are flushed before the lock is let go.
 - **A write sent twice is written once.** The app sends a `request_id`, the same for each try of the same action,
-  with these writes: the check-in before class, a practice on one's own (`/me/solo`), feedback (`/feedback`), a
-  password change (`/me/password`), and the teacher's feedback on an item, batch moves and placements, and new
-  passwords for a student; and, from the app of v1.0, sign-up and login. The answer is kept for ten minutes in
-  `CacheService`, by the login token's hash and the id (for sign-up and login, which carry no token, by the hash of
-  the phone number, normalised, and the id), and a repeat gets it back instead of writing again. Two copies of a
-  sign-up or login that arrive together write once: each looks for the other's answer again under the lock.
+  with every write it makes: sign-up and login; the check-in before class and saying how it went (the mood, and each
+  item's answers); a practice on one's own (`/me/solo`); the intake (`PUT /me/intake`); a shared note (`/me/shared`);
+  feedback (`/feedback`); a password change (`/me/password`); the language (`POST /me`); and the teacher's links,
+  settings and curricula (every `PUT`), feedback on an item, batch moves and placements, removing a student or taking
+  one back, a new group code, and new passwords for a student. Logout alone goes without one. The answer is kept for
+  ten minutes in `CacheService`, by the login token's hash and the id (for sign-up and login, which carry no token,
+  by the hash of the phone number, normalised, and the id), and a repeat gets it back instead of writing again. Only
+  answers that succeeded are kept, but for sign-up and login, whose refusals are kept too (not `too_many_attempts`,
+  which passes with time, nor `busy` or a 5xx), so a retry after a lost answer is not counted as another wrong try.
+  Two copies that arrive together write once: a route that holds the lock throughout looks for the other's answer
+  inside it, and sign-up, login, a password change and a new password for a student look again under their own
+  lock and keep their answer before letting it go.
 - **Ids** are the largest id + 1, worked out under the lock. A person's and a class's, which other rows point at, come
   from a counter in the script properties that never goes back (the larger of it and the largest id, + 1), so an id
   is never given twice: not after the Sheet's menu removes someone, nor when a read misses a row just written. Two
@@ -209,7 +215,9 @@ the app counts them. Besides the routes' own errors:
 | 503 | `{"detail": "busy"}` | the script lock was not free within 20 s |
 
 A **GET** with no envelope (a browser, an uptime check) answers the health check:
-`{"status":200,"body":{"ok":true,"assistant":"off","model":null}}`.
+`{"status":200,"body":{"ok":true,"assistant":"off","model":null}}`. No other answer has `assistant` or `model`, so the
+app can tell it from a call's own answer: it is what the redirect's one-time address (below) gives when fetched a
+second time.
 
 The web app answers a POST with a 302 redirect to `script.googleusercontent.com`; follow it with a **GET**, as curl's
 `-L` and `fetch` do. Do not re-send the POST to the new address.
@@ -447,7 +455,8 @@ done
   hour), the history mixing classes and sessions on one's own, the practice summary, and the rules.
 - [`store.test.mjs`](test/store.test.mjs): the envelope, a write repeated with its request id, validation shapes, text
   kept as typed, hashed tokens and passwords, columns by name, ids, the lock (busy, always let go), a failure inside a
-  route, growing tabs, the cache and its invalidation, the Dashboard's formulas.
+  route, growing tabs, a full tab losing its every row (a logout, a new password), the cache and its invalidation,
+  the Dashboard's formulas.
 - [`reset.test.mjs`](test/reset.test.mjs): the Sheet's menu: which tabs hold a person's rows; removing the test
   people (theirs go, everyone else's rows stay as they were); a removed person's token refused at once, a write
   replayed with its request id bringing nothing back, a login that overlaps the removal; resetting the studio (what
@@ -456,9 +465,10 @@ done
 - [`concurrency.test.mjs`](test/concurrency.test.mjs): two requests at once, each run in the middle of another
   (`meanwhile()` in the fakes), with the Sheet read as we believe Apps Script reads it when requests overlap (below):
   sign-ups (two numbers, or one number twice), logouts, the first visits of a day, intakes, a login and the menu
-  overlapping a removal or a logout; then the guards that hold whatever a read misses (ids that never repeat, one
-  account per number, a shared id refused, sign-up and login answered again for their request id) and the intake's
-  calls under the lock.
+  overlapping a removal or a logout, two copies of a password change or of a new password for a student; then the
+  guards that hold whatever a read misses (ids that never repeat, one account per number, a shared id refused,
+  sign-up, login and a new password answered again for their request id, refusals of sign-up and login too) and the
+  intake's calls under the lock.
 - [`snapshot.test.mjs`](test/snapshot.test.mjs): a regression snapshot, 105 requests and their recorded answers
   ([`test/snapshot/`](test/snapshot/)); every status and every body must match. After a deliberate change to the
   answers, `node appsscript/test/snapshot/record.mjs` records them again; read its diff before committing.

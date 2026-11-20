@@ -11,6 +11,10 @@
 
 const METHODS_ = ['GET', 'POST', 'PUT', 'DELETE'];
 const LOCK_ = true; // the route writes: it runs under the script lock from start to finish
+// The route takes the lock itself, around its writes, and under it looks for the answer a copy of the request (the same
+// request id) kept, and keeps its own before letting the lock go (replayed_, keepAnswer_): a write that is not the same
+// twice, so two copies arriving together must write once (a sign-up, a login, a new password).
+const OWN_REPLAY_ = 'own replay';
 const REPLAY_S_ = 600; // how long the answer to a write with a request id is kept for a repeat of it
 const AUTH_PATHS_ = ['/auth/signup', '/auth/login']; // answered again by the phone number and the request id
 
@@ -100,15 +104,15 @@ function handle_(request) {
   }
 }
 
-/** [method, path pattern, handler, LOCK_ when the handler writes and holds the lock throughout]. A writing route
- * without LOCK_ takes the lock itself around its writes, to keep a slow step (a password hash) or its reads (a
- * check-in, an intake) out of it; what it writes it reads for the first time under the lock wherever it can. */
+/** [method, path pattern, handler, LOCK_ when the handler writes and holds the lock throughout, or OWN_REPLAY_]. A
+ * writing route without LOCK_ takes the lock itself around its writes, to keep a slow step (a password hash) or its
+ * reads (a check-in, an intake) out of it; what it writes it reads for the first time under the lock wherever it can. */
 function routes_() {
   return [
     ['GET', '/health', health_],
     ['GET', '/studio', studio_],
-    ['POST', '/auth/signup', signup_],
-    ['POST', '/auth/login', login_],
+    ['POST', '/auth/signup', signup_, OWN_REPLAY_],
+    ['POST', '/auth/login', login_, OWN_REPLAY_],
     ['POST', '/auth/logout', logout_],
     ['GET', '/me', me_],
     ['POST', '/me', updateMe_, LOCK_],
@@ -119,7 +123,7 @@ function routes_() {
     ['GET', '/me/asanas', myItems_],
     ['GET', '/me/asanas/{item}', myItem_],
     ['POST', '/me/shared', shareNote_, LOCK_],
-    ['POST', '/me/password', changePassword_],
+    ['POST', '/me/password', changePassword_, OWN_REPLAY_],
     ['GET', '/home', home_],
     ['GET', '/curricula', curricula_],
     ['POST', '/sessions/{session_id}/checkin', checkin_],
@@ -137,7 +141,7 @@ function routes_() {
     ['GET', '/teacher/students', students_],
     ['POST', '/teacher/students/{user_id}/status', setStatus_, LOCK_],
     ['PUT', '/teacher/students/{user_id}/batch', placeInBatch_, LOCK_],
-    ['POST', '/teacher/students/{user_id}/password', resetPassword_],
+    ['POST', '/teacher/students/{user_id}/password', resetPassword_, OWN_REPLAY_],
     ['GET', '/teacher/students/{user_id}/asanas', studentItems_],
     ['GET', '/teacher/students/{user_id}/asanas/{item}', studentItem_],
     ['POST', '/teacher/students/{user_id}/feedback', itemFeedback_, LOCK_],
@@ -151,7 +155,7 @@ function route_(request) {
   let pathMatched = false;
   const all = routes_();
   for (let i = 0; i < all.length; i++) {
-    const [method, pattern, handler, lock] = all[i];
+    const [method, pattern, handler, mode] = all[i];
     const want = pattern.split('/');
     if (want.length !== parts.length) continue;
     const params = {};
@@ -168,16 +172,18 @@ function route_(request) {
     pathMatched = true;
     if (method !== request.method) continue;
     const ctx = new Context_(request, params);
+    if (mode === OWN_REPLAY_) return replayed_(request) || keepingRefusals_(request, () => handler(ctx));
     const run = () => once_(request, () => handler(ctx));
-    return lock ? ctx.lock(run) : run();
+    return mode === LOCK_ ? ctx.lock(run) : run();
   }
   if (pathMatched) throw new HttpError_(405, 'Method Not Allowed');
   throw new HttpError_(404, 'Not Found');
 }
 
 /** Runs a write once per request id: a repeat (a retry after a timeout) gets the answer kept from the first time, for
- * REPLAY_S_, instead of writing again. Only answers that succeeded are kept. A route that holds the lock throughout
- * looks inside it, so two copies arriving together write once; sign-up and login look again under their own lock. */
+ * REPLAY_S_, instead of writing again. Only answers that succeeded are kept, but for sign-up and login
+ * (keepingRefusals_). A route that holds the lock throughout looks inside it, so two copies arriving together write
+ * once; an OWN_REPLAY_ route looks again under its own lock. */
 function once_(request, fn) {
   return replayed_(request) || keepAnswer_(request, fn());
 }
@@ -201,14 +207,27 @@ function replayKey_(request) {
   return request.token ? 'req:' + sha256Hex_(request.token) + ':' + request.requestId : null;
 }
 
-/** The answer kept for a repeat of this request, or null. */
+/** The answer kept for a repeat of this request, or null; a refusal kept for it is thrown again. */
 function replayed_(request) {
   const key = replayKey_(request);
-  const kept = key ? cache_().get(key) : null;
-  return kept ? JSON.parse(kept) : null;
+  const kept = key ? JSON.parse(cache_().get(key) || 'null') : null;
+  if (kept && kept.$refused) throw new HttpError_(kept.$refused, kept.detail);
+  return kept;
 }
 
-/** Keeps `answer` for a repeat of this request (sign-up and login do so under their lock, before letting it go);
+/** Sign-up and login keep a refusal for a repeat too (a 4xx, but too_many_attempts, which passes with time; never busy
+ * or a 5xx, which may go another way next time), so a retry after a lost answer is not counted as another wrong try. */
+function keepingRefusals_(request, fn) {
+  try {
+    return fn();
+  } catch (err) {
+    const refusal = err instanceof HttpError_ && err.status >= 400 && err.status < 500 && err.status !== 429;
+    if (refusal && AUTH_PATHS_.indexOf(request.path) >= 0) keepAnswer_(request, { $refused: err.status, detail: err.detail });
+    throw err;
+  }
+}
+
+/** Keeps `answer` for a repeat of this request (an OWN_REPLAY_ route does so under its lock, before letting it go);
  * returns it. */
 function keepAnswer_(request, answer) {
   const key = replayKey_(request);
@@ -231,11 +250,11 @@ class Context_ {
 
   /** Runs `fn` holding the script lock; re-entrant. It flushes first: Apps Script may answer a read of a tab from what
    * this execution read of it before (it fetches more than it is asked for, to answer the reads that follow), so a tab
-   * read before the lock could come back under it without the rows another request wrote while this one waited (in
-   * the live test of v0.9.1, six sign-ups at once got the ids 2, 2, 2, 2, 3, 3); a flush sends the next reads to the
-   * Sheet. The tabs read before the lock are then read again (unless `keepReads`, for a lock that writes no tab or
-   * reads for the first time the ones it writes), and writes are flushed before the lock is let go. A route that
-   * writes a tab reads it for the first time under the lock wherever it can, so as not to rest on the flush alone. */
+   * read before the lock could come back under it without the rows another request wrote while this one waited (and
+   * sign-ups at once would take the same id); a flush sends the next reads to the Sheet. The tabs read before the
+   * lock are then read again (unless `keepReads`, for a lock that writes no tab or reads for the first time the ones
+   * it writes), and writes are flushed before the lock is let go. A route that writes a tab reads it for the first
+   * time under the lock wherever it can, so as not to rest on the flush alone. */
   lock(fn, keepReads) {
     if (this.locked) return fn();
     const lock = LockService.getScriptLock();

@@ -68,7 +68,7 @@ test('remove test people: only names starting with TEST go, with every row of th
   for (const [name, col] of PERSON_TABS) assert.ok(before[name].slice(1).some(theirs(name, col)), name + ' has rows of test people to remove');
 
   const out = run(b, 'removeTestPeople_(new Db_())');
-  assert.deepEqual([out.people, out.names.sort(), out.teacher], [3, ['  test Meera', 'TEST Ravi', 'TEST waiting'], false]);
+  assert.deepEqual([out.people, out.teacher], [3, false]);
   for (const [name, col] of [['users', 'id']].concat(PERSON_TABS)) {
     const [header, ...rows] = before[name];
     const others = rows.filter((r) => !theirs(name, col)(r));
