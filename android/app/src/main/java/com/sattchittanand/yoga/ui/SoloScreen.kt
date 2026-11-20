@@ -116,6 +116,15 @@ fun SoloPractise(vm: AppViewModel, run: SoloRun) {
             dismissButton = { TextButton(onClick = { leaving = false }) { Text(stringResource(R.string.keep_going)) } },
         )
     }
+    val saved = stringResource(R.string.solo_saved)
+    if (run.unsure) { // its Finish may have reached the studio or not: sent again as it is, or left, never changed
+        Column(Modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text(stringResource(R.string.solo_unsure), style = MaterialTheme.typography.bodyLarge)
+            Button(onClick = { vm.finishSolo(saved) }, enabled = !vm.busy, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.try_again)) }
+            OutlinedButton(onClick = { vm.solo = null }, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.leave)) }
+        }
+        return
+    }
     val curricula = vm.curricula ?: return Waiting(vm, vm::refresh)
     val f = run.current
     var now by remember { mutableLongStateOf(SystemClock.elapsedRealtime()) }
@@ -132,12 +141,11 @@ fun SoloPractise(vm: AppViewModel, run: SoloRun) {
     }
     val update = { next: SoloRun -> vm.solo = next }
     val last = run.at == run.said.size - 1
-    val saved = stringResource(R.string.solo_saved)
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Label(stringResource(R.string.item_of, run.at + 1, run.said.size))
         Text(curricula.library[f.item]?.title(vm.prefs.lang) ?: f.item, style = MaterialTheme.typography.headlineSmall)
         curricula.find(run.curriculum)?.items?.firstOrNull { it.item == f.item }?.let {
-            Text(listOf(doseLabel(it.dose, it.unit), it.cue).filter(String::isNotBlank).joinToString(" · "), style = MaterialTheme.typography.bodyMedium,
+            Text(listOf(doseLabel(it), it.cue).filter(String::isNotBlank).joinToString(" · "), style = MaterialTheme.typography.bodyMedium,
                 color = Palette.muted)
         }
         Text(stopwatch((run.held(now) / 1000).toInt()), Modifier.fillMaxWidth(), style = MaterialTheme.typography.displayMedium, textAlign = TextAlign.Center)

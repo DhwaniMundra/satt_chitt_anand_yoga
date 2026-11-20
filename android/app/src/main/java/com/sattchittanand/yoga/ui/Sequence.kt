@@ -19,6 +19,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.sattchittanand.yoga.Curricula
 import com.sattchittanand.yoga.Curriculum
+import com.sattchittanand.yoga.PlanItem
 import com.sattchittanand.yoga.R
 
 /** The reaction scale, 1 to 4, as the student taps it and the teacher reads it. */
@@ -32,12 +33,17 @@ private val DOSE_UNITS = mapOf(
     "strokes" to R.plurals.dose_strokes,
 )
 
-/** "5 breaths", "3 min": a unit the app does not know (the owner can type any in the Sheet) is shown as written, and
- *  so is the unit alone when the owner left the dose empty or wrote words in it. */
+/** "5 breaths", "3 min", "2.5 min": a unit the app does not know (the owner can type any in the Sheet) is shown as
+ *  written, and so is the unit alone when the owner left the dose empty or wrote words in it. A count that is not
+ *  whole takes the unit's word for many, its number as written. */
 @Composable
-fun doseLabel(dose: Int?, unit: String): String = when (dose) {
-    null -> unit
-    else -> DOSE_UNITS[unit]?.let { pluralStringResource(it, dose, dose) } ?: "$dose $unit".trim()
+fun doseLabel(p: PlanItem): String {
+    val words = DOSE_UNITS[p.unit]
+    return when {
+        p.doseLabel != null -> words?.let { pluralStringResource(it, 2, 2).replaceFirst(Regex("[0-9०-९]+"), p.doseLabel) } ?: "${p.doseLabel} ${p.unit}".trim()
+        p.dose == null -> p.unit
+        else -> words?.let { pluralStringResource(it, p.dose, p.dose) } ?: "${p.dose} ${p.unit}".trim()
+    }
 }
 
 /** A curriculum's items in order, each with how much and how to do it; with [collapsed], that many until "Show all". */
@@ -52,7 +58,7 @@ fun Sequence(plan: Curriculum, curricula: Curricula, lang: String, collapsed: In
                 Text(curricula.library[p.item]?.title(lang) ?: p.item, style = MaterialTheme.typography.bodyLarge)
                 Text(p.cue, style = MaterialTheme.typography.bodyMedium, color = Palette.muted)
             }
-            Text(doseLabel(p.dose, p.unit), style = MaterialTheme.typography.labelLarge, color = Palette.moss)
+            Text(doseLabel(p), style = MaterialTheme.typography.labelLarge, color = Palette.moss)
         }
     }
     if (plan.items.size > collapsed) {

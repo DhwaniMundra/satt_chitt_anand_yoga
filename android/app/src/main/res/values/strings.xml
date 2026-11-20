@@ -359,4 +359,5 @@
     <string name="field_pain_note">The pain note</string>
     <string name="field_note">The note</string>
     <string name="field_text">The text</string>
+    <string name="solo_unsure">We could not tell whether this practice reached the studio. Try again to make sure, or leave it.</string>
 </resources>
