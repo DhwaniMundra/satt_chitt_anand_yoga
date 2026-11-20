@@ -1,4 +1,4 @@
-"""Phone screens: the v1 tour's real screenshots, by what they show (SHOTS), and the one card the film redraws.
+"""Phone screens: the v0.9 tour's real screenshots, by what they show (SHOTS), and the one card the film redraws.
 
 `screen(name, clock)` gives a 540x1200 screen with its status-bar clock set to the moment for whoever holds the phone:
 a real screenshot by its role in SHOTS, or "mock:<name>[:<argument>]". Everything is drawn at S times that size, in
@@ -36,21 +36,25 @@ FALLBACK, SERIF_FALLBACK = ("/usr/share/fonts/truetype/liberation/LiberationSans
 # How each item went, as the app's chips say it (the film's map icons use these colours too).
 SCALE = (("Not yet", (188, 180, 166)), ("With effort", (214, 160, 84)), ("Steady", (104, 152, 166)), ("At ease", (46, 108, 126)))
 
-V1 = "v1.0/"
+TOUR = "v0.9/"
 SHOTS = {  # the final tour's screens (scripts/viz.py), by what they show
-    "signup": V1 + "release_02_signup.png",
-    "today": V1 + "03_today.png", "checkin": V1 + "04_checkin_before.png", "after": V1 + "05_after_class.png",
-    "after_items": V1 + "05a_after_class_items.png", "practice": V1 + "07_practice.png", "history": V1 + "08_item_history.png",
-    "solo_choose": V1 + "09_solo_choose.png", "solo_item": V1 + "10_solo_item.png", "history_solo": V1 + "12_history_solo.png",
-    "ask": V1 + "13_ask.png", "ask_answer": V1 + "14_ask_asana.png", "me": V1 + "16_me.png", "me_shared": V1 + "16b_me_shared.png",
-    "solo_running": V1 + "10a_solo_running.png", "practice_after": V1 + "12b_practice_after_solo.png",
-    "waiting": V1 + "21_waiting.png", "intake": V1 + "22_intake.png", "intake_poses": V1 + "23_intake_poses.png",
-    "thanks": V1 + "23b_intake_thanks.png",
-    "batches": V1 + "26_teacher_batches.png",
-    "students_waiting": V1 + "27_students_waiting.png", "placed_today": V1 + "27b_neha_today.png",
-    "students_placed": V1 + "30b_rohan_moved.png",
-    "move": V1 + "30_move_batch.png", "asha_items": V1 + "31_asha_items.png", "feedback_sent": V1 + "32_feedback_sent.png",
-    "insights": V1 + "33_insights.png", "class_review": V1 + "34_class_review.png",
+    "signup": TOUR + "release_02_signup.png",
+    "today": TOUR + "03_today.png", "checkin": TOUR + "04_checkin_before.png", "after": TOUR + "05_after_class.png",
+    "after_items": TOUR + "05a_after_class_items.png", "practice": TOUR + "07_practice.png",
+    "history": TOUR + "08_item_history.png",
+    "solo_choose": TOUR + "09_solo_choose.png", "solo_item": TOUR + "10_solo_item.png",
+    "history_solo": TOUR + "12_history_solo.png",
+    "ask": TOUR + "13_ask.png", "ask_answer": TOUR + "14_ask_asana.png", "me": TOUR + "16_me.png",
+    "me_shared": TOUR + "16b_me_shared.png",
+    "solo_running": TOUR + "10a_solo_running.png", "practice_after": TOUR + "12b_practice_after_solo.png",
+    "waiting": TOUR + "21_waiting.png", "intake": TOUR + "22_intake.png", "intake_poses": TOUR + "23_intake_poses.png",
+    "thanks": TOUR + "23b_intake_thanks.png",
+    "batches": TOUR + "26_teacher_batches.png",
+    "students_waiting": TOUR + "27_students_waiting.png", "placed_today": TOUR + "27b_neha_today.png",
+    "students_placed": TOUR + "30b_rohan_moved.png",
+    "move": TOUR + "30_move_batch.png", "asha_items": TOUR + "31_asha_items.png",
+    "feedback_sent": TOUR + "32_feedback_sent.png",
+    "insights": TOUR + "33_insights.png", "class_review": TOUR + "34_class_review.png",
 }
 # The debug build's first screens show a "Server address" field: never these, only the release build's copies.
 REFUSED = re.compile(r"(^|/)\d+[a-z]?_(welcome|signup)\.png$")
@@ -333,9 +337,9 @@ def missing(name: str) -> bool:
 
 
 def source(name: str) -> Path:
-    """Where screen `name` is: a version's tour (scripts/viz.py), or a pull request's shots beside v1's."""
+    """Where screen `name` is: a version's tour (scripts/viz.py), or a pull request's shots beside v0.9's."""
     path = SHOTS[name]
-    return shot(path) if path.startswith("v") else folder("v1") / "screens" / path
+    return shot(path) if path.startswith("v") else folder("v0.9") / "screens" / path
 
 
 @functools.lru_cache(maxsize=8)

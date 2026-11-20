@@ -1,6 +1,6 @@
-"""Where the local visualisations live (.local/visualization/, gitignored): one folder per major version, viz_<major>/,
-with each version's screenshots in screens/<version>/ and its recordings and videos in tours/; build files go to work/.
-No dependencies, so any script can import it."""
+"""Where the local visualisations live (.local/visualization/, gitignored): viz_v0/ for the prototypes (v0.1 to v0.7)
+and viz_v0.9/ for the practice tracker (v0.9 on), each with every version's screenshots in screens/<version>/ and its
+recordings and videos in tours/; build files go to work/. No dependencies, so any script can import it."""
 
 import re
 import shutil
@@ -9,23 +9,23 @@ from typing import Callable
 
 LOCAL = Path(__file__).resolve().parents[1] / ".local" / "visualization"
 WORK = LOCAL / "work"
-TEST_RELEASES = {"v0.9": "1"}  # a release for testing, by the major version it leads to
+TRACKER = (0, 9)  # the version the practice tracker began with
 
 
 def folder(version: str) -> Path:
-    """The version's folder, by its major part: v0.4-two-phones -> viz_v0, v1 -> viz_v1; v0.9, the release for testing
-    v1, -> viz_v1."""
-    number = re.match(r"v(\d+)(\.\d+)?", version)
-    return LOCAL / f"viz_v{TEST_RELEASES.get(number[0], number[1])}"
+    """The version's folder: v0, v0.4 and v0.4-two-phones -> viz_v0; v0.9, v0.9_first-two-phones and v0.9.1-two-phones
+    -> viz_v0.9."""
+    number = re.match(r"v(\d+)(?:\.(\d+))?", version)
+    return LOCAL / ("viz_v0.9" if (int(number[1]), int(number[2] or 0)) >= TRACKER else "viz_v0")
 
 
 def tours(version: str) -> Path:
-    """The version's screen recordings and the videos made from them: viz_<major>/tours/."""
+    """The version's screen recordings and the videos made from them: <its folder>/tours/."""
     return folder(version) / "tours"
 
 
 def screens(version: str) -> Path:
-    """The version's screenshots and small recordings: viz_<major>/screens/<version>/."""
+    """The version's screenshots and small recordings: <its folder>/screens/<version>/."""
     return folder(version) / "screens" / version
 
 

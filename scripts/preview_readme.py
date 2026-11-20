@@ -1,8 +1,8 @@
 """Shows the README roughly as GitHub will: renders it with GitHub's Markdown API, points the images at the local
 files, and screenshots the page with a headless browser into the version's folder (scripts/viz.py), for example
-.local/visualization/viz_v1/readme_preview.png; the page itself goes to .local/visualization/work/.
+.local/visualization/viz_v0.9/readme_preview.png; the page itself goes to .local/visualization/work/.
 
-Usage: python3 scripts/preview_readme.py [version, default v1]
+Usage: python3 scripts/preview_readme.py [version, default v0.9.1]
 """
 
 import json
@@ -29,7 +29,7 @@ def main() -> None:
         f'<body><article class="markdown-body">{html}</article></body></html>',
         encoding="utf-8",
     )
-    shot = folder(sys.argv[1] if len(sys.argv) > 1 else "v1") / "readme_preview.png"
+    shot = folder(sys.argv[1] if len(sys.argv) > 1 else "v0.9.1") / "readme_preview.png"
     shot.parent.mkdir(parents=True, exist_ok=True)
     subprocess.run(
         ["brave-browser", "--headless=new", "--disable-gpu", "--hide-scrollbars", "--allow-file-access-from-files",

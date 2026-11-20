@@ -2,8 +2,8 @@
 from the screen, the checks done here, and every answer written out to read.
 
     scripts/demo.sh            # the dev backend with the demo data and the 6 GB emulator, Gemma downloaded
-    python3 scripts/eval_phone.py docs/evals/companion_v1_phone.md             # the conversations
-    python3 scripts/eval_phone.py docs/evals/companion_v1_phone.md --held-out  # then the held-out questions, added to it
+    python3 scripts/eval_phone.py docs/evals/companion_v0.9_phone.md             # the conversations
+    python3 scripts/eval_phone.py docs/evals/companion_v0.9_phone.md --held-out  # then the held-out questions, added to it
 
 adb cannot type Devanagari, so the Hindi and Marathi questions are the Ask screen's suggestion chips, which the app
 words in each language (one of them asks about the student's own asana that most needs attention).
@@ -205,7 +205,7 @@ def main(out, held_out=False):
     passed = sum(all(r[6].values()) for r in results)
     times = sorted(r[5] for r in results)
     lines = [
-        "# Practice companion evaluation: companion_v1_phone", "",
+        f"# Practice companion evaluation: {Path(out).stem}", "",
         "- **Model:** gemma-4-E2B-it in the app (LiteRT-LM on the CPU), on the 6 GB Android emulator",
         "- **Students:** demo students Asha Kulkarni (Intermediate batch) and Kavita Joshi (Pain management batch), synthetic data on the dev backend",
         f"- **Passed the automatic checks:** {passed}/{len(results)}",

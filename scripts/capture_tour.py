@@ -1,7 +1,7 @@
 """Walks through the app on the emulator and saves the same screenshots and two screen recordings every time,
-so each iteration can be compared with the last: screenshots in .local/visualization/viz_<major>/screens/<version>/,
+so each iteration can be compared with the last: screenshots in .local/visualization/viz_v0.9/screens/<version>/,
 each with the screen's UI dump beside it (<name>.xml, every element's bounds), and recordings and their small copies in
-viz_<major>/tours/ (gitignored; scripts/make_figures.py turns the best of it into the committed GIFs and contact sheets
+viz_v0.9/tours/ (gitignored; scripts/make_figures.py turns the best of it into the committed GIFs and contact sheets
 in docs/media/). It prints what the edges of a scrolling list cut through in any shot.
 
 Needs: `source scripts/env.sh`, the 6 GB emulator running (SCA_AVD=sca_phone_big scripts/run_emulator.sh) with
@@ -18,7 +18,7 @@ in the batch her answers point to, moves Rohan, reads the class's review and wri
 her practice after it, Ask about her own asana (asked again in a fresh chat if the answer misreads her data) and asked to
 remember her wrists, Me with that note shared, and Hindi and Marathi (07-20).
 
-Usage: python3 scripts/capture_tour.py v1.0
+Usage: python3 scripts/capture_tour.py v0.9.1
 """
 
 import re

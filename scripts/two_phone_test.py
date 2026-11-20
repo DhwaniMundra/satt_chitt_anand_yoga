@@ -15,9 +15,9 @@ the server is out of reach, and it lands once it is back. A new group code turns
 whose answers are kept when the phone turns; both sign out and in again, their data still there; and both Today tabs are
 shot in Hindi.
 
-Each step saves a screenshot (.local/visualization/viz_<major>/screens/<version>/), and a check that fails saves the
+Each step saves a screenshot (.local/visualization/viz_v0.9/screens/<version>/), and a check that fails saves the
 screen and its UI dump beside them (fail_<n>.png and .xml). The debug build's run is recorded from both screens into
-one side-by-side video (viz_<major>/tours/two_phones_<version>.mp4). With --release, the same loop runs again on a
+one side-by-side video (viz_v0.9/tours/two_phones_<version>.mp4). With --release, the same loop runs again on a
 release build (shrunk by R8) pointed at the dev backend, its screenshots named release_*; with --release-only, on that
 build alone. The pass/fail list goes to docs/evals/two_phones_<version>.md.
 

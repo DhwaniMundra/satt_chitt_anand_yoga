@@ -1,4 +1,5 @@
-"""Makes the README's pictures in docs/media/ from the local tours in .local/visualization/viz_v0/ (gitignored):
+"""Makes the README's pictures in docs/media/ from the local tours in .local/visualization/viz_v0/ and viz_v0.9/
+(gitignored):
 
 - figures/hero.png and figures/before_after.png
 - gifs/students.gif, gifs/teacher.gif, gifs/two_phones.gif: landscape strips of phones, each playing its own real clip
@@ -249,7 +250,8 @@ def main() -> None:
                              ("v0.2", "v0.2: after the first round of fixes"),
                              ("v0.4", "v0.4: after the code review and the Marathi notes"),
                              ("v0.4-two-phones", "v0.4: two phones, one server (teacher and students, in order)"),
-                             ("v0.5", "v0.5: Ask becomes a practice companion that knows the student's own classes")):
+                             ("v0.5", "v0.5: Ask becomes a practice companion that knows the student's own classes"),
+                             ("v0.9", "v0.9: a practice tracker; the final tour, on synthetic demo data")):
         sheet(version, caption)
     print(f"media in {OUT}")
 

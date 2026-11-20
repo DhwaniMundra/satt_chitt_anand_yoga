@@ -1,11 +1,11 @@
-"""The film for Satt Chitt Anand v1, as an animated story (about two and a half minutes, 1920x1080, narrated): how the
-class works without the app and what gets lost, in muted colour; then the app as v1 has it: the four batches; joining
+"""The film for Satt Chitt Anand v0.9, as an animated story (about two and a half minutes, 1920x1080, narrated): how the
+class works without the app and what gets lost, in muted colour; then the app as v0.9 has it: the four batches; joining
 with the group code, the intake and the teacher's approval into a batch; the class, how it felt and how each item went;
 the teacher's review and feedback; the weeks that follow, with solo practice and a move between batches; Ask; and
 what goes to the teacher's Sheet and what stays on the phone.
 
 Figures, homes, the world, the batches, the camera, the music, the caption bar and the layout check come from
-scripts/film/; the phone screens are the v1 tour's screenshots (scripts/film/screens.py). Every clock agrees with the
+scripts/film/; the phone screens are the v0.9 tour's screenshots (scripts/film/screens.py). Every clock agrees with the
 batches' times: the class is the Intermediate batch at 8:00 in India, on Thursday 19 November. The voice is
 make_video's (Kokoro), so the captions follow it word by word. Everything drawn registers its box, and --qa fails if
 anything collides (film/layout.py has the rules).
@@ -14,8 +14,8 @@ anything collides (film/layout.py has the rules).
     tools/media-venv/bin/python scripts/make_advert.py --storyboard    # a frame per beat, with its line
     tools/media-venv/bin/python scripts/make_advert.py                 # the film, its captions, checked as drawn
 
-Writes .local/visualization/viz_v1/release_v1_1080p.mp4, a 720p copy under 30 MB to send, release_v1.srt, and
-release_v1/ for the checks.
+Writes .local/visualization/viz_v0.9/satt_chitt_anand_film_1080p.mp4, a 720p copy under 30 MB to send
+(satt_chitt_anand_film_720p.mp4), satt_chitt_anand_film.srt, and film/ for the checks.
 """
 
 import argparse
@@ -38,8 +38,8 @@ from make_video import BEZEL, MOSS_LIGHT, SAFFRON_LIGHT, SATT, ease, font, place
 from viz import folder
 
 mv.WORK = mv.LOCAL / "work" / "advert"  # voice clips are cached here, apart from the tour's
-FILM = folder("v1") / "release_v1_1080p.mp4"
-CHECKS = folder("v1") / "release_v1"
+FILM = folder("v0.9") / "satt_chitt_anand_film_1080p.mp4"
+CHECKS = folder("v0.9") / "film"
 SURYA = "[Surya Namaskar](/sˈʊɹjə nʌməskˈɑɹ/)"  # Kokoro's own guess runs the words together
 ASANA = "[asana](/ˈɑsənə/)"
 FPS = 30
@@ -1078,7 +1078,7 @@ def film() -> None:
     mv.WORK.mkdir(parents=True, exist_ok=True)
     CHECKS.mkdir(parents=True, exist_ok=True)
     FAILURES.write_text("")
-    picture, sound = mv.WORK / "film_v1_picture.mp4", mv.WORK / "film_v1_sound.wav"
+    picture, sound = mv.WORK / "film_picture.mp4", mv.WORK / "film_sound.wav"
     mv.render_picture(picture, int(total * FPS), frame)
     mv.soundtrack(sound, total, PLAN, music=lambda seconds: music.music(seconds, (0.05, PLAN[-1].start + 0.1)), volume=0.1)
     mv.mux(picture, sound, total, FILM, FILM.with_name(FILM.name.replace("_1080p", "_720p")))
