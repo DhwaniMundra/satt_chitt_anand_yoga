@@ -19,13 +19,14 @@ class DataTest {
             "curricula": [{"key": "beginner", "name": "Beginner", "about": null, "items": [
                 {"item": "tadasana", "dose": null, "unit": "breaths", "cue": "Stand tall."},
                 {"item": "omkar", "dose": 3, "unit": null, "cue": null},
-                {"item": "omkar", "dose": "5"}]},
+                {"item": "omkar", "dose": "5"},
+                {"item": "tadasana", "dose": 0, "unit": "breaths", "cue": "Slowly."}]},
               {"key": "empty", "name": null}]
         }"""))
         val items = c.find("beginner")!!.items
-        assertEquals(listOf(null, 3, 5), items.map { it.dose })
-        assertEquals(listOf("breaths", "", ""), items.map { it.unit })
-        assertEquals(listOf("Stand tall.", "", ""), items.map { it.cue })
+        assertEquals("0 is no count, as null is", listOf(null, 3, 5, null), items.map { it.dose })
+        assertEquals(listOf("breaths", "", "", "breaths"), items.map { it.unit })
+        assertEquals(listOf("Stand tall.", "", "", "Slowly."), items.map { it.cue })
         assertEquals("", c.find("beginner")!!.about)
         assertEquals(emptyList<PlanItem>(), c.find("empty")!!.items)
         assertEquals("", c.library.getValue("tadasana").english)
@@ -43,10 +44,18 @@ class DataTest {
         val home = Home.from(json("""{"user": $user, "batch": null, "studio": $studio, "sessions": [${session(5, ", \"checked_in\": false")}],
             "after_checkin": null, "after_class": ${session(4, ", \"checked_in\": false, \"curriculum\": \"beginner\", \"said\": null")}, "group_link": null}"""))
         assertEquals(4, home.afterClass!!.id)
-        assertFalse(home.afterClass!!.checkedIn)
+        assertFalse(home.afterClass.checkedIn)
         assertNull(home.afterSaid)
         assertEquals("", home.studio.teacherTitle)
         assertEquals(true, home.checkedIn(5, true).sessions.single().checkedIn)
+        assertEquals("the class to say how it went too", true, home.checkedIn(4, true).afterClass!!.checkedIn)
+    }
+
+    @Test fun aCheckInNotYetConfirmedIsKeptWithItsRequestId() {
+        val pending = listOf(PendingCheckin(5, 3, "a1"), PendingCheckin(9, 5, "b2"))
+        assertEquals(pending, PendingCheckin.restore(PendingCheckin.saved(pending)))
+        assertEquals(emptyList<PendingCheckin>(), PendingCheckin.restore(null))
+        assertEquals(emptyList<PendingCheckin>(), PendingCheckin.restore("not json"))
     }
 
     @Test fun aServerWithoutAfterClassGivesTheClassCheckedInTo() {
@@ -89,7 +98,7 @@ class DataTest {
     }
 
     @Test fun lengthsAreCountedInCodePointsAsTheServerCountsThem() {
-        val hindi = "घुटने में दर्द" // 14 code points: each vowel sign and the nasal mark is one
+        val hindi = "घुटने में दर्द" // Devanagari is all in the BMP: as many code points as chars
         assertEquals(14, hindi.codePointLength())
         assertEquals(14, hindi.length)
         assertEquals("घुटने", hindi.limitedTo(5))

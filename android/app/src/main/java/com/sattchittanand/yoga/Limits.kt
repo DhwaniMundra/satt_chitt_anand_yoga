@@ -1,7 +1,8 @@
 package com.sattchittanand.yoga
 
 /** The server's limits on what people type (appsscript/src/Validate.gs), so a field stops where the server would. Text
- *  is counted in code points, as the server counts it: a Devanagari vowel sign or virama is one. */
+ *  is counted in code points, as the server counts it: the same as String.length, except that a character outside
+ *  the BMP, such as an emoji, is one, not two. */
 object Limits {
     const val NAME = 80
     const val MEALS = 600

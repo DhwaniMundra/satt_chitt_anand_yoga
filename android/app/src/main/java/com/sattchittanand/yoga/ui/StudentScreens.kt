@@ -118,6 +118,12 @@ fun TodayScreen(vm: AppViewModel) {
             }
             if (!home.user.isApproved) PendingCard { aboutMe = true }
 
+            vm.checkInError?.let { code -> // a check-in sent in the background and refused: here until read
+                SectionCard(tint = Palette.saffronLight) {
+                    Text(errorText(code), style = MaterialTheme.typography.bodyMedium)
+                    TextButton(onClick = { vm.checkInError = null }) { Text(stringResource(R.string.ok)) }
+                }
+            }
             next?.let { NextClassCard(vm, it, now) }
 
             home.groupLink?.let { link ->

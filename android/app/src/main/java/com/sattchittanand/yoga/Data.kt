@@ -38,6 +38,11 @@ class Prefs(context: Context) {
         get() = store.getString("solo", null)
         set(value) = store.edit().putString("solo", value).apply()
 
+    /** The check-ins not yet confirmed by the server, as [PendingCheckin.saved] writes them. */
+    var checkins: String?
+        get() = store.getString("checkins", null)
+        set(value) = store.edit().putString("checkins", value).apply()
+
     companion object {
         /** Read before the activity exists, to pick the language its resources load in. */
         fun lang(context: Context): String =
@@ -71,26 +76,37 @@ fun problemCode(detail: JSONArray): String {
  */
 class Api(private val prefs: Prefs) {
 
-    suspend fun get(path: String) = call("GET", path, null, null)
+    suspend fun get(path: String) = call("GET", path, null, null, retry = false)
 
-    /** [requestId] for a write that creates something: the same id for each try of the same action. */
-    suspend fun post(path: String, body: JSONObject = JSONObject(), requestId: String? = null) = call("POST", path, body, requestId)
-    suspend fun put(path: String, body: JSONObject, requestId: String? = null) = call("PUT", path, body, requestId)
+    /** [requestId] for a write that creates something: the same id for each try of the same action, which the server
+     *  writes once, so it may be tried again ([retry]). */
+    suspend fun post(path: String, body: JSONObject = JSONObject(), requestId: String? = null, retry: Boolean = requestId != null) =
+        call("POST", path, body, requestId, retry)
 
-    /** Tries again, waiting a little longer each time, while the server is busy (its lock was taken, so nothing was
-     *  done) and, for a write with a request id, which the server writes once, while the connection fails. */
-    private suspend fun call(method: String, path: String, body: JSONObject?, requestId: String?): JSONObject = withContext(Dispatchers.IO) {
+    suspend fun put(path: String, body: JSONObject, requestId: String? = null) = call("PUT", path, body, requestId, requestId != null)
+
+    private suspend fun call(method: String, path: String, body: JSONObject?, requestId: String?, retry: Boolean): JSONObject =
+        withContext(Dispatchers.IO) { send(method, path, body, requestId, retry) }
+
+    /** With [retry]: tries again, waiting a little longer each time, while the connection fails, and once while the
+     *  server is busy (it has waited 20 s for its lock already, and did nothing). Anything else is the caller's. */
+    private suspend fun send(method: String, path: String, body: JSONObject?, requestId: String?, retry: Boolean): JSONObject {
         var wait = FIRST_WAIT_MS
-        while (wait <= LAST_WAIT_MS) {
+        var busyAgain = retry
+        while (true) {
             try {
-                return@withContext request(method, path, body, requestId)
+                return request(method, path, body, requestId)
             } catch (e: ApiError) {
-                if (e.code != "busy" && !(e.code == "network" && requestId != null)) throw e
+                val again = when (e.code) {
+                    "busy" -> busyAgain.also { busyAgain = false }
+                    "network" -> retry && wait <= LAST_WAIT_MS
+                    else -> false
+                }
+                if (!again) throw e
             }
             delay(wait + Random.nextLong(wait / 2))
             wait *= 2
         }
-        request(method, path, body, requestId) // the last try: its error is the caller's
     }
 
     /** A GET on the calling thread, for the companion's tools, which run on Gemma's own thread. */
@@ -146,7 +162,7 @@ class Api(private val prefs: Prefs) {
 
     private companion object {
         const val MAX_REDIRECTS = 3
-        const val FIRST_WAIT_MS = 1_000L // then 2 s and 4 s, and a last try: four in all
+        const val FIRST_WAIT_MS = 1_000L // then 2 s and 4 s: four tries in all while the connection fails
         const val LAST_WAIT_MS = 4_000L
     }
 }
@@ -234,7 +250,8 @@ data class LibraryItem(val key: String, val type: String, val sanskrit: String, 
 }
 
 /** One item of a curriculum: so many breaths, seconds, minutes, rounds or strokes, and how to do it. [dose] is null
- *  when the owner left it empty or wrote words; the unit or the cue then says it alone. */
+ *  when the reply has no count (none, or 0, for a cell the owner left empty or wrote words in); the unit or the cue
+ *  then says it alone. */
 data class PlanItem(val item: String, val dose: Int?, val unit: String, val cue: String)
 
 data class Curriculum(val key: String, val name: String, val about: String, val items: List<PlanItem>)
@@ -250,7 +267,7 @@ data class Curricula(val library: Map<String, LibraryItem>, val curricula: List<
             }.associateBy { it.key },
             o.list("curricula").map { c ->
                 Curriculum(c.text("key"), c.text("name"), c.text("about"),
-                    c.list("items").map { PlanItem(it.text("item"), it.intOrNull("dose"), it.text("unit"), it.text("cue")) })
+                    c.list("items").map { PlanItem(it.text("item"), it.intOrNull("dose")?.takeIf { d -> d > 0 }, it.text("unit"), it.text("cue")) })
             },
         )
     }
@@ -349,6 +366,22 @@ data class SoloRun(val startedAt: Long, val curriculum: String?, val said: List<
     }
 }
 
+/** A check-in sent in the background that the server has not confirmed yet: kept on the phone and sent again, with
+ *  the same request id, until it lands. */
+data class PendingCheckin(val sessionId: Int, val mood: Int, val requestId: String) {
+    companion object {
+        fun saved(list: List<PendingCheckin>): String =
+            JSONArray(list.map { JSONObject().put("session", it.sessionId).put("mood", it.mood).put("id", it.requestId) }).toString()
+
+        /** The check-ins [saved] wrote; none if the text is missing or not theirs. */
+        fun restore(text: String?): List<PendingCheckin> = try {
+            if (text == null) emptyList() else JSONArray(text).map { PendingCheckin(it.getInt("session"), it.getInt("mood"), it.getString("id")) }
+        } catch (e: JSONException) {
+            emptyList()
+        }
+    }
+}
+
 /** The stopwatch's holds, in seconds: the latest and the longest. */
 data class Holds(val recent: Int, val longest: Int)
 
@@ -370,8 +403,8 @@ data class ClassReview(val curriculum: String?, val joined: Int, val answered: I
     }
 }
 
-/** One item of a class review: how many said each reaction (not yet … at ease), who felt strain or pain, the notes. A
- *  name is null for a student no longer in the Sheet. */
+/** One item of a class review: how many said each reaction (not yet … at ease), who felt strain or pain, the notes.
+ *  A name the reply leaves out is null; the screen then names a former student. */
 data class ItemReview(val item: String, val reactions: List<Int>, val pain: List<Pair<String?, String?>>, val notes: List<Pair<String?, String>>)
 
 data class Studio(val tagline: String, val teacherName: String, val teacherTitle: String, val teacherBio: String) {
@@ -413,12 +446,17 @@ data class StudioWords(
  *  about it, if anything. */
 data class Home(val user: User, val batch: BatchInfo?, val studio: Studio, val sessions: List<ClassSession>, val afterClass: ClassSession?,
     val afterSaid: Said?, val groupLink: String?) {
-    /** This home as it is once the student has checked in to [sessionId], or not. */
-    fun checkedIn(sessionId: Int, yes: Boolean) = copy(sessions = sessions.map { if (it.id == sessionId) it.copy(checkedIn = yes) else it })
+    /** This home as it is once the student has checked in to [sessionId], or not: the class coming, or the one to say
+     *  how it went. */
+    fun checkedIn(sessionId: Int, yes: Boolean): Home {
+        fun mark(s: ClassSession) = if (s.id == sessionId) s.copy(checkedIn = yes) else s
+        return copy(sessions = sessions.map(::mark), afterClass = afterClass?.let(::mark))
+    }
 
     companion object {
         fun from(o: JSONObject): Home {
-            // after_class may be a class the student did not check in to; a server without it gives after_checkin alone.
+            // after_class is the class to say how it went, checked in to or not, as its checked_in says; a reply with
+            // only after_checkin gives a class checked in to.
             val any = o.has("after_class")
             val after = o.optJSONObject(if (any) "after_class" else "after_checkin")
             return Home(
