@@ -22,10 +22,35 @@ TEACHER_NAME = json.loads((ROOT / "content" / "studio.json").read_text(encoding=
 BACKEND = "http://localhost:8000"  # the dev backend as this laptop sees it; the emulator reaches it at 10.0.2.2:8000
 
 
+class DevBackend:
+    """The dev backend on port 8000, serving its Sheet from `data`, which it saves after every change: stopped and
+    started again, it goes on where it was (and the Sheet can be edited by hand in between)."""
+
+    def __init__(self, data: Path, teacher_code: str) -> None:
+        self.data = data
+        self.env = dict(os.environ, SCA_TEACHER_CODE=teacher_code)
+        self.server: subprocess.Popen | None = None
+
+    def start(self) -> None:
+        self.server = subprocess.Popen(["node", ROOT / "scripts" / "dev_backend.mjs", self.data], env=self.env, stdout=subprocess.DEVNULL)
+        for _ in range(50):
+            try:
+                urllib.request.urlopen(BACKEND, timeout=1)
+                return
+            except OSError:
+                time.sleep(0.2)
+
+    def stop(self) -> None:
+        if self.server:
+            self.server.terminate()
+            self.server.wait(timeout=10)
+            self.server = None
+
+
 @contextlib.contextmanager
 def dev_backend(data: Path, demo: bool, teacher_code: str = ""):
     """The dev backend on port 8000 with a new data file: the synthetic demo (scripts/seed_demo.mjs) or, without
-    `demo`, an empty Sheet whose teacher signs up with `teacher_code`. Stopped on leaving."""
+    `demo`, an empty Sheet whose teacher signs up with `teacher_code`. Gives the DevBackend; stopped on leaving."""
     try:
         urllib.request.urlopen(BACKEND, timeout=2)
         raise SystemExit("something already answers on port 8000: stop it first (scripts/demo.sh stop)")
@@ -34,19 +59,12 @@ def dev_backend(data: Path, demo: bool, teacher_code: str = ""):
     data.unlink(missing_ok=True)
     if demo:
         subprocess.run(["node", ROOT / "scripts" / "seed_demo.mjs", data], check=True)
-    env = dict(os.environ, SCA_TEACHER_CODE=teacher_code)
-    server = subprocess.Popen(["node", ROOT / "scripts" / "dev_backend.mjs", data], env=env, stdout=subprocess.DEVNULL)
+    backend = DevBackend(data, teacher_code)
+    backend.start()
     try:
-        for _ in range(50):
-            try:
-                urllib.request.urlopen(BACKEND, timeout=1)
-                break
-            except OSError:
-                time.sleep(0.2)
-        yield
+        yield backend
     finally:
-        server.terminate()
-        server.wait(timeout=10)
+        backend.stop()
 
 
 def call(method: str, path: str, token: str = "", body: dict | None = None) -> dict:
