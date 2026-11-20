@@ -143,31 +143,45 @@ private fun inWords(a: Double, words: List<String>): String {
     return if (a % 1 < 0.05 || a >= words.size) low else "between $low and ${words[a.toInt().coerceIn(0, words.lastIndex)]}"
 }
 
-/** An item's progress as Gemma reads it ([Tools.asanaProgress]): the server's sums, the item named as fits [lang], each
- *  date with its weekday and each average reaction in words, so the model has nothing to work out. */
-fun progressSummary(item: ItemName, p: Map<String, Any?>, lang: String): Map<String, Any?> {
-    fun day(value: Any?) = (value as? String)?.let { DATE.format(LocalDate.parse(it)) }
+/** A day as Gemma reads it, with its weekday, on the student's own calendar ([zone]): from the moment [at] (ISO) when
+ *  the server gives one; else from the date in India it gives ([indiaDate]), named as India's when the student is
+ *  elsewhere. */
+fun dayWords(at: Any?, indiaDate: Any?, zone: ZoneId, now: Instant): String? = when {
+    at is String -> DATE.format(Instant.parse(at).atZone(zone))
+    indiaDate is String -> DATE.format(LocalDate.parse(indiaDate)).let { if (zone.rules.getOffset(now) == IST.rules.getOffset(now)) it else "$it (India's date)" }
+    else -> null
+}
 
+/** An item's progress as Gemma reads it ([Tools.asanaProgress]): the server's sums, the item named as fits [lang], each
+ *  date with its weekday on the student's own calendar ([zone]) and each average reaction in words, so the model has
+ *  nothing to work out. The days come from the entries' and the feedback's own moments, newest first as the server
+ *  lists them, where it gives them. */
+fun progressSummary(item: ItemName, p: Map<String, Any?>, lang: String, zone: ZoneId = IST, now: Instant = Instant.now()): Map<String, Any?> {
     @Suppress("UNCHECKED_CAST")
     fun map(key: String) = p[key] as? Map<String, Any?>
+    @Suppress("UNCHECKED_CAST")
+    fun list(key: String) = (p[key] as? List<Map<String, Any?>>).orEmpty()
+    fun day(at: Any?, indiaDate: Any?) = dayWords(at, indiaDate, zone, now)
     val trend = map("reaction_trend")
     val times = { n: Any?, which: String -> if (n == 1 || n == 1.0) "$which time" else "$which ${(n as Number).toInt()} times" }
-    @Suppress("UNCHECKED_CAST")
-    val notes = (p["your_notes"] as? List<Map<String, Any?>>).orEmpty()
+    val entries = list("entries")
+    val pains = entries.filter { (it["pain"] as? Number)?.toInt() == 1 }
+    val notes = if (entries.isEmpty()) list("your_notes").map { linkedMapOf("date" to day(null, it["date"]), "text" to it["text"]) }
+    else entries.filter { !(it["note"] as? String).isNullOrEmpty() }.take(5).reversed().map { linkedMapOf("date" to day(it["at"], it["date"]), "text" to it["note"]) }
     return linkedMapOf(
         "asana" to if (lang == "en") item.full else item.sanskrit, // in Hindi and Marathi, no English name to copy
         "times_in_class" to p["in_class"],
         "times_on_own" to p["solo"],
-        "first" to day(p["first"]),
-        "last" to day(p["last"]),
+        "first" to day(entries.lastOrNull()?.get("at"), p["first"]),
+        "last" to day(entries.firstOrNull()?.get("at"), p["last"]),
         "how_it_felt" to trend?.let {
             linkedMapOf(times(it["each"], "first") to (it["early_average"] as? Number)?.let(::reactionWords),
                 times(it["each"], "last") to (it["recent_average"] as? Number)?.let(::reactionWords))
         },
         "holds" to map("holds"),
-        "strain_or_pain" to map("strain_or_pain")?.let { linkedMapOf("times" to it["times"], "last" to day(it["last"])) },
-        "teacher_said" to map("teacher_said")?.let { linkedMapOf("date" to day(it["date"]), "text" to it["text"]) },
-        "your_notes" to notes.map { linkedMapOf("date" to day(it["date"]), "text" to it["text"]) },
+        "strain_or_pain" to map("strain_or_pain")?.let { linkedMapOf("times" to it["times"], "last" to day(pains.firstOrNull()?.get("at"), it["last"])) },
+        "teacher_said" to map("teacher_said")?.let { linkedMapOf("date" to day(list("feedback").firstOrNull()?.get("at"), it["date"]), "text" to it["text"]) },
+        "your_notes" to notes,
     )
 }
 
@@ -219,14 +233,15 @@ class Tools(
         }
     }
 
-    /** The summary as Gemma reads it: every date written out ("Monday 16 November"), every mood and average reaction in
-     *  words, and the moods named as the classes' (practice on one's own asks none), so it has no weekday to work out
-     *  and no scale to read. The items practised in class and on one's own stay apart, as the server gives them. */
+    /** The summary as Gemma reads it: every date written out ("Monday 16 November") on the student's own calendar, from
+     *  each class's or session's moment (which then goes), every mood and average reaction in words, and the moods named
+     *  as the classes' (practice on one's own asks none), so it has no weekday or time zone to work out and no scale to
+     *  read. The items practised in class and on one's own stay apart, as the server gives them. */
     @Suppress("UNCHECKED_CAST")
     private fun readable(summary: Map<String, Any?>): Map<String, Any?> {
         fun list(key: String) = summary[key] as? List<Map<String, Any?>>
         fun moods(m: Map<String, Any?>) = m.mapValues { (k, v) -> if ("mood" in k && v is Number) moodWords(v) else v }
-        fun day(m: Map<String, Any?>) = m + ("date" to DATE.format(LocalDate.parse(m["date"] as String)))
+        fun day(m: Map<String, Any?>) = (m - "at") + ("date" to dayWords(m["at"], m["date"], zone, now()))
         fun reactions(m: Map<String, Any?>) = m + ("average_reaction" to (m["average_reaction"] as? Number)?.let(::reactionWords))
         return moods(summary).mapKeys { (k, _) -> if (k.startsWith("average_mood")) k.replace("mood", "class_mood") else k } +
             listOfNotNull(
@@ -246,7 +261,7 @@ class Tools(
             val library = data.library()
             val key = resolveItem(asana, library)
                 ?: return mapOf("error" to "Nothing called \"$asana\" is in the studio's list. The closest: ${closestItems(asana, library).joinToString(", ")}.")
-            progressSummary(library.first { it.key == key }, data.itemProgress(key), lang)
+            progressSummary(library.first { it.key == key }, data.itemProgress(key), lang, zone, now())
         } catch (e: Exception) {
             mapOf("error" to UNREACHABLE)
         }
@@ -288,7 +303,7 @@ class Tools(
 
     fun getMyNotes(): Map<String, Any?> {
         used += "get_my_notes"
-        return mapOf("notes" to data.notes().map { mapOf("note" to it.text, "saved" to it.savedAt.toString().take(10)) })
+        return mapOf("notes" to data.notes().map { mapOf("note" to it.text, "saved" to it.savedAt.atZone(zone).toLocalDate().toString()) })
     }
 
     /** The tools as LiteRT-LM reads them: names, descriptions and parameters from the annotations. */

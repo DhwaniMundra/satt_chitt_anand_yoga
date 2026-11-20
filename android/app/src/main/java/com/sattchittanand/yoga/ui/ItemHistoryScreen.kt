@@ -98,7 +98,7 @@ fun ItemHistoryScreen(vm: AppViewModel, item: String, student: Student?, back: (
             Waiting(vm, { vm.loadItem(item, student?.user?.id) }, Modifier.fillMaxWidth())
             return@Column
         }
-        Text(listOfNotNull(timesLine(h.inClass, h.solo).ifEmpty { null }, h.first?.let { stringResource(R.string.since, indiaDayLabel(it)) })
+        Text(listOfNotNull(timesLine(h.inClass, h.solo).ifEmpty { null }, h.entries.lastOrNull()?.at?.let { stringResource(R.string.since, dayLabel(it)) })
             .joinToString(" · "), style = MaterialTheme.typography.bodyLarge)
         h.trend?.let { Text(stringResource(R.string.trend_line, reactionWord(it.early), reactionWord(it.recent)), style = MaterialTheme.typography.bodyLarge, color = Palette.moss) }
         h.holds?.let { Text(stringResource(R.string.holds_line, stopwatch(it.longest), stopwatch(it.recent)), style = MaterialTheme.typography.bodyLarge) }

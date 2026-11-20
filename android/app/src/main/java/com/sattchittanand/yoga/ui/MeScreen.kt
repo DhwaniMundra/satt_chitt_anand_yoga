@@ -42,6 +42,7 @@ import com.sattchittanand.yoga.AppViewModel
 import com.sattchittanand.yoga.Limits
 import com.sattchittanand.yoga.Note
 import com.sattchittanand.yoga.R
+import com.sattchittanand.yoga.formatPhone
 
 @Composable
 fun MeScreen(vm: AppViewModel, onLanguage: (String) -> Unit) {
@@ -54,7 +55,7 @@ fun MeScreen(vm: AppViewModel, onLanguage: (String) -> Unit) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text(user.name, style = MaterialTheme.typography.headlineSmall)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(user.phone, color = Palette.muted)
+            Text(formatPhone(user.phone), color = Palette.muted)
             Pill(stringResource(R.string.role_student))
         }
 

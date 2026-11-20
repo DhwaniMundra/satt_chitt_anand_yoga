@@ -52,6 +52,7 @@ import com.sattchittanand.yoga.Limits
 import com.sattchittanand.yoga.R
 import com.sattchittanand.yoga.User
 import com.sattchittanand.yoga.Student
+import com.sattchittanand.yoga.formatPhone
 import java.util.Locale
 import kotlin.math.roundToInt
 
@@ -273,7 +274,7 @@ fun StudentsScreen(vm: AppViewModel) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text(student.name, style = MaterialTheme.typography.titleMedium)
-                        Text("${student.phone} · ${pluralStringResource(R.plurals.joined_count, joined, joined)}", style = MaterialTheme.typography.bodyMedium, color = Palette.muted)
+                        Text("${formatPhone(student.phone)} · ${pluralStringResource(R.plurals.joined_count, joined, joined)}", style = MaterialTheme.typography.bodyMedium, color = Palette.muted)
                         if (batch != null && student.batchSince != null) {
                             Text(stringResource(R.string.batch_since, batch.info.name, dayLabel(student.batchSince)), style = MaterialTheme.typography.bodyMedium,
                                 color = Palette.moss)
@@ -405,7 +406,7 @@ private fun StudentPractice(vm: AppViewModel, student: Student, back: () -> Unit
     LaunchedEffect(student.user.id) { vm.loadItems(student.user.id) }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         BackHeader(student.user.name, back)
-        Text("${student.user.phone} · ${pluralStringResource(R.plurals.joined_count, student.joined, student.joined)}", color = Palette.muted)
+        Text("${formatPhone(student.user.phone)} · ${pluralStringResource(R.plurals.joined_count, student.joined, student.joined)}", color = Palette.muted)
         Label(stringResource(R.string.each_item))
         ItemList(vm, vm.items, teacherViewing = true, reload = { vm.loadItems(student.user.id) }, open = open)
     }

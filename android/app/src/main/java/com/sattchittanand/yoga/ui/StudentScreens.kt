@@ -111,7 +111,7 @@ fun TodayScreen(vm: AppViewModel) {
                 val closes = after.startsAt.plusSeconds(after.minutes * 60L + 12 * 3600L)
                 SectionCard(tint = Palette.mossLight) {
                     Text(stringResource(R.string.told_teacher, LocalTeacher.current), style = MaterialTheme.typography.titleMedium)
-                    Text(after.batch.name + " · " + stringResource(R.string.change_until, timeLabel(closes)), style = MaterialTheme.typography.bodyMedium,
+                    Text(after.batch.name + " · " + stringResource(R.string.change_until, momentLabel(closes)), style = MaterialTheme.typography.bodyMedium,
                         color = Palette.muted)
                     TextButton(onClick = { afterClass = true }) { Text(stringResource(R.string.change)) }
                 }
@@ -141,10 +141,11 @@ fun TodayScreen(vm: AppViewModel) {
                     home.sessions.drop(1).forEachIndexed { i, s ->
                         if (i > 0) HorizontalDivider(color = Palette.line)
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Column(Modifier.width(96.dp)) {
+                            Column(Modifier.width(112.dp)) { // the time here and, abroad, in India, each on its own line
                                 Text(dayLabel(s.startsAt), style = MaterialTheme.typography.titleMedium)
-                                Text(timeLabel(s.startsAt), style = MaterialTheme.typography.bodyMedium, color = Palette.muted)
+                                timeLines(s.startsAt).forEach { Text(it, style = MaterialTheme.typography.bodyMedium, color = Palette.muted) }
                             }
+                            Spacer(Modifier.width(12.dp))
                             Column(Modifier.weight(1f)) {
                                 Text(vm.curricula?.find(s.curriculum)?.name ?: s.batch.name, style = MaterialTheme.typography.bodyLarge)
                                 Text(stringResource(R.string.minutes, s.minutes), style = MaterialTheme.typography.bodyMedium, color = Palette.muted)

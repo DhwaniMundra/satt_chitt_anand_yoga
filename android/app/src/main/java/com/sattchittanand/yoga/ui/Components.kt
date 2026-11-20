@@ -258,10 +258,6 @@ fun dayLabel(at: Instant): String {
     return dayName(daysFromToday(at, Instant.now(), zone), at.atZone(zone).toLocalDate())
 }
 
-/** The same for a day the server gives only as a date in India (an item's first time), against today in India. */
-@Composable
-fun indiaDayLabel(day: LocalDate): String = dayName(ChronoUnit.DAYS.between(LocalDate.now(IST), day), day)
-
 @Composable
 private fun dayName(fromToday: Long, day: LocalDate): String = when (fromToday) {
     0L -> stringResource(R.string.today)
@@ -269,14 +265,26 @@ private fun dayName(fromToday: Long, day: LocalDate): String = when (fromToday) 
     else -> dateFormat("EEE d MMM").format(day)
 }
 
+/** A moment's time of day where the phone is ([zone]) and, when that is not India's, in India too: ("7:30 PM",
+ *  "8:00 AM IST"), or ("8:00 AM", null) in India. */
+fun timeParts(at: Instant, zone: ZoneId, format: DateTimeFormatter): Pair<String, String?> {
+    val local = format.format(at.atZone(zone))
+    return local to if (zone.rules.getOffset(at) == IST.rules.getOffset(at)) null else "${format.format(at.atZone(IST))} IST"
+}
+
 /** "8:00 AM"; on a phone outside India, the class's India time too: "7:30 PM · 8:00 AM IST". */
 @Composable
-fun timeLabel(at: Instant): String {
-    val format = dateFormat("h:mm a")
-    val here = ZoneId.systemDefault()
-    val local = format.format(at.atZone(here))
-    return if (here.rules.getOffset(at) == IST.rules.getOffset(at)) local else "$local · ${format.format(at.atZone(IST))} IST"
-}
+fun timeLabel(at: Instant): String = timeParts(at, ZoneId.systemDefault(), dateFormat("h:mm a")).toList().filterNotNull().joinToString(" · ")
+
+/** The same on two lines, for a narrow column: "7:30 PM", then "8:00 AM IST". */
+@Composable
+fun timeLines(at: Instant): List<String> = timeParts(at, ZoneId.systemDefault(), dateFormat("h:mm a")).toList().filterNotNull()
+
+/** "6:25 AM" for a moment today on the student's own calendar, else with its day: "Tomorrow 6:25 AM", in India time too
+ *  when the phone is elsewhere. */
+@Composable
+fun momentLabel(at: Instant): String =
+    if (daysFromToday(at, Instant.now(), ZoneId.systemDefault()) == 0L) timeLabel(at) else "${dayLabel(at)} ${timeLabel(at)}"
 
 /** "2 d 5 h", "3 h 20 min", "18 min"; in Hindi "3 घंटे 20 मिनट", in Marathi "3 तास 20 मिनिटे" (the units come from
  *  the strings, singular or plural). A zero second part is left out: "2 d", not "2 d 0 h". */

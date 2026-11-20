@@ -188,11 +188,11 @@ data class ItemSummary(val item: String, val inClass: Int, val solo: Int, val tr
 
 /** One item's history for one student (GET /me/asanas/{item}): each time, newest first, the holds timed solo, and the
  *  teacher's feedback. */
-data class ItemHistory(val item: String, val inClass: Int, val solo: Int, val first: LocalDate?, val trend: Trend?, val holds: Holds?,
+data class ItemHistory(val item: String, val inClass: Int, val solo: Int, val trend: Trend?, val holds: Holds?,
     val painTimes: Int, val entries: List<ItemEntry>, val feedback: List<Pair<Instant, String>>) {
     companion object {
         fun from(o: JSONObject) = ItemHistory(
-            o.getString("item"), o.getInt("in_class"), o.getInt("solo"), o.date("first"), Trend.from(o, "reaction_trend"),
+            o.getString("item"), o.getInt("in_class"), o.getInt("solo"), Trend.from(o, "reaction_trend"),
             if (o.isNull("holds")) null else o.getJSONObject("holds").let { Holds(it.getInt("recent_seconds"), it.getInt("longest_seconds")) },
             o.getJSONObject("strain_or_pain").getInt("times"),
             o.getJSONArray("entries").map {

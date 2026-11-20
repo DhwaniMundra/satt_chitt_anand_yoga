@@ -245,6 +245,51 @@ class CompanionTest {
         assertEquals("८:०० वाजता (भारतीय वेळ)", withoutGlosses("८:०० वाजता (भारतीय वेळ)")) // Devanagari in brackets stays
     }
 
+    /** The server for a student in California: moments in UTC beside the dates in India, as it gives them. */
+    private class Abroad : StudentData {
+        override fun practice(days: Int, lang: String): Map<String, Any?> = linkedMapOf("period_days" to days, "classes_joined" to 1,
+            "classes" to listOf(linkedMapOf("date" to "2026-11-23", "at" to "2026-11-23T01:30:00Z", "class" to "Intermediate", "mood_before" to 3,
+                "mood_after" to 4)),
+            "solo" to listOf(linkedMapOf("date" to "2026-11-23", "at" to "2026-11-23T03:00:00Z", "minutes" to 20, "items" to listOf("Vajrasana"))))
+        override fun upcoming(lang: String): List<UpcomingClass> = emptyList()
+        override fun saveNote(text: String) {}
+        override fun notes() = listOf(KeptNote("Knee is better", Instant.parse("2026-11-23T03:00:00Z")))
+        override fun library() = LIBRARY
+        override fun itemProgress(key: String): Map<String, Any?> = if (key != "setu_bandhasana") VAJRASANA else linkedMapOf(
+            "item" to key, "in_class" to 2, "solo" to 0, "first" to "2026-11-21", "last" to "2026-11-23", "reaction_trend" to null, "holds" to null,
+            "strain_or_pain" to linkedMapOf("times" to 1, "last" to "2026-11-23"),
+            "teacher_said" to linkedMapOf("date" to "2026-11-23", "text" to "Go gently."),
+            "your_notes" to listOf(linkedMapOf("date" to "2026-11-23", "text" to "Knee pinched")),
+            "entries" to listOf( // newest first
+                linkedMapOf("date" to "2026-11-23", "at" to "2026-11-23T01:30:00Z", "kind" to "class", "reaction" to 2, "pain" to 1, "note" to "Knee pinched"),
+                linkedMapOf("date" to "2026-11-21", "at" to "2026-11-21T01:30:00Z", "kind" to "class", "reaction" to 3, "pain" to 0, "note" to null)),
+            "feedback" to listOf(linkedMapOf("date" to "2026-11-23", "at" to "2026-11-23T04:00:00Z", "text" to "Go gently.")),
+        )
+    }
+
+    /** A student in California, 13 and a half hours behind India: each day from its own moment on their calendar, and a
+     *  date the server gives only as India's named as India's. */
+    @Test fun theToolsGiveDaysOnTheStudentsOwnCalendar() {
+        val california = ZoneId.of("America/Los_Angeles")
+        val mondayMorning = Instant.parse("2026-11-23T17:00:00Z") // 9:00 AM on Monday there, 10:30 PM in India
+        val t = Tools(Abroad(), NOTES, "en", california) { mondayMorning }
+        val week = t.getMyPractice(7)
+        // A class at 7:00 AM on Monday in India was on Sunday evening in California.
+        assertEquals(mapOf("date" to "Sunday 22 November", "class" to "Intermediate", "mood_before" to "okay", "mood_after" to "good"),
+            (week["classes"] as List<*>).single())
+        assertEquals(listOf("Sunday 22 November"), (week["solo"] as List<*>).map { (it as Map<*, *>)["date"] })
+        assertFalse("no moment in UTC left to misread", "2026-11-23T" in week.toString())
+        val bridge = t.asanaProgress("bridge")
+        assertEquals(listOf("Friday 20 November", "Sunday 22 November"), listOf(bridge["first"], bridge["last"]))
+        assertEquals(mapOf("times" to 1, "last" to "Sunday 22 November"), bridge["strain_or_pain"])
+        assertEquals(mapOf("date" to "Sunday 22 November", "text" to "Go gently."), bridge["teacher_said"])
+        assertEquals(listOf(mapOf("date" to "Sunday 22 November", "text" to "Knee pinched")), bridge["your_notes"])
+        val onlyIndiaDates = t.asanaProgress("vajrasana")
+        assertEquals("Friday 30 October (India's date)", onlyIndiaDates["first"])
+        assertEquals(mapOf("date" to "Monday 16 November (India's date)", "text" to "Much steadier this week."), onlyIndiaDates["teacher_said"])
+        assertEquals(listOf(mapOf("note" to "Knee is better", "saved" to "2026-11-22")), t.getMyNotes()["notes"])
+    }
+
     /** A student in New York: a Monday 7:00 class in India is on their Sunday evening, "today", at their own time too. */
     @Test fun theScheduleIsOnTheStudentsOwnCalendar() {
         val newYork = ZoneId.of("America/New_York")
