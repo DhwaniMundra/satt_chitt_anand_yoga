@@ -67,13 +67,13 @@ def tour(version: str) -> None:
 
     def log_out(tab: str) -> None:
         p.tap(tab, exact=True)
-        tap_scrolling("Log out")
+        p.tap_scrolling("Log out")
         time.sleep(1.5)
 
     def language(name: str, me: str) -> None:
         p.tap(me, exact=True)
         time.sleep(1.5)
-        tap_scrolling(name, exact=True)
+        p.tap_scrolling(name, exact=True)
         time.sleep(3)
 
     p.adb("install", "-r", str(APK))
@@ -94,7 +94,7 @@ def tour(version: str) -> None:
     time.sleep(3)
     p.join_class(STUDENT[0], todays_class(), 2)  # she joined the 8:00 class; the film tells it as this one
     p.launch()  # back from the Meet link in the browser, the class over
-    tap_scrolling(f"Tell {p.TEACHER_NAME}")
+    p.tap_scrolling(f"Tell {p.TEACHER_NAME}")
     time.sleep(1.5)
     p.tap("Good")  # the after-class mood, by its spoken label
     shot("05_after_class")
@@ -106,7 +106,7 @@ def tour(version: str) -> None:
     p.tap_under("Virabhadrasana", "At ease")
     p.frame("Sectional", "Virabhadrasana")  # the first item's card starts the screen, the mood card above it out of sight
     shot("05a_after_class_items")
-    tap_scrolling("Done", exact=True)
+    p.tap_scrolling("Done", exact=True)
     time.sleep(2)
     shot("06_after_sent")
     video.stop()
@@ -122,7 +122,7 @@ def tour(version: str) -> None:
     p.adb("shell", "input", "swipe", "540", "1700", "540", "500", "600")
     time.sleep(1)
     shot("23_intake_poses")
-    tap_scrolling(f"Send to {p.TEACHER_NAME}", exact=True)
+    p.tap_scrolling(f"Send to {p.TEACHER_NAME}", exact=True)
     time.sleep(1.3)
     shot("23b_intake_thanks")  # "Thank you. The teacher will place you soon."
     time.sleep(3)
@@ -133,12 +133,12 @@ def tour(version: str) -> None:
     p.tap("I'm the teacher")
     log_in(*TEACHER)
     shot("24_teacher_today")
-    tap_scrolling("Share on WhatsApp", exact=True)  # the next class, on its batch's everyday link
+    p.tap_scrolling("Share on WhatsApp", exact=True)  # the next class, on its batch's everyday link
     time.sleep(2.5)
     shot("25_teacher_share")  # the message names the batch
     p.back()
     time.sleep(1)
-    find_scrolling("https://meet.google.com/def-ghij-klm")  # the last batch's everyday link
+    p.find_scrolling("https://meet.google.com/def-ghij-klm")  # the last batch's everyday link
     bring("https://meet.google.com/def-ghij-klm", 1950)  # the four links in frame, the group code below them out of it
     shot("26_teacher_batches")
     p.tap("Students", exact=True)
@@ -150,7 +150,7 @@ def tour(version: str) -> None:
     shot("28_students_intake")
     p.type_into("A note for the review (optional)", "Knee pain on stairs; start with the gentle sequence")
     p.hide_keyboard()
-    tap_scrolling("Approve into")
+    p.tap_scrolling("Approve into")
     time.sleep(2)
     p.frame(None, "How each item has gone")  # the shared notes, then the first student's whole card
     shot("29_students_placed")  # each with a batch and since when
@@ -167,7 +167,7 @@ def tour(version: str) -> None:
     p.tap("Insights", exact=True)
     time.sleep(2)
     shot("33_insights")
-    tap_scrolling("How each item went")
+    p.tap_scrolling("How each item went")
     time.sleep(2)
     shot("34_class_review")  # strain or pain first: Asha's wrists in Surya Namaskar
     p.back()
@@ -176,7 +176,7 @@ def tour(version: str) -> None:
     p.tap_under("Asha Kulkarni", "How each item has gone ›")
     time.sleep(2)
     shot("31_asha_items")
-    tap_scrolling("Surya Namaskar")
+    p.tap_scrolling("Surya Namaskar")
     time.sleep(2)
     p.type_into("Write to Asha", "Spread your fingers and press through the knuckles; in the plank, knees down for now.")
     p.hide_keyboard()
@@ -201,7 +201,7 @@ def tour(version: str) -> None:
     time.sleep(2)
     p.frame(None, "Vajrasana")
     shot("07_practice")
-    tap_scrolling("Surya Namaskar")
+    p.tap_scrolling("Surya Namaskar")
     time.sleep(2)
     shot("08_item_history")  # the teacher's note, and her strain in today's class
     p.back()
@@ -219,7 +219,7 @@ def tour(version: str) -> None:
     p.tap("+ Bhujangasana")
     p.hide_keyboard()
     shot("09_solo_choose")
-    tap_scrolling("Start (2)", exact=True)
+    p.tap_scrolling("Start (2)", exact=True)
     time.sleep(1)
     p.tap("Start the stopwatch")
     time.sleep(39)
@@ -231,15 +231,15 @@ def tour(version: str) -> None:
     p.type_into("Add a note", "Cushion under the ankles; no knee pain")
     p.hide_keyboard()
     shot("10_solo_item")
-    tap_scrolling("Next", exact=True)
+    p.tap_scrolling("Next", exact=True)
     p.tap("Start the stopwatch")
     time.sleep(40)
     p.tap("Stop", exact=True)
     p.tap("At ease", exact=True)
-    tap_scrolling("Finish", exact=True)
+    p.tap_scrolling("Finish", exact=True)
     time.sleep(1.3)
     shot("11_solo_saved")
-    tap_scrolling("Vajrasana")
+    p.tap_scrolling("Vajrasana")
     time.sleep(2)
     shot("12_history_solo")  # this practice the latest
     p.back()  # to the Practice screen
@@ -295,7 +295,7 @@ def tour(version: str) -> None:
     time.sleep(2)
     shot("20_practice_marathi")
     language("English", "मी")
-    tap_scrolling("Log out")
+    p.tap_scrolling("Log out")
 
     for name in ("student_tour", "teacher_tour"):
         make_small(viz.tours(version) / f"{name}_{version}.mp4", viz.tours(version) / f"{name}_{version}_small.mp4")
@@ -307,28 +307,6 @@ def todays_class() -> str:
     """The start of today's 8:00 class in India, in UTC, as the dev backend takes it."""
     india = timezone(timedelta(hours=5, minutes=30))
     return datetime.now(india).replace(hour=8, minute=0, second=0, microsecond=0).astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-
-
-def tap_scrolling(text: str, exact: bool = False) -> None:
-    """Taps `text`, scrolling down until it is on screen."""
-    for _ in range(12):
-        try:
-            p.find(text, timeout=1.5, exact=exact)
-            break
-        except TimeoutError:
-            p.scroll_down()
-    p.tap(text, exact=exact)
-
-
-def find_scrolling(text: str) -> None:
-    """Scrolls down until `text` is on screen."""
-    for _ in range(12):
-        try:
-            p.find(text, timeout=1.5)
-            return
-        except TimeoutError:
-            p.scroll_down()
-    raise TimeoutError(f"'{text}' not on screen")
 
 
 def bring(text: str, y: int) -> None:

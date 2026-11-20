@@ -139,6 +139,28 @@ def tap(text: str, exact: bool = False, timeout: float = 15, last: bool = False)
     time.sleep(0.8)
 
 
+def find_scrolling(text: str, exact: bool = False) -> ET.Element:
+    """The element showing `text`, scrolling down until it is on screen. The keyboard closes first, as the swipe would
+    land on it.
+
+    Raises:
+        TimeoutError: if it is not there by the end of the page.
+    """
+    for _ in range(12):
+        try:
+            return find(text, timeout=1.5, exact=exact)
+        except TimeoutError:
+            hide_keyboard()
+            scroll_down()
+    raise TimeoutError(f"'{text}' not on screen")
+
+
+def tap_scrolling(text: str, exact: bool = False) -> None:
+    """Taps `text`, scrolling down until it is on screen."""
+    find_scrolling(text, exact)
+    tap(text, exact=exact)
+
+
 def tap_xy(x: int, y: int) -> None:
     adb("shell", "input", "tap", str(x), str(y))
     time.sleep(0.8)
@@ -453,13 +475,49 @@ def screenshot(path: Path) -> None:
 
 
 def launch(fresh: bool = False) -> None:
-    """Starts the app; with `fresh`, signed out and with no chat or health notes, as on a new phone. Gemma's download
-    stays: `pm clear` would delete the 2.6 GB model."""
+    """Starts the app; with `fresh`, signed out and with no chat or health notes, as on a new phone. A debug build
+    keeps Gemma's download: `pm clear` would delete the 2.6 GB model. A release build lets no one in with run-as, so
+    it is cleared whole."""
     adb("shell", "am", "force-stop", PACKAGE)
-    if fresh:
+    if fresh and debuggable():
         adb("shell", "run-as", PACKAGE, "rm", "-rf", "shared_prefs/sca.xml", "files/companion")
+    elif fresh:
+        adb("shell", "pm", "clear", PACKAGE)
     adb("shell", "am", "start", "-n", f"{PACKAGE}/.MainActivity")
     time.sleep(3)
+
+
+def debuggable() -> bool:
+    """Whether the app on the phone is a debug build."""
+    return "DEBUGGABLE" in adb("shell", "dumpsys", "package", PACKAGE)
+
+
+def install(apk: Path) -> None:
+    """Installs `apk` over the app on the phone, or in its place when the one there is signed with another key (a
+    release build after a debug one, say)."""
+    done = subprocess.run(["adb", "install", "-r", str(apk)], capture_output=True, text=True)
+    if "INSTALL_FAILED_UPDATE_INCOMPATIBLE" in done.stdout + done.stderr:
+        adb("uninstall", PACKAGE)
+        adb("install", str(apk))
+    elif done.returncode:
+        raise RuntimeError(f"adb install {apk}: {done.stdout}{done.stderr}")
+
+
+def resumed() -> str:
+    """The activity in front, as package/.Class: the app's com.sattchittanand.yoga/.MainActivity, Android's share sheet
+    (com.android.intentresolver/...), Chrome."""
+    found = re.search(r"topResumedActivity=ActivityRecord\{\S+ \S+ (\S+)", adb("shell", "dumpsys", "activity", "activities"))
+    return found[1] if found else ""
+
+
+def clear_log() -> None:
+    adb("logcat", "-c")
+
+
+def opened() -> list[str]:
+    """The links the phone has opened since clear_log(), as Android logs them: the scheme and host, and "..." for the
+    rest, which it keeps out of the log ("https://meet.google.com/...")."""
+    return re.findall(r"act=android\.intent\.action\.VIEW dat=(\S+)", adb("logcat", "-d", "-s", "ActivityTaskManager:I"))
 
 
 def demo_mode() -> None:
