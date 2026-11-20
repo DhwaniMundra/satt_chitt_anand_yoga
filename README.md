@@ -78,7 +78,7 @@ flowchart LR
 
 ## How it was made
 
-In rounds, from v0.1 to v1.0, which is out for testing as v0.9. Each round, a script walks through the app on an Android
+In rounds, from v0.1 to v1.0, which is out for testing as [v0.9.1](https://github.com/DhwaniMundra/satt_chitt_anand_yoga/releases/tag/v0.9.1). Each round, a script walks through the app on an Android
 emulator, and the companion is asked the same questions in three languages. Then every screen and every answer is read,
 and what reading finds is fixed, with a test where one fits. One finding of v1.0: Gemma reported an average reaction of
 2.0 ("with effort") as "not yet", so the tools now hand it the words, worked out in code.
