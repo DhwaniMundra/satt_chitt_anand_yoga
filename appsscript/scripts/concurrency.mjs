@@ -105,9 +105,13 @@ check('each account has the number it was sent with', () => {
 });
 
 console.log('\nA later sign-up of a number already taken…');
-const again = await signupOf({ ...people[1], name: late.name }, randomUUID());
-console.log('  ' + shown(again));
-check('a later sign-up of a taken number gets 409 phone_taken', () => assert.deepEqual([again.status, again.body.detail], [409, 'phone_taken']));
+const taken = made.findIndex((r) => r); // a number whose sign-up made its account (one answered busy made none)
+const again = taken < 0 ? null : await signupOf({ ...people[taken], name: late.name }, randomUUID());
+console.log('  ' + (again ? people[taken].name + "'s number: " + shown(again) : 'no account was made'));
+check('a later sign-up of a taken number gets 409 phone_taken', () => {
+  assert.ok(again, 'no account was made');
+  assert.deepEqual([again.status, again.body.detail], [409, 'phone_taken']);
+});
 
 console.log('\nEach token\'s GET /me…');
 const mine = await Promise.all(made.map((r) => (r ? call('GET', '/me', { token: r.body.token }) : null)));

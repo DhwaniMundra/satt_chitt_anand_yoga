@@ -36,7 +36,7 @@ let made = 0;
 const madeUpPhone = () => '+91 10000 ' + String(Date.now() % 100000 + made++).padStart(5, '0').slice(-5);
 
 const CHECKS = [
-  ['GET (no envelope)', get, (r) => assert.deepEqual(r, { status: 200, body: { ok: true } })],
+  ['GET (no envelope)', get, (r) => assert.deepEqual(r, { status: 200, body: { ok: true, assistant: 'off', model: null } })],
   ['/health', () => call('GET', '/health'), (r) => assert.equal(r.body.ok, true)],
   ['/studio en', () => call('GET', '/studio'), (r) => assert.equal(r.body.name, 'Satt Chitt Anand Yoga')],
   ['/studio hi', () => call('GET', '/studio', { query: { lang: 'hi' } }), (r) => assert.equal(r.body.name, 'सत्·चित्·आनन्द योग')],
