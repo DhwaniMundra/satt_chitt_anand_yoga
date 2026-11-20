@@ -2,15 +2,15 @@
 
 - **Server:** the dev backend at http://10.0.2.2:8000 (the laptop as the emulators see it), on an empty Sheet for each build
 - **Phones:** emulator-5554 (teacher), emulator-5556 (students), Android 16 emulators with 2 GB and no WhatsApp, so each share button opens Android's share sheet
-- **Started:** 2026-11-20 10:51 India time. The teacher's Today tab shows the rest of the day's classes, one card per batch, so how many depends on the hour
+- **Started:** 2026-11-20 11:26 India time. The teacher's Today tab shows the rest of the day's classes, one card per batch, so how many depends on the hour
 - **Not tested:** the Ask tab, as Gemma needs a phone with 6 GB. The Hindi pass is screenshots only (41_hindi_*, 42_hindi_*), read by eye
 
-## Release build (R8-shrunk, x86_64, built with -PscaServer=http://10.0.2.2:8000 -Pabi=x86_64): 130/130 passed
+## Release build (R8-shrunk, x86_64, built with -PscaServer=http://10.0.2.2:8000 -Pabi=x86_64): 131/131 passed
 
 - ✅ no WhatsApp on the teacher's phone (pm list packages)
 - ✅ no WhatsApp on the students' phone (pm list packages)
 - ✅ teacher signed up
-- ✅ the Today tab has a card for each of the day's classes, one per batch (1 at 10:52 India time: Pain management)
+- ✅ the Today tab has a card for each of the day's classes, one per batch (1 at 11:27 India time: Pain management)
 - ✅ what is no link is refused, its reason beside its own box
 - ✅ and the other batches' links are saved
 - ✅ no class group link is set
@@ -47,6 +47,7 @@
 - ✅ moved to 18:15, the class keeps its id and its own link, and the day has no second Pain management class
 - ✅ its card shows the new time
 - ✅ and its own link
+- ✅ a dose of 2.5 in the Sheet shows as written in the class's sequence
 - ✅ a class of her batch that she did not check in to is the one she is asked about
 - ✅ a student who did not check in is asked 'Were you in class?'
 - ✅ about that class, once the tab has read it again

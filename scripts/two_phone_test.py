@@ -3,16 +3,17 @@ the whole loop. The teacher signs up and sets each batch's everyday Meet link; o
 field while the others save. Two students sign up with the group code and tell the teacher about themselves, one with
 pain, and the teacher places each in the batch their answers point to. A class group link (not WhatsApp's) shows the
 students a button for it, and clearing it takes the button away. The owner moves a batch's time in the Sheet, and its
-coming class moves with it, keeping its own link. Meera, who did not check in, is asked whether she was in class (and
-never about one held before she was placed) and says how it went. The teacher shares a class, its Meet link pasted as a
-browser gives it, through Android's
-share sheet; Asha checks in with a mood, which opens the class, and after it says how each item went, with a strain on
-one, all of it kept when the phone turns. The teacher reads the classes on Insights and in their reviews, strain first,
-and writes to Asha about that asana, which she reads in its history. She practises on her own with the stopwatch and
-shares a health note. Remove and a new group code ask first; the teacher moves Meera to another batch with a note, kept
-in the review history, and gives her a new password, which she changes on the Me tab; in a batch with no link yet she
-checks in from the faces on the card while the server is out of reach, and it lands once it is back. A new group code turns the old one away from a third sign-up, whose answers are
-kept when the phone turns; both sign out and in again, their data still there; and both Today tabs are shot in Hindi.
+coming class moves with it, keeping its own link; a dose typed as 2.5 shows as written. Meera, who did not check in, is
+asked whether she was in class (and never about one held before she was placed) and says how it went. The teacher shares
+a class, its Meet link pasted as a browser gives it, through Android's share sheet; Asha checks in with a mood, which
+opens the class, and after it says how each item went, with a strain on one, all of it kept when the phone turns. The
+teacher reads the classes on Insights and in their reviews, strain first, and writes to Asha about that asana, which she
+reads in its history. She practises on her own with the stopwatch and shares a health note. Remove and a new group code
+ask first; the teacher moves Meera to another batch with a note, kept in the review history, and gives her a new
+password, which she changes on the Me tab; in a batch with no link yet she checks in from the faces on the card while
+the server is out of reach, and it lands once it is back. A new group code turns the old one away from a third sign-up,
+whose answers are kept when the phone turns; both sign out and in again, their data still there; and both Today tabs are
+shot in Hindi.
 
 Each step saves a screenshot (.local/visualization/viz_<major>/screens/<version>/), and a check that fails saves the
 screen and its UI dump beside them (fail_<n>.png and .xml). The debug build's run is recorded from both screens into
@@ -342,11 +343,12 @@ def loop(run: Run, backend: p.DevBackend, teacher_code: str, debug: bool) -> Non
 
     # 8. The owner's hand in the Sheet, with the server stopped. The day's last class, which the teacher gives its own
     #    link, has its batch's time moved 45 minutes later: it moves with it, keeping its id and its link, and the day
-    #    gets no second class. Meera's placement is dated two hours back, so a class begun since then is her batch's.
+    #    gets no second class (a class moves only while it is more than an hour away, so one two hours away is taken).
+    #    Its curriculum's first dose becomes 2.5, which the sequence shows as written.
     with run.part("a batch's time moves in the Sheet"):
         on(TEACHER)
         sessions = p.call("GET", "/teacher/home?lang=en", token)["sessions"]
-        last = [s for s in sessions if moment(s["starts_at"]) > datetime.now(IST) + timedelta(hours=1)][-1]
+        last = [s for s in sessions if moment(s["starts_at"]) > datetime.now(IST) + timedelta(hours=2)][-1]
         p.scroll_to_top()
         if last["id"] != sessions[0]["id"]:  # the first card is the open one
             p.tap_scrolling(f" · {clock(last['starts_at'])}")
@@ -356,12 +358,9 @@ def loop(run: Run, backend: p.DevBackend, teacher_code: str, debug: bool) -> Non
         p.tap_under("Google Meet link", "Save")
         run.check("the teacher gives a coming class its own link", "Saved")
         batch, new_start = last["batch"]["key"], moment(last["starts_at"]) + timedelta(minutes=45)
-        meera = next(u for u in p.call("GET", "/teacher/students", token)["students"] if u["name"] == "Meera (test)")["id"]
-        two_hours_ago = {"$date": int((time.time() - 2 * 3600) * 1000)}
         backend.stop()
         edit_sheet(run.sheet, "batches", {"key": batch}, {"time": f"{new_start:%H:%M}"})
-        edit_sheet(run.sheet, "users", {"id": meera}, {"batch_since": two_hours_ago})
-        edit_sheet(run.sheet, "batch_changes", {"student_id": meera}, {"created_at": two_hours_ago})
+        edit_sheet(run.sheet, "curriculum_items", {"curriculum": last["curriculum"], "position": 1}, {"dose": 2.5})
         backend.start()
         come_back()
         day = [(s["id"], s["starts_at"], s["meet_link"]) for s in p.call("GET", "/teacher/home?lang=en", token)["sessions"]
@@ -372,6 +371,12 @@ def loop(run: Run, backend: p.DevBackend, teacher_code: str, debug: bool) -> Non
         run.check("and its own link", "https://" + MOVED_LINK, scroll=True)
         run.shot("12a_teacher_class_moved")
         moved = last["id"]
+        p.launch()  # the app reads the curricula once a start
+        run.verdict("a dose of 2.5 in the Sheet shows as written in the class's sequence", any(text.startswith("2.5 ") for text in
+                    labels(whole_page=True)), "no '2.5 …' in the sequence")
+        p.scroll_to_top()
+        p.find_scrolling("2.5 ")
+        run.shot("12b_teacher_decimal_dose")
 
     # 9. Meera did not check in to a class of her batch: asked whether she was in it, she says how it went.
     with run.part("Meera says how a class went, with no check-in"):
