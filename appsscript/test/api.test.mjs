@@ -944,3 +944,25 @@ test('a time typed as the hour alone, or in Devanagari digits, reads as typed; o
   const cases = [['7', 420], ['17', 1020], [' 7 ', 420], ['५:३०', 330], ['१७:३०', 1050], ['5.30 PM', 1050], ['17h30', null], ['', null], ['25:00', null], ['7:75', null]];
   for (const [typed, minutes] of cases) assert.equal(b.evaluate('startMinutes_(' + JSON.stringify(typed) + ')'), minutes, typed);
 });
+
+test('a batch set by hand in the users tab is the student\'s batch from then on, whatever batch_since says', () => {
+  const ist = (s) => Date.parse(s + '+05:30');
+  for (const [name, since] of [['the date typed', ist('2026-11-19T00:00')], ['cleared', ''], ['as the app wrote it', undefined]]) {
+    const b = freshBackend({ now: ist('2026-11-19T09:00') });
+    const { t, code } = teacherAndCode(b);
+    const r = b.call('POST', '/auth/signup', { body: { name: 'Meera', phone: '9000000004', password: 'secret1', code } }).body;
+    assert.equal(b.call('PUT', '/teacher/students/' + r.user.id + '/batch', { token: t.token, body: { batch: 'beginner' } }).status, 200);
+    b.state.offsetMs = 5 * 60 * MIN; // 14:00: moved to Intermediate by hand
+    const users = b.ss.getSheetByName('users');
+    const header = users.rows()[0];
+    const row = users.rows().findIndex((x) => x[0] === r.user.id) + 1;
+    users.getRange(row, header.indexOf('batch') + 1).setValue("'intermediate");
+    if (since !== undefined) users.getRange(row, header.indexOf('batch_since') + 1).setValue(since === '' ? '' : new Date(since));
+    b.context.onEdit({});
+    b.state.offsetMs = (24 + 23) * 60 * MIN - 30 * MIN; // the next day, 07:30: Intermediate's 08:00 check-in is open
+    const next = b.call('GET', '/home', { token: r.token }).body.sessions[0];
+    const checkin = (id) => b.call('POST', '/sessions/' + id + '/checkin', { token: r.token, body: { phase: 'before', mood: 3 } });
+    assert.deepEqual([next.batch.key, checkin(next.id).status], ['intermediate', 200], name);
+    assert.equal(checkin(classStarted(b, -30, 'beginner')).body.detail, 'other_batch', name + ': the old batch\'s');
+  }
+});
