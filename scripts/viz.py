@@ -8,12 +8,14 @@ from pathlib import Path
 
 LOCAL = Path(__file__).resolve().parents[1] / ".local" / "visualization"
 WORK = LOCAL / "work"
+TEST_RELEASES = {"v0.9": "1"}  # a release for testing, by the major version it leads to
 
 
 def folder(version: str) -> Path:
-    """The version's folder, by its major part: v0.4-two-phones -> viz_v0, v1 -> viz_v1."""
-    major = re.match(r"v(\d+)", version)[1]
-    return LOCAL / f"viz_v{major}"
+    """The version's folder, by its major part: v0.4-two-phones -> viz_v0, v1 -> viz_v1; v0.9, the release for testing
+    v1, -> viz_v1."""
+    number = re.match(r"v(\d+)(\.\d+)?", version)
+    return LOCAL / f"viz_v{TEST_RELEASES.get(number[0], number[1])}"
 
 
 def tours(version: str) -> Path:
