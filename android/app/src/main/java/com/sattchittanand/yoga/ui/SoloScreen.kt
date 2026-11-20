@@ -36,6 +36,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.sattchittanand.yoga.AppViewModel
+import com.sattchittanand.yoga.Limits
 import com.sattchittanand.yoga.R
 import com.sattchittanand.yoga.SoloRun
 import kotlinx.coroutines.delay
@@ -121,6 +122,11 @@ fun SoloPractise(vm: AppViewModel, run: SoloRun) {
     LaunchedEffect(run.runningSince) {
         while (run.runningSince != null) {
             now = SystemClock.elapsedRealtime()
+            val current = vm.solo
+            if (current != null && current.held(now) >= SoloRun.MAX_HOLD_MS) { // the stopwatch stops at 60:00
+                vm.solo = current.stopped(now)
+                break
+            }
             delay(200)
         }
     }
@@ -131,7 +137,8 @@ fun SoloPractise(vm: AppViewModel, run: SoloRun) {
         Label(stringResource(R.string.item_of, run.at + 1, run.said.size))
         Text(curricula.library[f.item]?.title(vm.prefs.lang) ?: f.item, style = MaterialTheme.typography.headlineSmall)
         curricula.find(run.curriculum)?.items?.firstOrNull { it.item == f.item }?.let {
-            Text(doseLabel(it.dose, it.unit) + " · " + it.cue, style = MaterialTheme.typography.bodyMedium, color = Palette.muted)
+            Text(listOf(doseLabel(it.dose, it.unit), it.cue).filter(String::isNotBlank).joinToString(" · "), style = MaterialTheme.typography.bodyMedium,
+                color = Palette.muted)
         }
         Text(stopwatch((run.held(now) / 1000).toInt()), Modifier.fillMaxWidth(), style = MaterialTheme.typography.displayMedium, textAlign = TextAlign.Center)
         Button(onClick = { update(run.toggled(SystemClock.elapsedRealtime())) }, modifier = Modifier.fillMaxWidth()) {
@@ -145,8 +152,7 @@ fun SoloPractise(vm: AppViewModel, run: SoloRun) {
             selected = f.pain, onClick = { update(run.changed(f.copy(pain = !f.pain))) }, label = { Text(stringResource(R.string.pain_flag)) },
             colors = FilterChipDefaults.filterChipColors(selectedContainerColor = Palette.danger, selectedLabelColor = Color.White),
         )
-        OutlinedTextField(f.note, { update(run.changed(f.copy(note = it))) }, placeholder = { Text(stringResource(R.string.add_note)) },
-            modifier = Modifier.fillMaxWidth(), minLines = 2)
+        LimitedField(f.note, { update(run.changed(f.copy(note = it))) }, Limits.NOTE, placeholder = { Text(stringResource(R.string.add_note)) }, minLines = 2)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             if (run.at > 0) {
                 OutlinedButton(onClick = { update(run.moved(run.at - 1, SystemClock.elapsedRealtime())) }, Modifier.weight(1f)) { Text(stringResource(R.string.back)) }

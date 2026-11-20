@@ -1,6 +1,8 @@
 package com.sattchittanand.yoga.ui
 
 import android.content.ActivityNotFoundException
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -31,6 +33,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -51,6 +54,8 @@ import androidx.compose.ui.unit.isSpecified
 import androidx.compose.ui.unit.sp
 import com.sattchittanand.yoga.AppViewModel
 import com.sattchittanand.yoga.R
+import com.sattchittanand.yoga.codePointLength
+import com.sattchittanand.yoga.limitedTo
 import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
@@ -292,17 +297,19 @@ fun untilLabel(from: Instant, to: Instant): String {
 
 // ---------- leaving the app ----------
 
-/** Opens WhatsApp with [text] ready to send to a chat or group; if WhatsApp is missing, the share sheet. */
-fun shareToWhatsApp(context: Context, text: String) {
+/** Hands [text] to Android's share sheet: the class's group on WhatsApp, an SMS, an e-mail, wherever the teacher
+ *  chooses. */
+fun shareText(context: Context, text: String) {
     val send = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, text)
-    try {
-        context.startActivity(Intent(send).setPackage("com.whatsapp"))
-    } catch (_: ActivityNotFoundException) {
-        context.startActivity(Intent.createChooser(send, null))
-    }
+    context.startActivity(Intent.createChooser(send, null))
 }
 
-/** Opens a Meet, Zoom or WhatsApp-group link in its app, or the browser. */
+/** Puts [text] on the clipboard. */
+fun copyText(context: Context, text: String) {
+    context.getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText(null, text))
+}
+
+/** Opens a call's or a group's link in its app, or the browser. */
 fun openLink(context: Context, url: String) {
     try {
         context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
@@ -310,27 +317,74 @@ fun openLink(context: Context, url: String) {
     }
 }
 
-@Composable
-fun errorText(code: String): String = stringResource(
-    when (code) {
-        "bad_phone" -> R.string.err_bad_phone
-        "bad_login" -> R.string.err_bad_login
-        "phone_taken" -> R.string.err_phone_taken
-        "bad_group_code" -> R.string.err_bad_group_code
-        "bad_teacher_code" -> R.string.err_bad_teacher_code
-        "bad_meet_link" -> R.string.err_bad_meet_link
-        "bad_group_link" -> R.string.err_bad_group_link
-        "network" -> R.string.err_network
-        "short_password" -> R.string.err_short_password
-        "pending" -> R.string.err_pending
-        "busy" -> R.string.err_busy
-        "too_many_attempts" -> R.string.err_too_many_attempts
-        "teacher_exists" -> R.string.err_teacher_exists
-        "checkin_closed" -> R.string.err_checkin_closed
-        else -> R.string.err_generic
-    },
-    LocalTeacher.current, // for the messages that name the teacher
+/** A field the server named in a refused input ([com.sattchittanand.yoga.problemCode]), as the message names it. */
+private val FIELDS = mapOf(
+    "name" to R.string.name, "age" to R.string.age, "height_cm" to R.string.height_cm, "weight_kg" to R.string.weight_kg,
+    "password" to R.string.field_password, "new_password" to R.string.field_password, "current_password" to R.string.field_password,
+    "meals" to R.string.field_meals, "pain_note" to R.string.field_pain_note, "note" to R.string.field_note,
 )
+
+@Composable
+fun errorText(code: String): String {
+    val problem = code.split(':')
+    if (problem.size > 1) { // a check the server refused: "too_long:pain_note:600"
+        val field = stringResource(FIELDS[problem[1]] ?: R.string.field_text)
+        return when (problem[0]) {
+            "too_long" -> stringResource(R.string.err_field_too_long, field, problem.getOrNull(2)?.toIntOrNull() ?: 0)
+            "range" -> stringResource(R.string.err_field_range, field)
+            else -> stringResource(R.string.err_field_invalid, field)
+        }
+    }
+    return stringResource(
+        when (code) {
+            "bad_phone" -> R.string.err_bad_phone
+            "bad_login" -> R.string.err_bad_login
+            "phone_taken" -> R.string.err_phone_taken
+            "bad_group_code" -> R.string.err_bad_group_code
+            "bad_teacher_code" -> R.string.err_bad_teacher_code
+            "bad_meet_link" -> R.string.err_bad_meet_link
+            "bad_group_link" -> R.string.err_bad_group_link
+            "bad_password" -> R.string.err_bad_password
+            "network" -> R.string.err_network
+            "short_password" -> R.string.err_short_password
+            "pending" -> R.string.err_pending
+            "busy" -> R.string.err_busy
+            "too_many_attempts" -> R.string.err_too_many_attempts
+            "teacher_exists" -> R.string.err_teacher_exists
+            "checkin_closed" -> R.string.err_checkin_closed
+            "after_closed" -> R.string.err_after_closed
+            "other_batch" -> R.string.err_other_batch
+            "needs_batch" -> R.string.err_needs_batch
+            "no_link" -> R.string.err_no_link
+            "nothing_said" -> R.string.err_nothing_said
+            "empty_note" -> R.string.err_empty_note
+            "old_server" -> R.string.err_old_server
+            else -> R.string.err_generic
+        },
+        LocalTeacher.current, // for the messages that name the teacher
+    )
+}
+
+/** A text field that stops at [limit] code points, as the server counts them (so a Devanagari note is not cut short
+ *  by surprise), and shows the count once it is near. */
+@Composable
+fun LimitedField(
+    value: String,
+    onChange: (String) -> Unit,
+    limit: Int,
+    modifier: Modifier = Modifier.fillMaxWidth(),
+    label: @Composable (() -> Unit)? = null,
+    placeholder: @Composable (() -> Unit)? = null,
+    minLines: Int = 1,
+    maxLines: Int = Int.MAX_VALUE,
+) {
+    val count = value.codePointLength()
+    val near = count * 5 >= limit * 4 // from four fifths of the way
+    OutlinedTextField(
+        value, { onChange(it.limitedTo(limit)) }, modifier = modifier, label = label, placeholder = placeholder, minLines = minLines, maxLines = maxLines,
+        supportingText = if (near) ({ Text("$count / $limit", Modifier.fillMaxWidth(), textAlign = TextAlign.End) }) else null,
+    )
+}
 
 /** A sub-screen's title with an arrow back, so leaving it never depends on the phone's Back alone. */
 @Composable

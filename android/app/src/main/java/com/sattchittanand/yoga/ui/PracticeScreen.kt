@@ -99,12 +99,15 @@ private fun SoloDay(s: SoloSession) {
 @Composable
 private fun ClassMoods(c: JoinedClass) {
     val words = listOf(R.string.mood_1, R.string.mood_2, R.string.mood_3, R.string.mood_4, R.string.mood_5).map { stringResource(it) }
-    val spoken = "${stringResource(R.string.before)}: ${words[c.moodBefore - 1]}. ${stringResource(R.string.after)}: ${c.moodAfter?.let { words[it - 1] } ?: "–"}."
+    // A mood may be missing: none after, if not given; none before, for a class said after without checking in first.
+    fun word(mood: Int?) = mood?.takeIf { it in 1..5 }?.let { words[it - 1] } ?: "–"
+    fun face(mood: Int?) = mood?.takeIf { it in 1..5 }?.let { MOODS[it - 1] } ?: "–"
+    val spoken = "${stringResource(R.string.before)}: ${word(c.moodBefore)}. ${stringResource(R.string.after)}: ${word(c.moodAfter)}."
     Row(verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             Text(c.name, style = MaterialTheme.typography.bodyLarge)
             Text(dayLabel(c.at), style = MaterialTheme.typography.bodyMedium, color = Palette.muted)
         }
-        Text("${MOODS[c.moodBefore - 1]} → ${c.moodAfter?.let { MOODS[it - 1] } ?: "–"}", fontSize = 22.sp, modifier = Modifier.semantics { contentDescription = spoken })
+        Text("${face(c.moodBefore)} → ${face(c.moodAfter)}", fontSize = 22.sp, modifier = Modifier.semantics { contentDescription = spoken })
     }
 }

@@ -30,7 +30,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -45,9 +44,11 @@ import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.DialogProperties
 import com.sattchittanand.yoga.AppViewModel
 import com.sattchittanand.yoga.ClassSession
 import com.sattchittanand.yoga.Intake
+import com.sattchittanand.yoga.Limits
 import com.sattchittanand.yoga.R
 import com.sattchittanand.yoga.User
 import com.sattchittanand.yoga.Student
@@ -84,10 +85,15 @@ fun TeacherTodayScreen(vm: AppViewModel, onLanguage: (String) -> Unit, openStude
     }
 }
 
+/** One class: its curriculum, and its own link, to save and to share. Share hands the class's message to the share
+ *  sheet, saving the link first if it was changed. */
 @Composable
 private fun SessionCard(vm: AppViewModel, s: ClassSession, open: Boolean, batchLink: String?, toggle: () -> Unit) {
     val context = LocalContext.current
-    var link by rememberSaveable(s.id) { mutableStateOf(if (s.ownLink) s.meetLink ?: "" else "") }
+    val own = if (s.ownLink) s.meetLink.orEmpty() else ""
+    var link by rememberSaveable(s.id) { mutableStateOf(own) }
+    val changed = link.isNotBlank() && link.trim() != own
+    val saved = stringResource(R.string.saved)
     SectionCard(Modifier.clickable(onClick = toggle), tint = if (open) Palette.paper else Palette.cream) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
@@ -112,19 +118,20 @@ private fun SessionCard(vm: AppViewModel, s: ClassSession, open: Boolean, batchL
                 placeholder = { Text("meet.google.com/abc-defg-hij") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
             )
             vm.error?.takeIf { it == "bad_meet_link" }?.let { Text(errorText(it), color = MaterialTheme.colorScheme.error) }
-            Button(
-                onClick = { vm.saveLinkAndShare(s.id, link) { shareToWhatsApp(context, it) } },
-                enabled = link.isNotBlank() && !vm.busy,
-                colors = ButtonDefaults.buttonColors(containerColor = Palette.saffron),
-                modifier = Modifier.fillMaxWidth().height(52.dp),
-            ) {
-                Icon(Icons.AutoMirrored.Filled.Send, null)
-                Spacer(Modifier.width(8.dp))
-                Text(stringResource(R.string.save_share))
-            }
-            if (s.hasLink) {
-                OutlinedButton(onClick = { vm.shareSession(s.id) { shareToWhatsApp(context, it) } }, modifier = Modifier.fillMaxWidth()) {
-                    Text(stringResource(R.string.share_whatsapp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = { vm.saveLink(s.id, link.trim(), saved, null) }, enabled = changed && !vm.busy,
+                    modifier = Modifier.weight(1f).height(52.dp)) {
+                    Text(stringResource(R.string.save))
+                }
+                Button(
+                    onClick = { if (changed) vm.saveLink(s.id, link.trim(), saved) { shareText(context, it) } else vm.shareSession(s.id) { shareText(context, it) } },
+                    enabled = (changed || s.hasLink) && !vm.busy,
+                    colors = ButtonDefaults.buttonColors(containerColor = Palette.saffron),
+                    modifier = Modifier.weight(1f).height(52.dp),
+                ) {
+                    Icon(Icons.AutoMirrored.Filled.Send, null)
+                    Spacer(Modifier.width(8.dp))
+                    Text(stringResource(R.string.share))
                 }
             }
         }
@@ -147,43 +154,78 @@ private fun Plan(vm: AppViewModel, s: ClassSession) {
     HorizontalDivider(color = Palette.line)
 }
 
+/** Each batch's everyday Meet link, the class group's link (optional), and the group code with the invite. A link field
+ *  shows the server's value, read again after each reload, unless the teacher is editing it. Save sends only the
+ *  fields changed, each on its own: one the server refuses says why beside it, and the others are saved. */
 @Composable
 private fun GroupCard(vm: AppViewModel) {
     val home = vm.teacherHome ?: return
     val settings = home.settings
     val context = LocalContext.current
-    val links = remember { mutableStateMapOf<String, String>().apply { home.batches.forEach { put(it.info.key, it.meetLink ?: "") } } }
-    var group by rememberSaveable { mutableStateOf(settings.groupLink ?: "") }
+    val group = AppViewModel.GROUP_FIELD
+    // What the teacher has typed, and what the server refused, by field: each batch's key, and the group's.
+    var edits by rememberSaveable { mutableStateOf(mapOf<String, String>()) }
+    var refused by rememberSaveable { mutableStateOf(mapOf<String, String>()) }
+    var askNewCode by rememberSaveable { mutableStateOf(false) }
+    val server = home.batches.associate { it.info.key to it.meetLink.orEmpty() } + (group to settings.groupLink.orEmpty())
+    val shown = { field: String -> edits[field] ?: server[field].orEmpty() }
+    val edit = { field: String, text: String ->
+        edits = edits + (field to text)
+        refused = refused - field
+    }
+    val changed = edits.filter { (field, text) -> text.trim() != server[field].orEmpty() }.mapValues { it.value.trim() }
     val saved = stringResource(R.string.saved)
     Label(stringResource(R.string.settings_title))
     SectionCard {
         Text(stringResource(R.string.standing_link), style = MaterialTheme.typography.titleSmall)
         Text(stringResource(R.string.standing_link_help), style = MaterialTheme.typography.bodyMedium, color = Palette.muted)
         home.batches.forEach { b ->
-            OutlinedTextField(
-                links[b.info.key].orEmpty(), { links[b.info.key] = it }, label = { Text(b.info.name + (b.info.time?.let { " · $it" } ?: "")) },
-                placeholder = { Text("meet.google.com/abc-defg-hij") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
-            )
+            val key = b.info.key
+            LinkField(shown(key), { edit(key, it) }, b.info.name + (b.info.time?.let { " · $it" } ?: ""), "meet.google.com/abc-defg-hij", refused[key])
         }
-        OutlinedTextField(
-            group, { group = it }, label = { Text(stringResource(R.string.group_link)) },
-            placeholder = { Text("chat.whatsapp.com/…") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
-        )
-        vm.error?.takeIf { it == "bad_group_link" || it == "bad_meet_link" }?.let { Text(errorText(it), color = MaterialTheme.colorScheme.error) }
-        Button(onClick = { vm.saveSettings(group, links.toMap(), saved) }, enabled = !vm.busy) { Text(stringResource(R.string.save)) }
+        LinkField(shown(group), { edit(group, it) }, stringResource(R.string.group_link), null, refused[group])
+        Button(
+            onClick = {
+                vm.saveLinks(changed[group], changed - group, saved) { ok, bad ->
+                    edits = edits.filterKeys { it in changed && it !in ok }
+                    refused = bad
+                }
+            },
+            enabled = changed.isNotEmpty() && !vm.busy,
+        ) { Text(stringResource(R.string.save)) }
         HorizontalDivider(color = Palette.line)
         Label(stringResource(R.string.group_code_label))
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(settings.groupCode, style = MaterialTheme.typography.displaySmall.copy(letterSpacing = 6.sp), color = Palette.moss, modifier = Modifier.weight(1f))
-            TextButton(onClick = vm::newGroupCode) {
+            Text(settings.groupCode ?: "–", style = MaterialTheme.typography.displaySmall.copy(letterSpacing = 6.sp), color = Palette.moss,
+                modifier = Modifier.weight(1f))
+            TextButton(onClick = { askNewCode = true }, enabled = !vm.busy) {
                 Icon(Icons.Filled.Refresh, null)
                 Text(stringResource(R.string.new_code))
             }
         }
-        OutlinedButton(onClick = { vm.shareInvite { shareToWhatsApp(context, it) } }, modifier = Modifier.fillMaxWidth()) {
+        OutlinedButton(onClick = { vm.shareInvite { shareText(context, it) } }, modifier = Modifier.fillMaxWidth()) {
             Text(stringResource(R.string.invite_students))
         }
     }
+    if (askNewCode) {
+        AlertDialog(
+            onDismissRequest = { askNewCode = false },
+            title = { Text(stringResource(R.string.new_code_ask)) },
+            text = { Text(stringResource(R.string.new_code_why)) },
+            confirmButton = { TextButton(onClick = { askNewCode = false; vm.newGroupCode() }) { Text(stringResource(R.string.new_code)) } },
+            dismissButton = { TextButton(onClick = { askNewCode = false }) { Text(stringResource(R.string.cancel)) } },
+        )
+    }
+}
+
+/** A link to paste, with the reason the server [refused] it, if it did. */
+@Composable
+private fun LinkField(value: String, onChange: (String) -> Unit, label: String, placeholder: String?, refused: String?) {
+    OutlinedTextField(
+        value, onChange, label = { Text(label) }, singleLine = true, modifier = Modifier.fillMaxWidth(), isError = refused != null,
+        placeholder = if (placeholder == null) null else ({ Text(placeholder) }),
+        supportingText = if (refused == null) null else ({ Text(errorText(refused)) }),
+    )
 }
 
 @Composable
@@ -192,6 +234,7 @@ fun StudentsScreen(vm: AppViewModel) {
     // (name, new password). Saveable: the server has already changed the password, so it must survive rotation.
     var shownPassword by rememberSaveable { mutableStateOf<Pair<String, String>?>(null) }
     var askingPassword by rememberSaveable { mutableStateOf<Int?>(null) } // a new password signs the student out everywhere: ask first
+    var askingRemove by rememberSaveable { mutableStateOf<Int?>(null) }
     var openStudent by rememberSaveable { mutableStateOf<Int?>(null) }
     var openItem by rememberSaveable { mutableStateOf<String?>(null) }
     vm.students.firstOrNull { it.user.id == openStudent }?.let { student ->
@@ -257,7 +300,7 @@ fun StudentsScreen(vm: AppViewModel) {
                     if (student.status == "rejected" && student.batch != null) {
                         Button(onClick = { vm.setStudentStatus(student.id, "approved") }) { Text(stringResource(R.string.take_back)) }
                     }
-                    if (student.status != "rejected") OutlinedButton(onClick = { vm.setStudentStatus(student.id, "rejected") }) { Text(stringResource(R.string.remove)) }
+                    if (student.status != "rejected") OutlinedButton(onClick = { askingRemove = student.id }) { Text(stringResource(R.string.remove)) }
                     TextButton(onClick = { askingPassword = student.id }) { Text(stringResource(R.string.new_password)) }
                 }
                 if (student.status == "approved") {
@@ -280,11 +323,34 @@ fun StudentsScreen(vm: AppViewModel) {
             dismissButton = { TextButton(onClick = { askingPassword = null }) { Text(stringResource(R.string.cancel)) } },
         )
     }
-    shownPassword?.let { (name, password) ->
+    vm.students.firstOrNull { it.user.id == askingRemove }?.let { student ->
+        val name = student.user.name
         AlertDialog(
-            onDismissRequest = { shownPassword = null },
+            onDismissRequest = { askingRemove = null },
+            title = { Text(stringResource(R.string.remove_ask, name)) },
+            text = { Text(stringResource(R.string.remove_why, name.substringBefore(' '))) },
+            confirmButton = {
+                TextButton(onClick = { askingRemove = null; vm.setStudentStatus(student.user.id, "rejected") }) { Text(stringResource(R.string.remove)) }
+            },
+            dismissButton = { TextButton(onClick = { askingRemove = null }) { Text(stringResource(R.string.cancel)) } },
+        )
+    }
+    // The server has changed the password already: the dialog stays until OK, for the teacher to copy or share it.
+    shownPassword?.let { (name, password) ->
+        val context = LocalContext.current
+        val message = stringResource(R.string.new_password_is, name, password)
+        var copied by remember { mutableStateOf(false) }
+        AlertDialog(
+            onDismissRequest = {},
+            properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false),
             confirmButton = { TextButton(onClick = { shownPassword = null }) { Text(stringResource(R.string.ok)) } },
-            text = { Text(stringResource(R.string.new_password_is, name, password), style = MaterialTheme.typography.titleMedium) },
+            dismissButton = {
+                Row {
+                    TextButton(onClick = { copyText(context, password); copied = true }) { Text(stringResource(if (copied) R.string.copied else R.string.copy)) }
+                    TextButton(onClick = { shareText(context, message) }) { Text(stringResource(R.string.share)) }
+                }
+            },
+            text = { Text(message, style = MaterialTheme.typography.titleMedium) },
         )
     }
 }
@@ -317,17 +383,17 @@ private fun IntakeSummary(vm: AppViewModel, intake: Intake?, placed: Boolean) {
 }
 
 /** Choosing a student's batch, with a note for the review history: the batches two to a row, the note, and [action]
- *  ("Approve into …", "Move to …"), named with the batch chosen. */
+ *  ("Approve into …", "Move to …"), named with the batch chosen. [done] once it is saved: until then the picker and the
+ *  note stay, so a move that fails can be sent again. */
 @Composable
 private fun BatchPicker(vm: AppViewModel, student: User, preselect: String?, action: Int, done: () -> Unit = {}) {
     val batches = vm.teacherHome?.batches ?: return
     var chosen by rememberSaveable(student.id) { mutableStateOf(preselect) }
     var note by rememberSaveable(student.id) { mutableStateOf("") }
     Choices(batches.map { it.info.name }, batches.indexOfFirst { it.info.key == chosen }.takeIf { it >= 0 }, perRow = 2) { chosen = batches[it].info.key }
-    OutlinedTextField(note, { note = it }, placeholder = { Text(stringResource(R.string.batch_note)) }, minLines = 2, maxLines = 3,
-        modifier = Modifier.fillMaxWidth())
+    LimitedField(note, { note = it }, Limits.BATCH_NOTE, placeholder = { Text(stringResource(R.string.batch_note)) }, minLines = 2, maxLines = 3)
     val name = batches.firstOrNull { it.info.key == chosen }?.info?.name
-    Button(onClick = { chosen?.let { vm.placeStudent(student.id, it, note); done() } }, enabled = name != null && !vm.busy, modifier = Modifier.fillMaxWidth()) {
+    Button(onClick = { chosen?.let { vm.placeStudent(student.id, it, note, done) } }, enabled = name != null && !vm.busy, modifier = Modifier.fillMaxWidth()) {
         Text(stringResource(action, name.orEmpty()))
     }
 }

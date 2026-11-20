@@ -40,7 +40,7 @@ class LocalStore(dir: File, userId: Int) {
     @Synchronized fun clearChat() { chat.clear(); save() }
 
     @Synchronized fun addNote(text: String) {
-        notes += Note(nextId++, text.trim().take(500), Instant.now())
+        notes += Note(nextId++, text.trim().limitedTo(Limits.HEALTH_NOTE), Instant.now())
         save()
     }
 

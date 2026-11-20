@@ -59,12 +59,13 @@ private fun ItemReviewCard(title: String, item: ItemReview) {
                 Text(item.reactions[i].toString(), Modifier.width(24.dp), style = MaterialTheme.typography.bodyMedium)
             }
         }
+        val former = stringResource(R.string.former_student) // a student no longer in the Sheet
         item.pain.forEach { (name, note) ->
-            Text("${stringResource(R.string.pain_flag)}: $name" + (note?.let { " · “$it”" } ?: ""),
+            Text("${stringResource(R.string.pain_flag)}: ${name ?: former}" + (note?.let { " · “$it”" } ?: ""),
                 style = MaterialTheme.typography.bodyMedium, color = Palette.danger)
         }
         item.notes.forEach { (name, text) ->
-            Text("“$text” · $name", style = MaterialTheme.typography.bodyMedium)
+            Text("“$text” · ${name ?: former}", style = MaterialTheme.typography.bodyMedium)
         }
     }
 }

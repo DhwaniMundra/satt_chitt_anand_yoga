@@ -12,7 +12,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -28,6 +27,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.sattchittanand.yoga.AppViewModel
 import com.sattchittanand.yoga.ItemSummary
+import com.sattchittanand.yoga.Limits
 import com.sattchittanand.yoga.R
 import com.sattchittanand.yoga.Student
 import kotlin.math.roundToInt
@@ -114,8 +114,8 @@ fun ItemHistoryScreen(vm: AppViewModel, item: String, student: Student?, back: (
         }
         if (student != null) {
             val about = vm.curricula?.library?.get(item)?.short(vm.prefs.lang) ?: item
-            OutlinedTextField(draft, { draft = it }, placeholder = { Text(stringResource(R.string.feedback_for, student.user.name.substringBefore(' '), about)) },
-                minLines = 2, modifier = Modifier.fillMaxWidth())
+            LimitedField(draft, { draft = it }, Limits.ITEM_FEEDBACK,
+                placeholder = { Text(stringResource(R.string.feedback_for, student.user.name.substringBefore(' '), about)) }, minLines = 2)
             Button(onClick = { vm.sendItemFeedback(student.user.id, item, draft, sent) { draft = "" } }, enabled = draft.isNotBlank() && !vm.busy) {
                 Text(stringResource(R.string.send))
             }

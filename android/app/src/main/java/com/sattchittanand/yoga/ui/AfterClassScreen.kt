@@ -14,16 +14,16 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshots.SnapshotStateMap
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -32,8 +32,19 @@ import androidx.compose.ui.unit.dp
 import com.sattchittanand.yoga.AppViewModel
 import com.sattchittanand.yoga.ClassSession
 import com.sattchittanand.yoga.ItemFeedback
+import com.sattchittanand.yoga.Limits
 import com.sattchittanand.yoga.R
 import com.sattchittanand.yoga.Said
+
+/** Answers per item, kept through a rotation: each as [item, reaction (0 for none), strain or pain, note]. */
+private val FeedbackSaver = listSaver<SnapshotStateMap<String, ItemFeedback>, List<Any>>(
+    save = { said -> said.values.map { listOf(it.item, it.reaction ?: 0, it.pain, it.note) } },
+    restore = { saved ->
+        mutableStateMapOf<String, ItemFeedback>().apply {
+            saved.forEach { (item, reaction, pain, note) -> put(item as String, ItemFeedback(item, (reaction as Int).takeIf { it > 0 }, pain as Boolean, note as String)) }
+        }
+    },
+)
 
 /** After class: the mood now, then how each item of the class's curriculum went. Every part can be skipped. With
  *  [before], what was said already, to change. */
@@ -42,7 +53,9 @@ fun AfterClassScreen(vm: AppViewModel, session: ClassSession, before: Said?, clo
     val curricula = vm.curricula
     val plan = curricula?.find(session.curriculum)
     var mood by rememberSaveable(session.id) { mutableStateOf(before?.mood) }
-    val said = remember(session.id) { mutableStateMapOf<String, ItemFeedback>().apply { before?.items?.forEach { put(it.item, it) } } }
+    val said = rememberSaveable(session.id, saver = FeedbackSaver) {
+        mutableStateMapOf<String, ItemFeedback>().apply { before?.items?.forEach { put(it.item, it) } }
+    }
     LazyColumn(
         Modifier.fillMaxSize(),
         contentPadding = PaddingValues(20.dp),
@@ -62,7 +75,7 @@ fun AfterClassScreen(vm: AppViewModel, session: ClassSession, before: Said?, clo
         }
         if (curricula != null && plan != null) {
             item { Text(stringResource(R.string.after_class_help), style = MaterialTheme.typography.bodyMedium, color = Palette.muted) }
-            items(plan.items, key = { it.item }) { p ->
+            items(plan.items.distinctBy { it.item }, key = { it.item }) { p -> // one answer per item, if the Sheet lists one twice
                 val title = curricula.library[p.item]?.title(vm.prefs.lang) ?: p.item
                 ItemCard(title, said[p.item] ?: ItemFeedback(p.item, null, false, "")) { said[p.item] = it }
             }
@@ -91,6 +104,6 @@ private fun ItemCard(title: String, f: ItemFeedback, change: (ItemFeedback) -> U
             selected = f.pain, onClick = { change(f.copy(pain = !f.pain)) }, label = { Text(stringResource(R.string.pain_flag)) },
             colors = FilterChipDefaults.filterChipColors(selectedContainerColor = Palette.danger, selectedLabelColor = Color.White),
         )
-        if (noting) OutlinedTextField(f.note, { change(f.copy(note = it)) }, modifier = Modifier.fillMaxWidth(), minLines = 2)
+        if (noting) LimitedField(f.note, { change(f.copy(note = it)) }, Limits.NOTE, minLines = 2)
     }
 }

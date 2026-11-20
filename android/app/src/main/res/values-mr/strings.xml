@@ -10,21 +10,21 @@
     <string name="login">लॉग इन</string>
     <string name="signup">खाते तयार करा</string>
     <string name="name">तुमचे नाव</string>
-    <string name="phone">व्हॉट्सॲप नंबर</string>
+    <string name="phone">फोन नंबर</string>
     <string name="password">पासवर्ड (किमान 6 अक्षरे)</string>
-    <string name="group_code">ग्रुप कोड (वर्गाच्या व्हॉट्सॲप आमंत्रणातून)</string>
+    <string name="group_code">ग्रुप कोड (तुमच्या शिक्षकांकडून)</string>
     <string name="group_code_help">कोड नाही? %1$s यांना विचारा.</string>
     <string name="teacher_code">शिक्षक कोड</string>
     <string name="back">मागे</string>
     <string name="role_student">विद्यार्थी</string>
 
-    <string name="err_bad_phone">कृपया योग्य व्हॉट्सॲप नंबर टाका.</string>
+    <string name="err_bad_phone">कृपया योग्य फोन नंबर टाका.</string>
     <string name="err_bad_login">नंबर किंवा पासवर्ड चुकीचा आहे.</string>
     <string name="err_phone_taken">या नंबरचे खाते आधीच आहे. कृपया लॉग इन करा.</string>
-    <string name="err_bad_group_code">ग्रुप कोडसाठी %1$s यांना विचारा; तो वर्गाच्या व्हॉट्सॲप आमंत्रणात आहे.</string>
+    <string name="err_bad_group_code">हा ग्रुप कोड बरोबर नाही. हा कोड तुमचे शिक्षक %1$s देतात.</string>
     <string name="err_bad_teacher_code">शिक्षक कोड बरोबर नाही.</string>
-    <string name="err_bad_meet_link">कृपया Google Meet किंवा Zoom ची लिंक टाका.</string>
-    <string name="err_bad_group_link">कृपया व्हॉट्सॲप ग्रुपची इनव्हाइट लिंक टाका (chat.whatsapp.com/…).</string>
+    <string name="err_bad_meet_link">कृपया व्हिडिओ कॉलची लिंक टाका: Google Meet, Zoom, Teams किंवा Jitsi.</string>
+    <string name="err_bad_group_link">कृपया वर्गाच्या ग्रुपची लिंक टाका, किंवा ती रिकामी ठेवा.</string>
     <string name="err_network">स्टुडिओ सर्व्हरशी जोडता येत नाही. इंटरनेट तपासा आणि पुन्हा प्रयत्न करा.</string>
     <string name="err_short_password">पासवर्डमध्ये किमान 6 अक्षरे हवीत.</string>
     <string name="err_generic">काहीतरी चुकले. कृपया पुन्हा प्रयत्न करा.</string>
@@ -92,7 +92,7 @@
     <string name="intake_none">अजून स्वतःबद्दल उत्तरे नाहीत</string>
     <string name="intake_meals">जेवण: %1$s</string>
     <string name="see_all">सर्व पाहा</string>
-    <string name="open_group">व्हॉट्सॲप ग्रुप उघडा</string>
+    <string name="open_group">वर्गाचा ग्रुप उघडा</string>
     <string name="how_feel_before">आत्ता तुम्हाला कसे वाटते?</string>
     <string name="how_feel_after">वर्ग संपला! आता तुम्हाला कसे वाटते?</string>
     <string name="how_did_it_go">कसे झाले?</string>
@@ -141,7 +141,7 @@
 
     <string name="my_practice">माझा सराव</string>
     <string name="classes_joined">वर्ग</string>
-    <string name="streak">सलग दिवस</string>
+    <string name="streak">सलग वर्ग</string>
     <string name="mood_lift">मूडमध्ये सुधारणा</string>
     <string name="mood_lift_help">वर्गानंतर सरासरी तुम्हाला किती बरे वाटते (−4 ते +4).</string>
     <string name="memory_title">माझ्या आरोग्याच्या नोंदी</string>
@@ -159,8 +159,6 @@
 
     <string name="classes_title">तुमचे वर्ग</string>
     <string name="meet_link">Google Meet लिंक</string>
-    <string name="save_share">सेव्ह करा आणि व्हॉट्सॲपवर पाठवा</string>
-    <string name="share_whatsapp">व्हॉट्सॲपवर पाठवा</string>
     <string name="uses_standing_link">बॅचची रोजची लिंक वापरली जात आहे</string>
     <string name="no_link_yet">अजून लिंक नाही</string>
     <plurals name="joined_count">
@@ -170,9 +168,9 @@
     <string name="settings_title">वर्ग लिंक आणि ग्रुप</string>
     <string name="standing_link">प्रत्येक बॅचची रोजची Meet लिंक</string>
     <string name="standing_link_help">बॅचच्या ज्या वर्गाला स्वतःची लिंक नाही, त्याला हीच वापरली जाईल.</string>
-    <string name="group_link">व्हॉट्सॲप ग्रुप इनव्हाइट लिंक</string>
+    <string name="group_link">वर्गाच्या ग्रुपची लिंक (ऐच्छिक)</string>
     <string name="group_code_label">ग्रुप कोड</string>
-    <string name="invite_students">व्हॉट्सॲपवर विद्यार्थ्यांना बोलवा</string>
+    <string name="invite_students">विद्यार्थ्यांना बोलवा</string>
     <string name="new_code">नवीन कोड</string>
     <string name="saved">सेव्ह झाले</string>
     <string name="students_title">विद्यार्थी</string>
@@ -182,7 +180,7 @@
     <string name="remove">काढा</string>
     <string name="new_password">नवीन पासवर्ड</string>
     <string name="new_password_is">%1$s चा नवीन पासवर्ड: %2$s</string>
-    <string name="no_students">अजून विद्यार्थी नाहीत. व्हॉट्सॲपवर इनव्हाइट पाठवा.</string>
+    <string name="no_students">अजून विद्यार्थी नाहीत. त्यांना इनव्हाइट पाठवा.</string>
     <string name="insights_title">वर्ग कसे चालले आहेत</string>
     <string name="avg_lift">सरासरी मूड सुधारणा</string>
     <plurals name="pairs">
@@ -321,4 +319,35 @@
         <item quantity="one">स्वतः %d वेळ</item>
         <item quantity="other">स्वतः %d वेळा</item>
     </plurals>
+    <string name="phone_hint">भारताबाहेर आहात? + आणि तुमच्या देशाच्या कोडने सुरुवात करा.</string>
+    <string name="were_you_in_class">तुम्ही वर्गात होता का?</string>
+    <string name="range_hint">%1$d ते %2$d</string>
+    <string name="change_password">पासवर्ड बदला</string>
+    <string name="current_password">सध्याचा पासवर्ड</string>
+    <string name="new_password_again">नवीन पासवर्ड पुन्हा</string>
+    <string name="passwords_differ">दोन्ही नवीन पासवर्ड सारखे नाहीत.</string>
+    <string name="password_changed">पासवर्ड बदलला</string>
+    <string name="new_code_ask">नवीन ग्रुप कोड बनवायचा?</string>
+    <string name="new_code_why">ज्या विद्यार्थ्यांकडे जुना कोड आहे, त्यांना त्याने साइन अप करता येणार नाही.</string>
+    <string name="remove_ask">%1$s यांना काढायचे?</string>
+    <string name="remove_why">%1$s यांना यापुढे वर्ग दिसणार नाहीत. तुम्ही त्यांना नंतर परत घेऊ शकता.</string>
+    <string name="copy">कॉपी करा</string>
+    <string name="copied">कॉपी झाले</string>
+    <string name="former_student">एक माजी विद्यार्थी</string>
+    <string name="err_bad_password">हा तुमचा सध्याचा पासवर्ड नाही.</string>
+    <string name="err_after_closed">या वर्गाबद्दल सांगण्याची वेळ गेली: वर्गानंतर 12 तासांनी ते बंद होते.</string>
+    <string name="err_other_batch">हा वर्ग दुसऱ्या बॅचचा आहे. ‘आज’ टॅबवर आता तुमचे स्वतःचे वर्ग आहेत.</string>
+    <string name="err_needs_batch">आधी या विद्यार्थ्याला एखाद्या बॅचमध्ये ठेवा.</string>
+    <string name="err_no_link">या वर्गाला अजून लिंक नाही. आधी लिंक टाका.</string>
+    <string name="err_nothing_said">अजून सेव्ह करण्यासारखे काही नाही: एखाद्या आसनाची वेळ मोजा, किंवा कसे झाले ते सांगा.</string>
+    <string name="err_empty_note">नोंद रिकामी आहे.</string>
+    <string name="err_old_server">यासाठी स्टुडिओचा सर्व्हर अपडेट व्हायला हवा. तोपर्यंत नवीन पासवर्डसाठी %1$s यांना विचारा.</string>
+    <string name="err_field_too_long">%1$s खूप मोठे आहे: जास्तीत जास्त %2$d अक्षरे.</string>
+    <string name="err_field_range">%1$s: कृपया संख्या तपासा.</string>
+    <string name="err_field_invalid">कृपया तपासा: %1$s.</string>
+    <string name="field_password">पासवर्ड</string>
+    <string name="field_meals">जेवणाचे उत्तर</string>
+    <string name="field_pain_note">वेदनेची नोंद</string>
+    <string name="field_note">नोंद</string>
+    <string name="field_text">मजकूर</string>
 </resources>
