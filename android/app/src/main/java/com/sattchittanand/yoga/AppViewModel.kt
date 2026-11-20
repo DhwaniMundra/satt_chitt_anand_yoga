@@ -345,12 +345,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         solo = run
         val entries = run.entries()
         if (entries.isNotEmpty()) {
-            val minutes = ((now - run.startedAt + 59_999) / 60000).toInt().coerceIn(1, 240) // whole minutes, rounded up
+            // Whole minutes, rounded up; for a run sent again as it is, the length sent the first time.
+            val minutes = run.sentMinutes ?: ((now - run.startedAt + 59_999) / 60000).toInt().coerceIn(1, 240)
             val body = JSONObject().put("minutes", minutes).put("entries", JSONArray(entries.map { it.json() }))
             try {
                 once("solo:${run.startedAt}", "") { api.post("/me/solo", body, it) }
             } catch (e: ApiError) {
-                if (e.status !in 400..499) solo = run.copy(unsure = true)
+                if (e.status !in 400..499) solo = run.copy(unsure = true, sentMinutes = minutes)
                 throw e
             }
             notice = saved

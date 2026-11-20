@@ -2829,13 +2829,13 @@ function moodChange_(checkins) {
 
 /** Which classes are a student's: a test of a class, true when they were in its batch at some moment while it ran
  * (placed before its end, not moved out before its start). Their batches come from their placements and moves in
- * batch_changes, and from the users tab: a batch set there by hand, with no change logged, counts from its
- * batch_since, or from always when that is empty. */
+ * batch_changes, and from the users tab: a batch set there by hand, with no change logged, is their batch now, from
+ * its batch_since (from always when that is empty), but never from before the last change logged. */
 function ownClasses_(ctx, user) {
   const changes = ctx.db.t('batch_changes').rows.filter((c) => c.student_id === user.id).sort((a, b) => a.created_at - b.created_at);
   const steps = [{ at: -Infinity, batch: changes.length ? changes[0].from : null }].concat(changes.map((c) => ({ at: c.created_at, batch: c.to })));
-  if (user.batch !== steps[steps.length - 1].batch) steps.push({ at: user.batch_since === null ? 0 : user.batch_since, batch: user.batch });
-  steps.sort((a, b) => a.at - b.at);
+  const last = steps[steps.length - 1];
+  if (user.batch !== last.batch) steps.push({ at: Math.max(user.batch_since === null ? 0 : user.batch_since, last.at), batch: user.batch });
   return (session) => {
     const end = session.starts_at + session.duration_min * 60000;
     return steps.some((step, i) => step.batch === session.batch && step.at < end && (i === steps.length - 1 || steps[i + 1].at > session.starts_at));
