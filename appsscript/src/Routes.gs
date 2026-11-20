@@ -196,7 +196,7 @@ function home_(ctx) {
   });
   // The class to say how it went: the latest whose after-class window is open, with what was said about it so far
   // (null before an answer), so it can be said or changed. `after_checkin` is one the student checked in to;
-  // `after_class` may also be one of the batch they were in at its time that they did not check in to (having joined
+  // `after_class` may also be one of theirs (ownClasses_) that they did not check in to (having joined
   // from the class's message), with `checked_in` saying which.
   const all = ctx.db.t('class_sessions').rows;
   const latest = (list) => list.filter((s) => afterOpen_(s, ctx.now)).sort((a, b) => b.starts_at - a.starts_at)[0];
@@ -213,9 +213,9 @@ function home_(ctx) {
     };
     return out;
   };
-  const batchAt = batchAt_(ctx, user);
+  const own = ownClasses_(ctx, user);
   const afterJoined = latest(all.filter((s) => joined[s.id]));
-  const afterOwn = latest(all.filter((s) => joined[s.id] || batchAt(s.starts_at) === s.batch));
+  const afterOwn = latest(all.filter((s) => joined[s.id] || own(s)));
   // Classes are for approved students only: one waiting or removed gets none, nor a class to say how it went.
   return {
     user: userJson_(user),
@@ -236,9 +236,10 @@ function checkin_(ctx) {
   const { path, body } = ctx.check({ path: PATH_SESSION_, body: BODY_.checkin });
   if (user.status !== 'approved') throw new HttpError_(403, 'pending');
   const row = sessionRow_(ctx, path.session_id);
-  // Joining is for one's own batch's classes; a class joined before a move can still be answered after it.
-  if (body.phase === 'before' && user.role === 'student' && row.batch !== user.batch) throw new HttpError_(403, 'other_batch');
-  const own = body.phase === 'after' && ownClass_(ctx, user, row);
+  // A class is the student's when they were in its batch at some moment while it ran ([ownClasses_]); one checked in
+  // to can be answered after it in any case.
+  const own = ownClasses_(ctx, user)(row);
+  if (body.phase === 'before' && user.role === 'student' && !own) throw new HttpError_(403, 'other_batch');
   const start = row.starts_at;
   const end = start + row.duration_min * 60000;
   const entry = (phase, mood) => Object.assign({ user_id: user.id, session_id: row.id, phase: phase, mood: mood, created_at: ctx.now },

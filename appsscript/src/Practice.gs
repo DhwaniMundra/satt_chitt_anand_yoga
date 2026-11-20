@@ -39,7 +39,8 @@ function sessionCurricula_(ctx) {
 }
 
 /** The library and the curricula in the student's language (the Devanagari names serve Hindi and Marathi). An item's
- * dose is always a whole number, 0 when its cell holds none (the app then shows the unit or the cue alone). */
+ * dose is always a whole number, rounded down (2.5 is 2), 0 when its cell holds none (the app then shows the unit or
+ * the cue alone); a count that is not whole comes as written in dose_label too ("2.5"). */
 function curricula_(ctx) {
   currentUser_(ctx);
   const { query } = ctx.check({ query: QUERY_LANG_ });
@@ -53,7 +54,11 @@ function curricula_(ctx) {
     }),
     curricula: c.curricula.map((r) => ({
       key: r.key, name: local(r, 'name'), level: r.level, about: local(r, 'about'),
-      items: (c.items[r.key] || []).map((i) => ({ item: i.item, dose: i.dose, unit: i.unit, cue: local(i, 'cue') })),
+      items: (c.items[r.key] || []).map((i) => {
+        const item = { item: i.item, dose: Math.floor(i.dose || 0), unit: i.unit, cue: local(i, 'cue') };
+        if (i.dose !== null && !Number.isInteger(i.dose)) item.dose_label = String(i.dose); // "2.5"
+        return item;
+      }),
     })),
   };
 }
@@ -68,8 +73,8 @@ function setCurriculum_(ctx) {
 }
 
 /** After class, how each item went for this student. Open while the "after" check-in is, to one who checked in or
- * was in the class's batch at its time; a second send replaces the first. Entries with no reaction, no pain and no
- * note are not kept. */
+ * whose class it is ([ownClasses_]); a second send replaces the first. Entries with no reaction, no pain and no note
+ * are not kept. */
 function sessionPractice_(ctx) {
   const user = currentUser_(ctx);
   const { path, body } = ctx.check({ path: PATH_SESSION_, body: BODY_.practice });
@@ -77,7 +82,7 @@ function sessionPractice_(ctx) {
   const row = sessionRow_(ctx, path.session_id);
   const checkins = ctx.db.t('checkins');
   const joined = checkins.rows.some((c) => c.user_id === user.id && c.session_id === row.id && c.phase === 'before');
-  if (!(joined || ownClass_(ctx, user, row)) || !afterOpen_(row, ctx.now)) throw new HttpError_(400, 'checkin_closed');
+  if (!(joined || ownClasses_(ctx, user)(row)) || !afterOpen_(row, ctx.now)) throw new HttpError_(400, 'checkin_closed');
   const library = curriculum_(ctx).library;
   const kept = saidEntries_(body.entries, library);
   // Saying how it went records coming to the class, with no mood before, for one who did not check in.

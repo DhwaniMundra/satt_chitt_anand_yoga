@@ -83,15 +83,14 @@ function checkPassword_(password, stored) {
 
 /**
  * The phone number as +<country><number>, so one person always gets one account however they type it:
- * "98765 43210", "098765 43210", "+91 98765 43210", "+91 098765 43210" and "0091 98765 43210" are the same number. A
- * bare 10-digit number, or 11 digits with the trunk prefix 0, is taken as Indian (+91); a number from abroad starts
- * with + and its country code. Devanagari digits count as digits. With [keepZero], a 0 after +91 stays, as an account
- * may be stored with it ("+9109876543210"). Throws a 400 bad_phone if it is not a plausible phone number.
+ * "98765 43210", "098765 43210", "+91 98765 43210", "+91 098765 43210" and "0091 98765 43210" are all +919876543210.
+ * A bare 10-digit number, or 11 digits with the trunk prefix 0, is taken as Indian (+91); a number from abroad starts
+ * with + and its country code. Devanagari digits count as digits. With [keepZero], a 0 typed after +91 (or 0091) is
+ * kept: "+91 098765 43210" is +9109876543210, as an account may be stored. Throws a 400 bad_phone if it is not a
+ * plausible phone number.
  */
 function normalizePhone_(raw, keepZero) {
-  let digits = String(raw)
-    .replace(/[०-९]/g, (d) => String(d.charCodeAt(0) - 0x966))
-    .replace(/\D/g, '');
+  let digits = latinDigits_(raw).replace(/\D/g, '');
   if (digits.indexOf('00') === 0) digits = digits.slice(2); // international prefix
   else if (digits.length === 11 && digits.charAt(0) === '0') digits = digits.slice(1); // Indian trunk prefix
   if (!keepZero && digits.length === 13 && digits.indexOf('910') === 0) digits = '91' + digits.slice(3); // the trunk 0 after +91

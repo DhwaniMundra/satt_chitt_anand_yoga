@@ -37,6 +37,16 @@ function pad2_(n) {
   return (n < 10 ? '0' : '') + n;
 }
 
+/** Minutes after midnight as a time of day: 420 is "07:00". */
+function clockOf_(minutes) {
+  return pad2_(Math.floor(minutes / 60)) + ':' + pad2_(minutes % 60);
+}
+
+/** Text with its Devanagari digits written as 0-9: "१०" is "10". */
+function latinDigits_(text) {
+  return String(text).replace(/[०-९]/g, (d) => String(d.charCodeAt(0) - 0x966));
+}
+
 /** strftime("%-I:%M %p") in India time: "8:00 AM". */
 function istClock_(ms) {
   const p = istParts_(ms);
@@ -103,11 +113,11 @@ function cleanMeetLink_(raw) {
 
 /** The class group's link: a WhatsApp group invite (its code alone, the rest of the address dropped), or any other
  * link as written (a Telegram or Signal group, say), always https. Its address ends in a name of letters (".com",
- * ".me"); without http(s)://, it needs a path too ("t.me/x"), so words like "Mr.Sharma", "e.g." or "7.00" are no
- * link. Else 400 bad_group_link. */
+ * ".me"); without http(s)://, it needs a path or a fragment too ("t.me/x", "signal.group/#…"), so words like
+ * "Mr.Sharma", "e.g." or "7.00" are no link. Else 400 bad_group_link. */
 function cleanGroupLink_(raw) {
   return firstLink_(raw, (p) => {
-    if (!/\.[a-z]{2,}$/.test(p.host) || (!p.scheme && p.path === '/')) return null;
+    if (!/\.[a-z]{2,}$/.test(p.host) || (!p.scheme && p.path === '/' && !p.fragment)) return null;
     if (p.host === 'chat.whatsapp.com') {
       const m = /^\/(?:invite\/)?([A-Za-z0-9]+)\/?$/.exec(p.path);
       return m ? 'https://chat.whatsapp.com/' + m[1] : null;
@@ -137,19 +147,23 @@ function batches_(ctx) {
   return out;
 }
 
-/** A batch's time as the owner typed it ("07:00", "7.00", "5:30 pm", "7 am") as minutes after midnight in India. */
+/** A batch's time as the owner typed it ("07:00", "7.00", "17", "5:30 pm", "7 am", Devanagari digits too) as minutes
+ * after midnight in India; null when it is no time (empty while the owner retypes it, "17h30"). */
 function startMinutes_(time) {
-  const m = /(\d{1,2})(?:[:.](\d\d))?\s*([ap])?\.?\s*m?\b/i.exec(String(time || ''));
-  if (!m || (m[2] === undefined && !m[3])) return 0;
+  const text = latinDigits_(time === null || time === undefined ? '' : time);
+  const bare = /^\s*(\d{1,2})\s*$/.exec(text); // "7", "17": the hour alone
+  const m = bare || /(\d{1,2})(?:[:.](\d\d))?\s*([ap])?\.?\s*m?\b/i.exec(text);
+  if (!m || (!bare && m[2] === undefined && !m[3])) return null;
   const hour = m[3] ? (Number(m[1]) % 12) + (m[3].toLowerCase() === 'p' ? 12 : 0) : Number(m[1]);
-  return (hour * 60 + Number(m[2] || 0)) % 1440;
+  const minute = Number(m[2] || 0);
+  return hour < 24 && minute < 60 ? hour * 60 + minute : null;
 }
 
-/** A batch for the app, in `lang`: its key, name, words, days and start ("07:00"). */
+/** A batch for the app, in `lang`: its key, name, words, days and start ("07:00", or null while its time is no time). */
 function batchJson_(batch, key, lang) {
   if (!batch) return { key: key, name: key || '', about: '', days: [], time: null };
   return { key: batch.key, name: pick_(batch.name, lang), about: pick_(batch.about, lang), days: batch.days,
-    time: pad2_(Math.floor(batch.start_min / 60)) + ':' + pad2_(batch.start_min % 60) };
+    time: batch.start_min === null ? null : clockOf_(batch.start_min) };
 }
 
 /** A session for the app. The link is shown only to approved members; without its own link a session uses its batch's
@@ -179,7 +193,7 @@ function studioJson_(ctx, lang) {
   };
 }
 
-/** Each batch's classes on its days, over the 7 days from `now`'s India date. */
+/** Each batch's classes on its days, over the 7 days from `now`'s India date; none for a batch whose time is no time. */
 function weekStarts_(now, batches) {
   const today = istDay_(now);
   const out = [];
@@ -188,7 +202,9 @@ function weekStarts_(now, batches) {
     const weekday = DAYS_[(day + 3) % 7]; // 1 Jan 1970 was a Thursday
     Object.keys(batches).forEach((key) => {
       const b = batches[key];
-      if (b.days.indexOf(weekday) >= 0) out.push({ batch: key, starts_at: istMidnight_(day) + b.start_min * 60000, duration_min: b.duration_min });
+      if (b.start_min !== null && b.days.indexOf(weekday) >= 0) {
+        out.push({ batch: key, starts_at: istMidnight_(day) + b.start_min * 60000, duration_min: b.duration_min });
+      }
     });
   }
   return out;
@@ -196,23 +212,28 @@ function weekStarts_(now, batches) {
 
 /** Makes the next 7 days' classes match the batches, one class per batch per day. A day without its class gets one.
  * A class whose time or length no longer matches the batch's (the owner changed it) is moved in its row, keeping its
- * id, its own link and its curriculum, if it has not begun and nobody has checked in to it; otherwise it stays as it
- * is, and the day gets no second class. A class is removed only on a day its batch no longer meets, under the same
- * conditions. Takes the lock only when there is something to change. */
+ * id, its own link and its curriculum, when nobody has checked in to it and both its old and its new start are more
+ * than an hour away (out of its check-in window, perhaps after its message was shared); otherwise it stays as it is,
+ * and the day gets no second class. A class is removed only on a day its batch no longer meets, under the same
+ * conditions. A batch whose time is no time (being retyped, say) is left as it is. Takes the lock only when there is
+ * something to change. */
 function ensureWeek_(ctx) {
-  const wanted = weekStarts_(ctx.now, batches_(ctx));
+  const batches = batches_(ctx);
+  const wanted = weekStarts_(ctx.now, batches);
   const today = istDay_(ctx.now);
   const dayOf = (r) => r.batch + '@' + istDay_(r.starts_at);
+  const away = (ms) => ms - ctx.now > CHECKIN_BEFORE_MIN_ * 60000;
   const changes = (table) => {
     const joined = {};
     ctx.db.t('checkins').rows.forEach((c) => {
       joined[c.session_id] = true;
     });
-    const free = (r) => r.starts_at > ctx.now && !joined[r.id];
+    const free = (r) => away(r.starts_at) && !joined[r.id];
     const byDay = {};
     table.rows.forEach((r) => {
       const day = istDay_(r.starts_at);
-      if (day >= today && day < today + 7) (byDay[dayOf(r)] || (byDay[dayOf(r)] = [])).push(r);
+      const timed = !batches[r.batch] || batches[r.batch].start_min !== null;
+      if (timed && day >= today && day < today + 7) (byDay[dayOf(r)] || (byDay[dayOf(r)] = [])).push(r);
     });
     const todo = { missing: [], moved: [], stale: [] };
     const want = {};
@@ -221,7 +242,9 @@ function ensureWeek_(ctx) {
       const rows = byDay[dayOf(w)] || [];
       const row = rows[0];
       if (!row) todo.missing.push(w);
-      else if (rows.length === 1 && free(row) && (row.starts_at !== w.starts_at || row.duration_min !== w.duration_min)) todo.moved.push([row, w]);
+      else if (rows.length === 1 && free(row) && away(w.starts_at) && (row.starts_at !== w.starts_at || row.duration_min !== w.duration_min)) {
+        todo.moved.push([row, w]);
+      }
     });
     Object.keys(byDay).forEach((key) => {
       if (!want[key]) todo.stale = todo.stale.concat(byDay[key].filter(free));
@@ -291,22 +314,23 @@ function moodChange_(checkins) {
   return [pairs ? sum / pairs : null, pairs];
 }
 
-/** The batch a student was in at a moment (null before they were placed), from their placements and moves in
- * batch_changes; for a student placed by hand in the Sheet, with no change logged, their batch from its batch_since
- * on (from always, if that is empty). */
-function batchAt_(ctx, user) {
+/** Which classes are a student's: a test of a class, true when they were in its batch at some moment while it ran
+ * (placed before its end, not moved out before its start). Their batches come from their placements and moves in
+ * batch_changes, and from the users tab: a batch set there by hand, with no change logged, counts from its
+ * batch_since, or from always when that is empty. */
+function ownClasses_(ctx, user) {
   const changes = ctx.db.t('batch_changes').rows.filter((c) => c.student_id === user.id).sort((a, b) => a.created_at - b.created_at);
-  if (!changes.length) return (at) => (user.batch_since === null || at >= user.batch_since ? user.batch : null);
-  return (at) => changes.reduce((batch, c) => (c.created_at <= at ? c.to : batch), changes[0].from);
-}
-
-/** Whether a class is of the batch the student was in at its time: theirs to say how it went, checked in or not. */
-function ownClass_(ctx, user, session) {
-  return batchAt_(ctx, user)(session.starts_at) === session.batch;
+  const steps = [{ at: -Infinity, batch: changes.length ? changes[0].from : null }].concat(changes.map((c) => ({ at: c.created_at, batch: c.to })));
+  if (user.batch !== steps[steps.length - 1].batch) steps.push({ at: user.batch_since === null ? 0 : user.batch_since, batch: user.batch });
+  steps.sort((a, b) => a.at - b.at);
+  return (session) => {
+    const end = session.starts_at + session.duration_min * 60000;
+    return steps.some((step, i) => step.batch === session.batch && step.at < end && (i === steps.length - 1 || steps[i + 1].at > session.starts_at));
+  };
 }
 
 /** Classes joined, the run of classes in a row the student came to, and the average mood change. The run goes back
- * through the classes of the batch the student was in at the time of each (so a move starts no new count), and any
+ * through the classes of the batch the student was in at the time of each ([ownClasses_]; a move starts no new count), and any
  * other they joined; one checked in to counts at once. A class still to come or under way does not break it, nor
  * one nobody came to: it was probably not held. Sent as streak_days. */
 function practiceStats_(ctx, user) {
@@ -319,10 +343,10 @@ function practiceStats_(ctx, user) {
     held[c.session_id] = true;
     if (c.user_id === user.id) mine[c.session_id] = true;
   });
-  const batchAt = batchAt_(ctx, user);
+  const own = ownClasses_(ctx, user);
   const ended = (s) => s.starts_at + s.duration_min * 60000 <= ctx.now;
   const run = sessions
-    .filter((s) => mine[s.id] || (held[s.id] && ended(s) && batchAt(s.starts_at) === s.batch))
+    .filter((s) => mine[s.id] || (held[s.id] && ended(s) && own(s)))
     .sort((a, b) => b.starts_at - a.starts_at);
   let streak = 0;
   while (streak < run.length && mine[run[streak].id]) streak++;
