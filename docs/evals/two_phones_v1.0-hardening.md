@@ -2,7 +2,7 @@
 
 - **Server:** the dev backend at http://10.0.2.2:8000 (the laptop as the emulators see it), on an empty Sheet for each build
 - **Phones:** emulator-5554 (teacher), emulator-5556 (students), Android 16 emulators with 2 GB and no WhatsApp, so each share button opens Android's share sheet
-- **Started:** 2026-11-20 20:10 India time. The teacher's Today tab shows the rest of the day's classes, one card per batch, so how many depends on the hour
+- **Started:** 2026-11-20 21:47 India time. The teacher's Today tab shows the rest of the day's classes, one card per batch, so how many depends on the hour
 - **Not tested:** the Ask tab, as Gemma needs a phone with 6 GB. The Hindi pass is screenshots only (41_hindi_*, 42_hindi_*), read by eye
 
 ## Debug build (app-debug.apk): 142/142 passed
@@ -11,7 +11,7 @@
 - ✅ no WhatsApp on the students' phone (pm list packages)
 - ✅ teacher phone shows the server address before sign-in
 - ✅ teacher signed up
-- ✅ the Today tab has a card for each of the day's classes, one per batch (3 at 20:11 India time: Beginner, Intermediate, Advanced)
+- ✅ the Today tab has a card for each of the day's classes, one per batch (3 at 21:48 India time: Beginner, Intermediate, Advanced)
 - ✅ what is no link is refused, its reason beside its own box
 - ✅ and the other batches' links are saved
 - ✅ no class group link is set
@@ -146,7 +146,7 @@
 - ✅ her health note, kept on this phone, is still there
 - ✅ marked shared
 - ✅ the week ahead gives each class's India time on a line of its own
-- ✅ the last moment to change what she said carries its day there, when it is not today ('you can change it until 7:01 PM')
+- ✅ the last moment to change what she said carries its day there, when it is not today ('you can change it until 8:37 PM')
 - ✅ the teacher's app is back in English
 - ✅ and the student's
 
@@ -155,7 +155,7 @@
 - ✅ no WhatsApp on the teacher's phone (pm list packages)
 - ✅ no WhatsApp on the students' phone (pm list packages)
 - ✅ teacher signed up
-- ✅ the Today tab has a card for each of the day's classes, one per batch (3 at 20:45 India time: Beginner, Intermediate, Advanced)
+- ✅ the Today tab has a card for each of the day's classes, one per batch (3 at 22:20 India time: Beginner, Intermediate, Advanced)
 - ✅ what is no link is refused, its reason beside its own box
 - ✅ and the other batches' links are saved
 - ✅ no class group link is set
@@ -290,7 +290,7 @@
 - ✅ her health note, kept on this phone, is still there
 - ✅ marked shared
 - ✅ the week ahead gives each class's India time on a line of its own
-- ✅ the last moment to change what she said carries its day there, when it is not today ('you can change it until 7:34 PM')
+- ✅ the last moment to change what she said carries its day there, when it is not today ('you can change it until 9:09 PM')
 - ✅ the teacher's app is back in English
 - ✅ and the student's
 

@@ -48,6 +48,7 @@ import threading
 import time
 import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 from pathlib import Path
 from typing import Callable
 
@@ -62,7 +63,7 @@ TEACHER, STUDENT = "emulator-5554", "emulator-5556"
 PHONES = (TEACHER, STUDENT)
 SERVER = "http://10.0.2.2:8000"  # the dev backend, as the emulators see it
 IST = timezone(timedelta(hours=5, minutes=30))
-CALIFORNIA = timezone(timedelta(hours=-8))  # Pacific Standard Time, as in November
+CALIFORNIA = ZoneInfo("America/Los_Angeles")  # its own offset on each date, summer time or not
 T = p.TEACHER_NAME
 PASSWORD = "pilot123"  # every test person's, until the teacher gives one a new password
 OWN_PASSWORD = "pilot456"  # the one Meera then chooses
@@ -802,22 +803,25 @@ def loop(run: Run, backend: p.DevBackend, teacher_code: str, debug: bool) -> Non
     #     on a line of its own, and the day on the last moment to change what she said, when it is not today there.
     with run.part("Asha's Today tab in California"):
         p.adb("shell", "cmd", "alarm", "set-timezone", "America/Los_Angeles")
-        p.launch()
-        tab("Today")
-        after = p.call("GET", "/home?lang=en", api_login(ASHA))["after_class"]
-        texts = labels(whole_page=True)
-        ist = [text for text in texts if re.fullmatch(r"\d{1,2}:\d\d [AP]M IST", text)]
-        run.verdict("the week ahead gives each class's India time on a line of its own", bool(ist), str(texts))
-        if after and after.get("said"):  # what she said can be changed
-            closes = moment(after["starts_at"]) + timedelta(minutes=after["duration_min"], hours=12)
-            here = closes.astimezone(CALIFORNIA)
-            days = (here.date() - datetime.now(CALIFORNIA).date()).days
-            want = "you can change it until " + {0: clock_at(here), 1: "Tomorrow "}.get(days, f"{here:%a} {here.day} {here:%b} ")
-            line = next((text for text in texts if "you can change it until" in text), "")
-            run.verdict(f"the last moment to change what she said carries its day there, when it is not today ({want!r})", want in line, line)
-        shoot_down(run, "40d_student_today_california")
-        p.adb("shell", "cmd", "alarm", "set-timezone", "Asia/Kolkata")
-        p.launch()
+        try:
+            p.launch()
+            tab("Today")
+            after = p.call("GET", "/home?lang=en", api_login(ASHA))["after_class"]
+            texts = labels(whole_page=True)
+            ist = [text for text in texts if re.fullmatch(r"\d{1,2}:\d\d [AP]M IST", text)]
+            run.verdict("the week ahead gives each class's India time on a line of its own", bool(ist), str(texts))
+            if after and after.get("said"):  # what she said can be changed
+                closes = moment(after["starts_at"]) + timedelta(minutes=after["duration_min"], hours=12)
+                here = closes.astimezone(CALIFORNIA)
+                days = (here.date() - datetime.now(CALIFORNIA).date()).days
+                want = "you can change it until " + {0: clock_at(here), 1: "Tomorrow "}.get(days, f"{here:%a} {here.day} {here:%b} ")
+                line = next((text for text in texts if "you can change it until" in text), "")
+                run.verdict(f"the last moment to change what she said carries its day there, when it is not today ({want!r})", want in line,
+                            line)
+            shoot_down(run, "40d_student_today_california")
+        finally:
+            p.adb("shell", "cmd", "alarm", "set-timezone", "Asia/Kolkata")
+            p.launch()
 
     # 21. Both Today tabs in Hindi, shot down the page for words cut off or running over; then English again.
     with run.part("both Today tabs in Hindi"):
