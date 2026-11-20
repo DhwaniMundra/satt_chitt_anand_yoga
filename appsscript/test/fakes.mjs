@@ -1,6 +1,24 @@
 // Small fakes of the Apps Script services the backend uses, enough to run dist/Code.gs in Node with no Google account.
 // The fake Sheet behaves like Sheets where it matters: a fixed grid (writing outside it fails), and text that looks
 // like a number, a boolean, a date or a formula is read as one unless it starts with an apostrophe.
+//
+// Two requests at once. Each call() is one execution, as each request to the web app is. meanwhile() runs another
+// request (from twin(), a second copy of Code.gs over the same Sheet, cache, properties and lock) in the middle of the
+// next one: right after its first read of a tab, or before its n-th tryLock. If the first holds the lock just then,
+// the other waits until it lets go, as a real request would.
+//
+// Stale reads (loadBackend({ staleReads: { flushRefreshes } }), or SCA_STALE_READS=1 for the whole suite): how we
+// believe SpreadsheetApp behaves when two executions overlap, from the live test of v0.9.1 (six sign-ups at once got
+// the ids 2, 2, 2, 2, 3, 3 in six rows, while the intake, which reads only under the lock, stayed right). An
+// execution's first read of a tab's cells takes a copy of all of them (Apps Script's look-ahead cache fetches more
+// than it is asked for, to answer the reads that follow); every later getValues() of that tab in the same execution
+// is answered from the copy, which follows the execution's own writes but not anyone else's. The tab's size
+// (getLastRow, getDataRange's dimensions) is always read afresh. So a tab read before the lock and again under it
+// comes back with the rows another execution added meanwhile as empty rows, which the backend skips, and with rows
+// another execution deleted still in place: the next id is one already given, a number already signed up is free, and
+// a row number points at someone else's row. SpreadsheetApp.flush() drops the copies when flushRefreshes is true (what
+// we believe); false is the worst case, a flush that refreshes nothing, where only a tab first read under the lock is
+// read right.
 import { createHash, randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -39,16 +57,23 @@ export class FakeRange {
   }
   getRow() { return this.row; }
   getColumn() { return this.col; }
-  getValues() {
+  /** The range's values in `data` (a tab's cells, by row). */
+  valuesIn(data) {
     const out = [];
     for (let r = 0; r < this.rows; r++) {
       const line = [];
+      const cells = data[this.row + r - 1] || [];
       for (let c = 0; c < this.cols; c++) {
-        const v = this.sheet.cell(this.row + r, this.col + c);
+        const v = cells[this.col + c - 1] ?? '';
         line.push(v && typeof v === 'object' && 'formula' in v ? '' : v instanceof Date ? new Date(v.getTime()) : v);
       }
       out.push(line);
     }
+    return out;
+  }
+  getValues() {
+    const out = this.valuesIn(this.sheet.view());
+    this.sheet.ss.called('read', this.sheet);
     return out;
   }
   getValue() { return this.getValues()[0][0]; }
@@ -57,13 +82,15 @@ export class FakeRange {
       throw new Error('The number of rows or columns in the data does not match the range.');
     }
     values.forEach((line, r) => line.forEach((v, c) => this.sheet.setCell(this.row + r, this.col + c, sheetsValue(v))));
+    this.sheet.ss.called('write', this.sheet);
     return this;
   }
   setValue(v) {
     for (let r = 0; r < this.rows; r++) for (let c = 0; c < this.cols; c++) this.sheet.setCell(this.row + r, this.col + c, sheetsValue(v));
+    this.sheet.ss.called('write', this.sheet);
     return this;
   }
-  setFormula(f) { this.sheet.setCell(this.row, this.col, { formula: f }); return this; }
+  setFormula(f) { this.sheet.setCell(this.row, this.col, { formula: f }); this.sheet.ss.called('write', this.sheet); return this; }
   setNumberFormat() { return this; }
   setFontWeight() { return this; }
   setFontSize() { return this; }
@@ -75,10 +102,24 @@ export class FakeSheet {
     Object.assign(this, { ss, name, maxRows: 1000, maxCols: 26, frozenRows: 0, data: [], notes: {}, hidden: false, protections: [] });
   }
   getName() { return this.name; }
-  cell(r, c) { return (this.data[r - 1] || [])[c - 1] ?? ''; }
+  /** The cells as the running execution reads them: the tab's own, or in the stale-read mode its copy of them. */
+  view() {
+    const copies = this.ss.copies();
+    if (!copies) return this.data;
+    if (!copies.has(this)) copies.set(this, this.data.map((line) => (line ? line.slice() : line)));
+    return copies.get(this);
+  }
+  /** The tab's cells, and the running execution's copy of them if it has one: its own writes change both. */
+  stores() {
+    const copies = this.ss.copies();
+    const copy = copies && copies.get(this);
+    return copy ? [this.data, copy] : [this.data];
+  }
   setCell(r, c, v) {
-    if (!this.data[r - 1]) this.data[r - 1] = [];
-    this.data[r - 1][c - 1] = v;
+    for (const data of this.stores()) {
+      if (!data[r - 1]) data[r - 1] = [];
+      data[r - 1][c - 1] = v;
+    }
     this.ss.writes++;
   }
   getLastRow() {
@@ -92,15 +133,21 @@ export class FakeSheet {
   }
   getMaxRows() { return this.maxRows; }
   getMaxColumns() { return this.maxCols; }
-  insertRowsAfter(after, n) { this.data.splice(after, 0, ...Array.from({ length: n }, () => [])); this.maxRows += n; return this; }
+  insertRowsAfter(after, n) {
+    for (const data of this.stores()) data.splice(after, 0, ...Array.from({ length: n }, () => []));
+    this.maxRows += n;
+    this.ss.called('structural', this);
+    return this;
+  }
   insertColumnsAfter(after, n) { this.maxCols += n; return this; }
   deleteRow(r) { return this.deleteRows(r, 1); }
   deleteRows(r, n) {
     if (r < 1 || n < 1 || r + n - 1 > this.maxRows) throw new Error('Those rows are out of bounds.');
     if (this.maxRows - n <= this.frozenRows) throw new Error('Sorry, it is not possible to delete all non-frozen rows.');
-    this.data.splice(r - 1, n);
+    for (const data of this.stores()) data.splice(r - 1, n);
     this.maxRows -= n;
     this.ss.writes++;
+    this.ss.called('structural', this);
     return this;
   }
   getDataRange() { return new FakeRange(this, 1, 1, Math.max(this.getLastRow(), 1), Math.max(this.getLastColumn(), 1)); }
@@ -117,7 +164,10 @@ export class FakeSheet {
     }
     return new FakeRange(this, a, b, c || 1, d || 1);
   }
-  clearContents() { this.data = []; return this; }
+  clearContents() {
+    for (const data of this.stores()) data.length = 0;
+    return this;
+  }
   setFrozenRows(n) { this.frozenRows = n; return this; }
   hideSheet() { this.hidden = true; return this; }
   isSheetHidden() { return this.hidden; }
@@ -128,8 +178,8 @@ export class FakeSheet {
     return p;
   }
   getProtections() { return this.protections; }
-  /** The tab as plain rows, for tests. */
-  rows() { return this.getDataRange().getValues(); }
+  /** The tab as plain rows, for tests: what the Sheet holds, whatever an execution has read. */
+  rows() { return this.getDataRange().valuesIn(this.data); }
 }
 
 export class FakeSpreadsheet {
@@ -139,6 +189,16 @@ export class FakeSpreadsheet {
     this.writes = 0;
     this.sheets.push(new FakeSheet(this, 'Sheet1'));
     this.active = this.sheets[0];
+    this.staleReads = null; // { flushRefreshes } in the stale-read mode
+    this.executions = []; // the requests running, the innermost last: each one's copies of the tabs it has read
+    this.called = () => {}; // each read, write, structural change and flush, for loadBackend's counts and meanwhile()
+  }
+  /** The running execution's copies of the tabs, in the stale-read mode; else null. */
+  copies() { return this.staleReads && this.executions.length ? this.executions[this.executions.length - 1] : null; }
+  flush() {
+    this.called('flush');
+    const copies = this.copies();
+    if (copies && this.staleReads.flushRefreshes) copies.clear();
   }
   getSheetByName(name) { return this.sheets.find((s) => s.name === name) || null; }
   getSheets() { return this.sheets.slice(); }
@@ -181,10 +241,32 @@ export class FakeCache {
   clear() { this.map.clear(); }
 }
 
+/** PropertiesService's script properties: strings by key, kept for good. */
+export class FakeProperties {
+  constructor() { this.map = new Map(); }
+  getProperty(key) { return this.map.has(key) ? this.map.get(key) : null; }
+  setProperty(key, value) {
+    if (String(value).length > 9000) throw new Error('Property value too long');
+    this.map.set(key, String(value));
+    return this;
+  }
+  deleteProperty(key) { this.map.delete(key); return this; }
+  getKeys() { return [...this.map.keys()]; }
+  getProperties() { return Object.fromEntries(this.map); }
+}
+
+/** The stale-read mode from the environment: SCA_STALE_READS=1 for what we believe, =worst for a flush that refreshes
+ * nothing. */
+function staleReadsFromEnv() {
+  const mode = process.env.SCA_STALE_READS;
+  return mode ? { flushRefreshes: mode !== 'worst' } : null;
+}
+
 /** A fresh backend: the bundle loaded into its own context with fake services. Its clock is real time, or the
- * moment [now] (ms) when given, as in the tests. */
-export function loadBackend({ code, now } = {}) {
+ * moment [now] (ms) when given, as in the tests. [staleReads] turns on the stale-read mode (above). */
+export function loadBackend({ code, now, staleReads = staleReadsFromEnv() } = {}) {
   const ss = new FakeSpreadsheet();
+  ss.staleReads = staleReads || null;
   // The clock: real time, or the frozen moment frozenMs; either moved by offsetMs.
   const state = { offsetMs: 0, frozenMs: now === undefined ? null : now, lockFree: true, lockHeld: 0, locks: 0, logs: [], digests: 0 };
   const clock = () => (state.frozenMs !== null ? state.frozenMs : Date.now()) + state.offsetMs;
@@ -194,10 +276,42 @@ export function loadBackend({ code, now } = {}) {
     static now() { return clock(); }
   }
   const cache = new FakeCache(clock);
+  const props = new FakeProperties();
+  // The Sheet's calls by kind (read: a getValues; write: a setValue(s); structural: rows inserted or deleted; flush),
+  // all of them and those made while the lock was held: what a route costs, and how long it holds everyone else up.
+  const counts = () => ({ read: 0, write: 0, structural: 0, flush: 0 });
+  state.calls = counts();
+  state.lockedCalls = counts();
+  // meanwhile(): the other requests waiting for a moment of the outermost one, and those waiting for the lock.
+  state.meanwhile = [];
+  state.afterRelease = [];
+  state.locksInRequest = 0;
+  const fire = (event) => {
+    if (ss.executions.length !== 1) return; // only the outermost request's moments
+    const i = state.meanwhile.findIndex((m) => (m.read !== undefined && m.read === event.read) || (m.lock !== undefined && m.lock === event.lock));
+    if (i < 0) return;
+    const [m] = state.meanwhile.splice(i, 1);
+    if (state.lockHeld > 0) state.afterRelease.push(m.other); // the other request waits for the lock
+    else m.other();
+  };
+  ss.called = (kind, sheet) => {
+    state.calls[kind]++;
+    if (state.lockHeld > 0) state.lockedCalls[kind]++;
+    if (kind === 'read') fire({ read: sheet.name });
+  };
   const lock = {
-    tryLock() { if (!state.lockFree) return false; state.lockHeld++; state.locks++; return true; },
+    tryLock() {
+      if (ss.executions.length === 1) fire({ lock: ++state.locksInRequest });
+      if (!state.lockFree) return false;
+      state.lockHeld++;
+      state.locks++;
+      return true;
+    },
     waitLock() { if (!this.tryLock()) throw new Error('Lock timeout'); },
-    releaseLock() { state.lockHeld = Math.max(0, state.lockHeld - 1); },
+    releaseLock() {
+      state.lockHeld = Math.max(0, state.lockHeld - 1);
+      if (state.lockHeld === 0) state.afterRelease.splice(0).forEach((other) => other());
+    },
   };
   const toSigned = (buf) => Array.from(buf, (b) => (b > 127 ? b - 256 : b));
   // The owner at the Sheet's menu: each dialog is kept in state.dialogs and answered from state.answers, a button for
@@ -227,11 +341,12 @@ export function loadBackend({ code, now } = {}) {
     SpreadsheetApp: {
       getActiveSpreadsheet: () => ss,
       getUi: () => ui,
-      flush: () => {},
+      flush: () => ss.flush(),
       ProtectionType: { SHEET: 'SHEET', RANGE: 'RANGE' },
     },
     LockService: { getScriptLock: () => lock },
     CacheService: { getScriptCache: () => cache },
+    PropertiesService: { getScriptProperties: () => props },
     Utilities: {
       DigestAlgorithm: { SHA_256: 'SHA_256' },
       Charset: { UTF_8: 'UTF_8' },
@@ -254,18 +369,46 @@ export function loadBackend({ code, now } = {}) {
     console: { error: (...args) => state.logs.push('ERROR ' + args.join(' ')) },
     Date: ShiftedDate,
   };
-  const context = vm.createContext(services);
-  vm.runInContext(code ?? readFileSync(join(ROOT, 'dist', 'Code.gs'), 'utf8'), context, { filename: 'Code.gs' });
-  const evaluate = (expression) => vm.runInContext(expression, context);
+  const source = code ?? readFileSync(join(ROOT, 'dist', 'Code.gs'), 'utf8');
 
-  /** One call through the envelope, as the app will make it: {status, body}. */
-  function call(method, path, { query, token, body, requestId } = {}) {
-    const envelope = { method, path, query: query || {}, token: token || '', body: body === undefined ? null : body };
-    if (requestId) envelope.request_id = requestId;
-    const out = context.doPost({ postData: { contents: JSON.stringify(envelope), type: 'application/json' } });
-    if (out.mime !== 'JSON') throw new Error('not JSON output');
-    return JSON.parse(out.getContent());
+  /** One execution: what `fn` reads of the Sheet is its own (see staleReads), as is each request to the web app. */
+  function execution(fn) {
+    if (ss.executions.length === 0) state.locksInRequest = 0;
+    ss.executions.push(new Map());
+    try {
+      return fn();
+    } finally {
+      ss.executions.pop();
+    }
   }
 
-  return { ss, state, cache, context, evaluate, call, Date: ShiftedDate, clock };
+  /** Runs `other` while the next request runs: right after that request's first read of tab `read`, or just before
+   * its `lock`-th tryLock; if it holds the lock just then, as soon as it lets go. */
+  function meanwhile({ read, lock: n }, other) {
+    state.meanwhile.push({ read, lock: n, other });
+  }
+
+  /** Code.gs loaded into a context of its own over these services: a backend, or a twin of one. */
+  function instance() {
+    const context = vm.createContext({ ...services });
+    vm.runInContext(source, context, { filename: 'Code.gs' });
+    const evaluate = (expression) => vm.runInContext(expression, context);
+
+    /** One call through the envelope, as the app will make it, as one execution: {status, body}. */
+    function call(method, path, { query, token, body, requestId } = {}) {
+      const envelope = { method, path, query: query || {}, token: token || '', body: body === undefined ? null : body };
+      if (requestId) envelope.request_id = requestId;
+      const out = execution(() => context.doPost({ postData: { contents: JSON.stringify(envelope), type: 'application/json' } }));
+      if (out.mime !== 'JSON') throw new Error('not JSON output');
+      return JSON.parse(out.getContent());
+    }
+
+    /** Another copy of the backend over the same Sheet, cache, properties, lock and clock: a second request's own
+     * execution, for meanwhile(). */
+    const twin = () => instance();
+
+    return { ss, state, cache, props, context, evaluate, call, execution, meanwhile, twin, Date: ShiftedDate, clock };
+  }
+
+  return instance();
 }

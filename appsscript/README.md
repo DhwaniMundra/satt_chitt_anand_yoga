@@ -30,7 +30,7 @@ Contents: [Set up](#set-up-5-minutes) ·
    installed in, and no other file. If Google shows "Google hasn't verified this app", that is expected for a script
    of one's own: click **Advanced** → **Go to … (unsafe)** → Allow. The execution log then shows the **teacher
    sign-up code** (give it to the teacher; it works once) and the group code. Both stay in the hidden `settings` tab.
-5. **Deploy.** Deploy → New deployment → the gear next to "Select type" → **Web app**. Description: "v0.9.1".
+5. **Deploy.** Deploy → New deployment → the gear next to "Select type" → **Web app**. Description: "v1.0".
    Execute as: **Me**. Who has access: **Anyone**. Click Deploy (allow again if asked) and copy the **Web app URL**
    (it ends in `/exec`). Opening it in a browser shows `{"status":200,"body":{"ok":true,...}}`.
 
@@ -44,6 +44,15 @@ Open the Sheet → Extensions → Apps Script, select everything in `Code.gs`, p
 [`dist/Code.gs`](dist/Code.gs), Save. Then Deploy → **Manage deployments** → the pencil (Edit) → Version: **New
 version** → Deploy. The URL stays the same. Running `setup` again is always safe: it adds what is missing and leaves
 the data, the codes, the batches, the curriculum and an existing Dashboard alone.
+
+**To v1.0**, from v0.9.1: paste the new `Code.gs`, Save, then Deploy → **Manage deployments** → the pencil (Edit) →
+Version: **New version** → Deploy. There is nothing to run: no tab or column is new. The script now keeps two kinds of
+entries in its own properties (Project Settings → Script Properties), both started by themselves: `last_id:users` and
+`last_id:class_sessions`, the last id given, and `phone:+91…`, one for each number signed up from now on. Before
+checking it, remove the test people from the Sheet's menu: the live test of v0.9.1 left accounts that share an id,
+and v1.0 refuses a token or a lookup for a shared id (signed out, and a line in the execution log). Then run the
+concurrency check ([below](#tests)). The app of v0.9.1 works with this backend as it is; the app of v1.0 also sends a
+request id with sign-up and login, so a retry after a lost answer gets the first answer instead of `phone_taken`.
 
 A Sheet made before v0.9.1 needs `setup` run once after pasting: it adds the `app_link` row to `settings` (optional:
 paste a download link for the app into its value, and the invite says where to get the app) and makes the `time`
@@ -95,7 +104,8 @@ row is gone (File → Version history can only bring back the whole Sheet as it 
   sign-ups; no one is signed out.
 
 Rows are deleted whole, so each tab keeps its header row and the Dashboard keeps working. The app's writes wait
-while an item runs, so use the menu when no class is on.
+while an item runs, so use the menu when no class is on. The numbers of the people removed are forgotten too, so they
+can sign up again at once. Ids are never given again: after a reset the teacher's id follows the last one given, not 1.
 
 The menu runs the code saved in the Apps Script editor, not the deployed web app: after pasting a new `Code.gs`,
 Save is enough for the menu, and no new deployment is needed. Then reload the Sheet so the menu appears. Its items
@@ -115,25 +125,42 @@ phone app ◀──── HTTP 200 {"status": 401, "body": {...}} ────�
 
 - **One request, one view of the Sheet.** A request reads a tab on first use with one `getValues()` call and keeps
   it, in step with its own writes. Columns are found by their header names.
-- **Writes take the script lock** (`LockService.getScriptLock()`, waiting up to 20 s, else `503 busy`). A route that
-  writes holds it from start to finish, so what it reads and what it writes are consistent. Sign-up, login and a
-  password reset do their slow password hash *before* taking the lock. A check-in, which many students send as class
-  starts, reads everything else before the lock and, under it, only the check-ins tab, read afresh, and its one write.
-  `/home` and `/teacher/home` take it only on the first visit of a day, to add that day's classes. Writes are flushed
-  before the lock is let go.
+- **Writes take the script lock** (`LockService.getScriptLock()`, waiting up to 20 s, else `503 busy`), and flush
+  first, so what is read under it is the Sheet as it is now: Apps Script may answer a read of a tab from what the same
+  request read of it before, so a tab read before the lock could come back under it without the rows another request
+  wrote meanwhile (in the live test of v0.9.1, six sign-ups at once got the ids 2, 2, 2, 2, 3, 3). A route that writes
+  holds it from start to finish, so what it reads and what it writes are consistent, or takes it only around its
+  writes and reads the tabs it writes for the first time under it: sign-up and logout read the users and tokens tabs
+  only there. Sign-up, login and a password change or reset do their slow password hash *before* taking the lock. A
+  check-in, which many students send as class starts, reads everything else before the lock and, under it, only the
+  check-ins tab and its one write. An intake save holds it for two reads and two or three writes, no row deleted.
+  `/home` and `/teacher/home` take it only to make the week (below). Writes are flushed before the lock is let go.
 - **A write sent twice is written once.** The app sends a `request_id`, the same for each try of the same action,
   with these writes: the check-in before class, a practice on one's own (`/me/solo`), feedback (`/feedback`), a
   password change (`/me/password`), and the teacher's feedback on an item, batch moves and placements, and new
-  passwords for a student. The answer is kept for ten minutes in `CacheService`, by the login token's hash and the id,
-  and a repeat gets it back instead of writing again.
-- **Ids** are the largest id + 1, worked out under the lock.
+  passwords for a student; and, from the app of v1.0, sign-up and login. The answer is kept for ten minutes in
+  `CacheService`, by the login token's hash and the id (for sign-up and login, which carry no token, by the hash of
+  the phone number, normalised, and the id), and a repeat gets it back instead of writing again. Two copies of a
+  sign-up or login that arrive together write once: each looks for the other's answer again under the lock.
+- **Ids** are the largest id + 1, worked out under the lock. A person's and a class's, which other rows point at, come
+  from a counter in the script properties that never goes back (the larger of it and the largest id, + 1), so an id
+  is never given twice: not after the Sheet's menu removes someone, nor when a read misses a row just written. Two
+  `users` rows that share an id (copied by hand, or left by an older backend) are refused: a token for that id is
+  signed out, the teacher's lookup answers `no_student`, and the execution log says so.
+- **One account per number**: the `users` tab, read under the lock, says whether a number is taken. As a second guard,
+  each sign-up keeps its number in the script properties; a number kept there for an account the `users` tab does not
+  show is refused for six minutes (a read that missed a sign-up just written: no execution runs longer) and forgotten
+  after (a row deleted by hand).
 - **Batches and their classes**: students are placed in batches (Beginner, Intermediate, Advanced, Pain management
   as seeded), each meeting on its own days at its own time with its own Meet link, as the `batches` tab says. The
-  week is made on demand: every visit to `/home` or `/teacher/home` makes the next 7 days' classes match the batches,
+  week is made on demand: a visit to `/home` or `/teacher/home` makes the next 7 days' classes match the batches,
   one class per batch per day: it adds each one missing, moves a class whose batch's time or length changed in its
   row (keeping its id, link and curriculum), and removes one from a day its batch no longer meets; it moves or
   removes only a class nobody has checked in to whose start (old and new) is more than an hour away, and leaves a
-  batch whose time is no time alone.
+  batch whose time is no time alone. It does so under the lock, with the classes read there, and then leaves a mark
+  in the cache for the day, the batches' days, times and lengths, and the cache generation, so the visits after it
+  take no lock; the mark lasts ten minutes, as the cache does, so a class row deleted by hand comes back within ten
+  minutes. A visit that cannot have the lock goes on with the classes as they are, rather than answer `busy`.
 - **Whose class it is**: a class is a student's when they were in its batch at some moment while it ran, by their
   placements and moves (`batch_changes`) or a batch set by hand in the `users` tab (from its `batch_since`). That
   decides the check-in before class (`other_batch`), saying how it went without one, and the streak.
@@ -159,7 +186,7 @@ a POST to the web app URL whose body is one JSON object, and every answer is HTT
 | `query` | object, optional | Query parameters, e.g. `{"lang": "hi", "days": 30}`. Values are read as text; they win over the same name in `path`. |
 | `token` | string, optional | The login token from sign-up or login, with or without `Bearer `. Empty or absent when signed out. |
 | `body` | object or `null`, optional | The JSON body of the route. |
-| `request_id` | string, optional | For a write: the same id for each try of the same action, so it is written once (above). |
+| `request_id` | string, optional | For a write: the same id for each try of the same action, so it is written once (above). For sign-up and login, the same id with the same phone number. |
 
 **Answer:**
 
@@ -324,7 +351,11 @@ on the live Sheet, so as not to write rows to it; from the parts above, expect a
 - *6 minutes per execution*; a request here takes seconds.
 - *One writer at a time.* Writes queue on the script lock, each holding it for about a second (an estimate from the
   reads above: read the tab, write, flush). A request that waits more than 20 s answers `503 busy`; ten check-ins
-  at the same moment would wait about ten seconds at worst.
+  at the same moment would wait about ten seconds at worst. The live test of v0.9.1 timed an intake save at 3.2 to
+  4.6 s under the lock (it changed each cell on its own and deleted and rewrote its self-assessment rows), so with
+  ten or eleven sent at once 16 of 29 answered `busy`. v1.0 holds the lock for the intake's two reads and two or three
+  block writes, with no row deleted: counted on the fakes, 6 or 7 calls to the Sheet under the lock where there were
+  about 20. The app of v1.0 waits up to 45 s for an answer.
 - *CacheService*: values up to 100 KB, kept at most 6 hours and possibly evicted earlier. An eviction costs only
   speed, except that recent failed logins are forgotten.
 - *10 million cells per spreadsheet.* A year of the class is about 365 sessions, 7,300 check-ins and 70,000 practice
@@ -352,7 +383,11 @@ from `practice` (the app reads only `practice`).
   (`sha256x$100$131072$<salt>$<hash>`), so they can be raised without breaking existing passwords. An unknown phone
   number is checked against a dummy hash of the same cost, so timing does not reveal who has an account.
 - **Login tokens** are 32 random bytes (43 characters), stored only as their SHA-256; the cache keys are those
-  hashes too. A token lasts until logout, a password reset, or its person's removal from the Sheet's menu.
+  hashes too. A token lasts until logout, a password reset, or its person's removal from the Sheet's menu. The answer
+  to a sign-up or login sent with a request id, token included, is kept in the script's cache for ten minutes, for
+  the app's retry (the same phone number and request id); the request id is a random UUID made on the phone.
+- **The script properties** hold the last ids given and, for each number signed up since v1.0, its account's id: no
+  password, hash or token. Only the script and its owner can read them.
 - **Randomness** comes from `Utilities.getUuid()` (Java's `UUID.randomUUID()`, a `SecureRandom`), hashed: tokens,
   salts, the teacher and group codes, temporary passwords.
 - **Guessing is slowed:** 5 wrong passwords for a number, 5 wrong teacher codes, or 5 wrong group codes from one
@@ -375,7 +410,7 @@ node --test 'appsscript/test/*.test.mjs'
 
 On the studio laptop, Node is in `tools/node/bin` (`export PATH=$PWD/tools/node/bin:$PATH`). The tests load
 `dist/Code.gs` (the file that gets pasted) into a Node `vm` context with small fakes of `SpreadsheetApp`,
-`LockService`, `CacheService`, `Utilities`, `ContentService` and `Logger` ([`test/fakes.mjs`](test/fakes.mjs)).
+`LockService`, `CacheService`, `PropertiesService`, `Utilities`, `ContentService` and `Logger` ([`test/fakes.mjs`](test/fakes.mjs)).
 The fake Sheet behaves like Sheets where it matters: a fixed grid, at least one row kept below the frozen header,
 and text that looks like a number, a boolean, a date or a formula is read as one unless it starts with an
 apostrophe. The menu's dialogs are answered by the test.
@@ -418,14 +453,36 @@ done
   replayed with its request id bringing nothing back, a login that overlaps the removal; resetting the studio (what
   stays, the codes working again); a tab whose rows fill its grid; the lock; the dialogs and the RESET box; a new
   group code.
+- [`concurrency.test.mjs`](test/concurrency.test.mjs): two requests at once, each run in the middle of another
+  (`meanwhile()` in the fakes), with the Sheet read as we believe Apps Script reads it when requests overlap (below):
+  sign-ups (two numbers, or one number twice), logouts, the first visits of a day, intakes, a login and the menu
+  overlapping a removal or a logout; then the guards that hold whatever a read misses (ids that never repeat, one
+  account per number, a shared id refused, sign-up and login answered again for their request id) and the intake's
+  calls under the lock.
 - [`snapshot.test.mjs`](test/snapshot.test.mjs): a regression snapshot, 105 requests and their recorded answers
   ([`test/snapshot/`](test/snapshot/)); every status and every body must match. After a deliberate change to the
   answers, `node appsscript/test/snapshot/record.mjs` records them again; read its diff before committing.
+
+**Stale reads.** The fakes can read the Sheet as we believe Apps Script does when two requests overlap, from the live
+test of v0.9.1 (six sign-ups at once got duplicate ids in six rows, while the intake, which read its tabs only under
+the lock, stayed right): a request's first read of a tab takes a copy of all its cells, and its later reads of that
+tab are answered from the copy, which follows its own writes but not anyone else's, while the tab's size is always
+read afresh; `SpreadsheetApp.flush()` drops the copies. The model is not proven. `concurrency.test.mjs` runs each case
+in it and in a worst case where a flush refreshes nothing, so that only a tab first read under the lock is read right;
+`SCA_STALE_READS=1` (or `=worst`) runs the whole suite in either.
 
 [`scripts/smoke.mjs`](scripts/smoke.mjs) checks the deployed web app with requests that write no row:
 `SCA_WEBAPP_URL=<url> node appsscript/scripts/smoke.mjs 5`. Its failed logins use numbers that cannot be real
 mobiles (`+91 1…`); its one wrong teacher code counts toward that code's lockout (5 in 15 minutes), so before the
 teacher has signed up, run it at most once a quarter of an hour.
+
+[`scripts/concurrency.mjs`](scripts/concurrency.mjs) checks what the live test of v0.9.1 found, and writes rows:
+`SCA_WEBAPP_URL=<url> SCA_GROUP_CODE=<group code> node appsscript/scripts/concurrency.mjs 6` sends 6 sign-ups at once
+("TEST concurrency 01" and on, numbers `+91 10000 7…` that cannot be real mobiles) with a second copy of the first
+number, and checks that every one is answered with an id of its own, that the number sent twice has one account (the
+other copy 409), that a later sign-up of a taken number gets 409, that each token's `GET /me` shows its own name, and
+that a sign-up sent again with its request id gets the first answer. It prints each answer, its time and a summary.
+Then remove the test people from the Sheet's menu.
 
 ## Developing
 
@@ -446,5 +503,7 @@ teacher has signed up, run it at most once a quarter of an hour.
   lists just those (run `setup`; the others are for the web app, the triggers and the menu). The work of the menu's
   items is in `removeTestPeople_(db)`, `resetStudio_(db)` and `newGroupCode_(db)`, which the tests call directly.
 - `loadBackend()` in [`test/fakes.mjs`](test/fakes.mjs) runs Code.gs locally, as a stand-in backend for app
-  development: it returns `{ss, state, cache, context, evaluate, call, Date, clock}`, where `call(method, path,
-  {query, token, body})` goes through the envelope and `state.offsetMs` / `state.frozenMs` move or stop the clock.
+  development: it returns `{ss, state, cache, props, context, evaluate, call, execution, meanwhile, twin, Date,
+  clock}`, where `call(method, path, {query, token, body, requestId})` goes through the envelope as one execution,
+  `state.offsetMs` / `state.frozenMs` move or stop the clock, and `twin()` and `meanwhile()` run a second request in
+  the middle of one.

@@ -215,8 +215,14 @@ function weekStarts_(now, batches) {
  * id, its own link and its curriculum, when nobody has checked in to it and both its old and its new start are more
  * than an hour away (out of its check-in window, perhaps after its message was shared); otherwise it stays as it is,
  * and the day gets no second class. A class is removed only on a day its batch no longer meets, under the same
- * conditions. A batch whose time is no time (being retyped, say) is left as it is. Takes the lock only when there is
- * something to change. */
+ * conditions. A batch whose time is no time (being retyped, say) is left as it is.
+ *
+ * The classes and check-ins are read for this only under the lock, for the first time in the request: read before
+ * it, they could come back under it without the classes another request had just added, which would be added again
+ * with the same ids. So that most visits take no lock, a mark in the cache says the week was made, for the day, the
+ * batches' days, times and lengths, and the cache generation (which a hand edit or the Sheet's menu moves on); it
+ * lasts as the cache does, so a class row deleted by hand (which fires no onEdit) comes back within ten minutes. A
+ * visit that cannot have the lock goes on with the classes as they are, rather than answer busy. */
 function ensureWeek_(ctx) {
   const batches = batches_(ctx);
   const wanted = weekStarts_(ctx.now, batches);
@@ -251,18 +257,34 @@ function ensureWeek_(ctx) {
     });
     return todo;
   };
-  let todo = changes(ctx.db.t('class_sessions'));
-  if (!todo.missing.length && !todo.moved.length && !todo.stale.length) return;
-  ctx.lock(() => {
+  const shape = Object.keys(batches).sort()
+    .map((key) => [key, batches[key].days.join(' '), batches[key].start_min, batches[key].duration_min].join('/')).join(';');
+  const mark = () => cacheKey_('week:' + today + ':' + sha256Hex_(shape));
+  if (cacheGet_(mark())) return;
+  const make = () => {
+    CACHE_GENERATION_ = null; // read again: it may have moved on while this request waited
+    if (cacheGet_(mark())) return; // made by a request that had the lock first
+    ctx.db.forget('class_sessions');
+    ctx.db.forget('checkins');
     const table = ctx.db.t('class_sessions');
-    todo = changes(table);
+    const todo = changes(table);
     todo.moved.forEach(([row, w]) => table.update(row, { starts_at: w.starts_at, duration_min: w.duration_min, updated_at: ctx.now }));
     if (todo.stale.length) table.remove(todo.stale);
-    let id = table.nextId();
-    table.insert(todo.missing.map((w) => ({
-      id: id++, batch: w.batch, starts_at: w.starts_at, duration_min: w.duration_min, meet_link: null, updated_at: ctx.now,
-    })));
-  });
+    if (todo.missing.length) {
+      let id = newIds_(ctx, 'class_sessions', todo.missing.length);
+      table.insert(todo.missing.map((w) => ({
+        id: id++, batch: w.batch, starts_at: w.starts_at, duration_min: w.duration_min, meet_link: null, updated_at: ctx.now,
+      })));
+    }
+    SpreadsheetApp.flush(); // the classes are in the Sheet before the mark says so
+    cachePut_(mark(), '1');
+  };
+  try {
+    ctx.lock(make, true);
+  } catch (err) {
+    if (!(err instanceof HttpError_) || err.status !== 503) throw err;
+    // The lock was busy: this visit goes on with the classes as they are, and a later one makes the week.
+  }
 }
 
 /** Whether a class's after-class window is open at [now]: from 10 minutes before its end to 12 hours after it. */

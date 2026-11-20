@@ -36,7 +36,10 @@ function myIntake_(ctx) {
   return { intake: intakeOf_(ctx, currentUser_(ctx).id) };
 }
 
-/** A student's intake, after sign-up (pending) or later from Me; a second send replaces the first. */
+/** A student's intake, after sign-up (pending) or later from Me; a second send replaces the first. Only its writes
+ * hold the lock: the two intake tabs, read there for the first time in the request, the student's row changed in
+ * place and their self-assessment rows written over in place (emptied when there are fewer, added at the end when
+ * there are more), a handful of calls with no row deleted, so a class sending theirs at once is not kept waiting. */
 function saveIntake_(ctx) {
   const user = currentUser_(ctx);
   if (user.role !== 'student') throw new HttpError_(403, 'students_only');
@@ -52,13 +55,17 @@ function saveIntake_(ctx) {
   const trimmed = (text) => (text === null ? null : text.trim() || null);
   const values = { age: body.age, height_cm: body.height_cm, weight_kg: body.weight_kg, food: body.food, meals: trimmed(body.meals),
     pain: pain.join(', ') || null, pain_note: trimmed(body.pain_note), updated_at: ctx.now };
-  const table = ctx.db.t('intake');
-  const row = table.rows.filter((r) => r.user_id === user.id)[0];
-  if (row) table.update(row, values);
-  else table.insert([Object.assign({ user_id: user.id }, values)]);
-  const ratings = ctx.db.t('intake_ratings');
-  ratings.remove(ratings.rows.filter((r) => r.user_id === user.id));
-  ratings.insert(Object.keys(byItem).map((k) => byItem[k]).filter((r) => r.reaction !== null || r.pain === 1)
-    .map((r) => ({ user_id: user.id, item: r.item, reaction: r.reaction, pain: r.pain })));
+  const said = Object.keys(byItem).map((k) => byItem[k]).filter((r) => r.reaction !== null || r.pain === 1)
+    .map((r) => ({ user_id: user.id, item: r.item, reaction: r.reaction, pain: r.pain }));
+  ctx.lock(() => {
+    const table = ctx.db.t('intake');
+    const row = table.rows.filter((r) => r.user_id === user.id)[0];
+    if (row) table.update(row, values);
+    else table.insert([Object.assign({ user_id: user.id }, values)]);
+    const ratings = ctx.db.t('intake_ratings');
+    const before = ratings.rows.filter((r) => r.user_id === user.id);
+    ratings.rewrite(before.map((r, i) => [r, said[i] || null]));
+    ratings.insert(said.slice(before.length));
+  }, true);
   return { intake: intakeOf_(ctx, user.id) };
 }

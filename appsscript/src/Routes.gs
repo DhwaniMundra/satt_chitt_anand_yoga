@@ -1,7 +1,8 @@
 // ---------- Routes: one function per route ----------
 // Each checks who is asking first, then the inputs, then the rules: a signed-out request is a 401 whatever its inputs,
 // and a bad input is a 422 before any rule is applied. Routes marked LOCK_ in routes_() run entirely under the script
-// lock; the others take it only around their writes, so a slow password hash never holds up everyone else.
+// lock; the others take it only around their writes, so a slow password hash never holds up everyone else, and read
+// the tabs they write for the first time under it wherever they can (Context_.lock says why).
 
 // ---------- public ----------
 
@@ -14,49 +15,38 @@ function studio_(ctx) {
   return studioJson_(ctx, query.lang);
 }
 
+/** One teacher, with the teacher code, which then works no more; students with the group code, which the teacher
+ * gives with the invite, and who then wait for the teacher to place them in a batch. The code is checked first, under
+ * its brake on guessing, then the slow password hash is done; the users tab is read only under the lock after it, so a
+ * sign-up another request has just written cannot be missed, and a number already taken costs one hash. One number,
+ * one account: the users tab says so, and the numbers kept in the script properties (phoneHeld_) say it again. */
 function signup_(ctx) {
   const { body } = ctx.check({ body: BODY_.signup });
   const phone = normalizePhone_(body.phone);
   // A code copied from a message may bring spaces, stars or a full stop with it.
   const code = body.code.replace(/^[^A-Za-z0-9]+|[^A-Za-z0-9]+$/g, '').toUpperCase();
-  const hasTeacher = () => ctx.db.t('users').rows.some((u) => u.role === 'teacher');
-  const taken = (users) => users.rows.some((u) => phoneOf_(u) === phone);
-  let status;
-  // The quick refusals come first, before the slow password hash; the lock below checks again.
-  if (body.role === 'teacher') {
-    if (hasTeacher()) throw new HttpError_(409, 'teacher_exists'); // one teacher per studio: the code works once
-    ctx.lock(() => {
-      if (attemptsBlocked_('login:teacher-code')) throw new HttpError_(429, 'too_many_attempts');
-      if (!codeMatches_(ctx, code, 'teacher_code')) {
-        attemptsFail_('login:teacher-code');
-        throw new HttpError_(400, 'bad_teacher_code');
-      }
-    }, true);
-    status = 'approved';
-  } else {
-    // The group code, which the teacher gives with the invite, keeps sign-ups to the class; the teacher then places
-    // each student in a batch.
-    const key = 'group-code:' + phone;
-    ctx.lock(() => {
-      if (attemptsBlocked_(key)) throw new HttpError_(429, 'too_many_attempts');
-      if (!codeMatches_(ctx, code, 'group_code')) {
-        attemptsFail_(key);
-        throw new HttpError_(400, 'bad_group_code');
-      }
-    }, true);
-    status = 'pending';
-  }
-  if (taken(ctx.db.t('users'))) throw new HttpError_(409, 'phone_taken');
+  const teacher = body.role === 'teacher';
+  const key = teacher ? 'login:teacher-code' : 'group-code:' + phone;
+  ctx.lock(() => {
+    if (attemptsBlocked_(key)) throw new HttpError_(429, 'too_many_attempts');
+    if (!codeMatches_(ctx, code, teacher ? 'teacher_code' : 'group_code')) {
+      attemptsFail_(key);
+      throw new HttpError_(400, teacher ? 'bad_teacher_code' : 'bad_group_code');
+    }
+  }, true);
   const pwHash = hashPassword_(body.password);
   return ctx.lock(() => {
+    const kept = replayed_(ctx.request); // a copy of this sign-up, with its request id, that had the lock first
+    if (kept) return kept;
     const users = ctx.db.t('users');
-    if (body.role === 'teacher' && hasTeacher()) throw new HttpError_(409, 'teacher_exists');
-    if (taken(users)) throw new HttpError_(409, 'phone_taken');
+    if (teacher && users.rows.some((u) => u.role === 'teacher')) throw new HttpError_(409, 'teacher_exists');
+    if (users.rows.some((u) => phoneOf_(u) === phone) || phoneHeld_(ctx, phone, users)) throw new HttpError_(409, 'phone_taken');
     const user = users.insert([{
-      id: users.nextId(), name: body.name.trim(), phone: phone, role: body.role, status: status, pw_hash: pwHash,
-      lang: body.lang, created_at: ctx.now,
+      id: newIds_(ctx, 'users', 1), name: body.name.trim(), phone: phone, role: body.role, status: teacher ? 'approved' : 'pending',
+      pw_hash: pwHash, lang: body.lang, created_at: ctx.now,
     }])[0];
-    return signIn_(ctx, user);
+    holdPhone_(ctx, phone, user.id);
+    return keepAnswer_(ctx.request, signIn_(ctx, user));
   });
 }
 
@@ -76,36 +66,37 @@ function login_(ctx) {
     attemptsFail_(key);
   }, true);
   // The account stored with the number exactly as typed first (two may be stored, with and without a 0 after +91),
-  // then the one whose number reads the same.
+  // then the one whose number reads the same. Read before the lock, for the slow password check; read again under it.
   const users = ctx.db.t('users').rows;
   const typed = normalizePhone_(body.phone, true);
   const user = users.filter((u) => u.phone === typed)[0] || users.filter((u) => phoneOf_(u) === phone)[0];
   const ok = checkPassword_(body.password, user ? user.pw_hash : DUMMY_HASH_); // the same work for an unknown number
   if (!user || !ok) throw new HttpError_(401, 'bad_login');
   return ctx.lock(() => {
+    const kept = replayed_(ctx.request); // a copy of this login, with its request id, that had the lock first
     // The users tab is read again under the lock: an account removed from the Sheet's menu, or given a new password,
-    // while this one was checked gets no token (an id freed by a removal may be someone else's by now).
-    const still = ctx.db.t('users').rows.filter((u) => u.id === user.id && u.pw_hash === user.pw_hash)[0];
-    if (!still) throw new HttpError_(401, 'bad_login');
+    // while this one was checked gets no token.
+    const still = userById_(ctx.db.t('users').rows, user.id);
+    if (!kept && (!still || still.pw_hash !== user.pw_hash)) throw new HttpError_(401, 'bad_login');
     attemptsClear_(key);
-    return signIn_(ctx, still);
+    return kept || keepAnswer_(ctx.request, signIn_(ctx, still));
   });
 }
 
 // ---------- signed in ----------
 
+/** Forgets this login's token. The tokens tab is read only under the lock: rows are deleted by their number, and one
+ * read before it could point at another person's row by then. */
 function logout_(ctx) {
-  if (ctx.token) {
-    const hash = sha256Hex_(ctx.token);
-    const mine = (table) => table.rows.filter((r) => r.token_hash === hash);
-    if (mine(ctx.db.t('tokens')).length) {
-      ctx.lock(() => {
-        const tokens = ctx.db.t('tokens');
-        tokens.remove(mine(tokens));
-        ctx.db.changedCache = true;
-      });
-    }
-  }
+  if (!ctx.token) return { ok: true };
+  const hash = sha256Hex_(ctx.token);
+  ctx.lock(() => {
+    const tokens = ctx.db.t('tokens');
+    const mine = tokens.rows.filter((r) => r.token_hash === hash);
+    if (!mine.length) return;
+    tokens.remove(mine);
+    ctx.db.changedCache = true;
+  });
   return { ok: true };
 }
 
@@ -115,7 +106,8 @@ function me_(ctx) {
 }
 
 /** A student (or the teacher) changing their own password: the current one first, under the login's brake on
- * guessing. This login stays signed in; every other is signed out. */
+ * guessing. This login stays signed in; every other is signed out. Who is asking is read before the lock, for the slow
+ * password check; the rows written are those of the users and tokens tabs as read again under it. */
 function changePassword_(ctx) {
   const user = currentUser_(ctx);
   const { body } = ctx.check({ body: BODY_.password });
@@ -131,7 +123,7 @@ function changePassword_(ctx) {
   return ctx.lock(() => {
     attemptsClear_(key);
     const users = ctx.db.t('users');
-    const me = users.rows.filter((u) => u.id === user.id)[0];
+    const me = userById_(users.rows, user.id);
     if (!me) throw new HttpError_(401, 'signed_out');
     users.update(me, { pw_hash: pwHash });
     const tokens = ctx.db.t('tokens');
@@ -396,14 +388,11 @@ function placeInBatch_(ctx) {
 function resetPassword_(ctx) {
   teacher_(ctx);
   const { path } = ctx.check({ path: PATH_USER_ });
-  const isStudent = (u) => u.id === path.user_id && u.role === 'student';
-  if (!ctx.db.t('users').rows.some(isStudent)) throw new HttpError_(404, 'no_student');
   const password = newCode_(8);
   const pwHash = hashPassword_(password);
   return ctx.lock(() => {
     const users = ctx.db.t('users');
-    const student = users.rows.filter(isStudent)[0];
-    if (!student) throw new HttpError_(404, 'no_student');
+    const student = studentRow_(ctx, path.user_id);
     users.update(student, { pw_hash: pwHash });
     const tokens = ctx.db.t('tokens');
     tokens.remove(tokens.rows.filter((r) => r.user_id === student.id));

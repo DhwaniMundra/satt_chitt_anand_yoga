@@ -13,14 +13,14 @@ export const WEDNESDAY_6AM = Date.parse('2026-11-18T00:30:00Z');
  * the suite at another moment of the day or week. A test about a particular moment pins it with freshBackend({ now }). */
 export const NOW = process.env.SCA_TEST_NOW ? Date.parse(process.env.SCA_TEST_NOW) : WEDNESDAY_6AM;
 
-/** A backend with its clock frozen at [now]; a test moves it on with state.offsetMs. */
-export function testBackend({ code, now = NOW } = {}) {
-  return loadBackend({ code, now });
+/** A backend with its clock frozen at [now]; a test moves it on with state.offsetMs. [staleReads] as in loadBackend. */
+export function testBackend({ code, now = NOW, staleReads } = {}) {
+  return loadBackend({ code, now, staleReads });
 }
 
 /** A backend after setup(), with the teacher code known. */
-export function freshBackend({ teacherCode = 'TEACH123', now } = {}) {
-  const b = testBackend({ now });
+export function freshBackend({ teacherCode = 'TEACH123', now, staleReads } = {}) {
+  const b = testBackend({ now, staleReads });
   b.context.setup();
   if (teacherCode !== null) setSetting(b, 'teacher_code', teacherCode);
   return b;

@@ -132,7 +132,73 @@ function attemptsClear_(key) {
   cache_().remove('fail:' + key);
 }
 
+// ---------- one account per number ----------
+// The users tab, read under the lock, says whether a number has an account. As a second guard, each sign-up also keeps
+// its number in the script properties ("phone:+919876543210" → {"id": 12, "at": <ms>}). A number kept there for an
+// account the users tab, as read, does not show is refused for PHONE_TRUST_MS_ (a read that missed a sign-up written
+// just before it) and forgotten after (the owner deleted the row by hand). The Sheet's menu forgets the numbers of the
+// people it removes.
+
+const PHONE_TRUST_MS_ = 6 * 60000; // how long an Apps Script execution may run: no read can miss an older sign-up
+
+function phoneKey_(phone) {
+  return 'phone:' + phone;
+}
+
+/** Under the lock: whether `phone` (normalised) is kept for an account. One the users tab shows with another number
+ * (changed by hand) does not count. */
+function phoneHeld_(ctx, phone, users) {
+  const raw = PropertiesService.getScriptProperties().getProperty(phoneKey_(phone));
+  let held = null;
+  try {
+    held = raw ? JSON.parse(raw) : null;
+  } catch (err) {
+    return false;
+  }
+  if (!held) return false;
+  const row = users.rows.filter((u) => u.id === held.id)[0];
+  if (row) return phoneOf_(row) === phone;
+  if (ctx.now - held.at >= PHONE_TRUST_MS_) return false;
+  console.error('signup: account %s keeps this number, but the users tab as read under the lock has no row with its id; refused as taken',
+    held.id);
+  return true;
+}
+
+/** Under the lock, once the sign-up's row is written: keeps its number for it. */
+function holdPhone_(ctx, phone, userId) {
+  PropertiesService.getScriptProperties().setProperty(phoneKey_(phone), JSON.stringify({ id: userId, at: ctx.now }));
+}
+
+/** Under the lock: forgets the numbers kept for `people` (every number, with `everything`). */
+function forgetPhones_(people, everything) {
+  const props = PropertiesService.getScriptProperties();
+  const ids = {};
+  const keys = {};
+  people.forEach((u) => {
+    ids[u.id] = true;
+    keys[phoneKey_(phoneOf_(u))] = true;
+  });
+  props.getKeys().filter((key) => key.indexOf('phone:') === 0).forEach((key) => {
+    let id = null;
+    try {
+      id = JSON.parse(props.getProperty(key)).id;
+    } catch (err) {
+      // a value typed by hand: forgotten with its number
+    }
+    if (everything || keys[key] || ids[id] === true) props.deleteProperty(key);
+  });
+}
+
 // ---------- who is asking ----------
+
+/** The users row with this id, or null. Two rows sharing an id give null, and the execution log says so: ids from
+ * newIds_ never repeat, but a row copied by hand, or the duplicates an older backend wrote, must not let one person's
+ * token or a lookup reach another. */
+function userById_(users, id) {
+  const found = users.filter((u) => u.id === id);
+  if (found.length > 1) console.error('users: %s rows share the id %s; none of them is used', found.length, id);
+  return found.length === 1 ? found[0] : null;
+}
 
 function currentUser_(ctx) {
   if (ctx._user) return ctx._user;
@@ -146,7 +212,7 @@ function currentUser_(ctx) {
     userId = String(row.user_id);
     cachePut_(key, userId);
   }
-  const user = ctx.db.t('users').rows.filter((u) => u.id === Number(userId))[0];
+  const user = userById_(ctx.db.t('users').rows, Number(userId));
   if (!user) throw new HttpError_(401, 'signed_out');
   ctx._user = user;
   return user;
