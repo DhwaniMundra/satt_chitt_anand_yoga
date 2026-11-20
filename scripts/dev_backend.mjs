@@ -4,14 +4,19 @@
 //   node scripts/dev_backend.mjs data/dev.json      serve on port 8000 (PORT, HOST); a missing file is set up afresh
 //
 // It answers as the live web app does: a POST of the envelope gets a 302 to a one-time /echo address, which the client
-// then fetches with GET. A plain GET answers the health check. A new Sheet's teacher sign-up code is SCA_TEACHER_CODE,
-// else the one setup() made, printed at start. SCA_DELAY_MS holds each answer back that long, as the live web app takes
-// a second or more, to see the app's loading states.
+// then fetches with GET; fetched again, that address answers the health check, as any plain GET does. A new Sheet's
+// teacher sign-up code is SCA_TEACHER_CODE, else the one setup() made, printed at start. SCA_DELAY_MS holds each answer
+// back that long, as the live web app takes a second or more, to see the app's loading states.
 //
 // For the tour scripts, never the app: POST /dev/class {"batch": "intermediate", "minutes_from_now": -47} adds a
 // 55-minute class of that batch at that time (here, one under way), so the check-ins are open whatever the time of day;
 // POST /dev/joined {"phone": "9800000002", "starts_at": "2026-11-19T02:30:00Z", "mood": 2} has that student join their
 // batch's class that began then, as if they had checked in before it, so they can say how it went.
+//
+// And for the two-phone test, the troubles of a real network: POST /dev/trouble {"path": "/auth/signup", "times": 1,
+// "drop": true} has the next call to that path (or to any, with "*") run but its answer lost (the connection closed);
+// {"status": 503, "html": true} answers it with that status and a page instead, without running it; {"delay_ms": 3000}
+// holds its answer back that long. Each trouble lasts `times` calls; POST /dev/trouble {} clears them.
 import { randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
@@ -62,16 +67,29 @@ function joined(b, phone, start, mood) {
   return session[0];
 }
 
+/** The first trouble queued for this envelope's path, used once more, or null. */
+function troubleFor(troubles, envelope) {
+  let path;
+  try {
+    path = String(JSON.parse(envelope).path || '').split('?')[0];
+  } catch {
+    return null;
+  }
+  const trouble = troubles.find((t) => t.times > 0 && (t.path === '*' || t.path === path));
+  if (trouble) trouble.times -= 1;
+  return trouble || null;
+}
+
 function serve(b, host, port) {
   const replies = new Map(); // one-time /echo keys -> the envelope to answer with
+  let troubles = []; // from POST /dev/trouble
   const send = (res, status, text) => res.writeHead(status, { 'Content-Type': 'application/json' }).end(text);
   createServer((req, res) => {
     const url = new URL(req.url, 'http://' + req.headers.host);
     if (req.method === 'GET') {
-      if (url.pathname !== '/echo') return send(res, 200, b.context.doGet().getContent());
-      const reply = replies.get(url.search.slice(1));
+      const reply = url.pathname === '/echo' && replies.get(url.search.slice(1));
       replies.delete(url.search.slice(1));
-      return reply ? send(res, 200, reply) : send(res, 404, '');
+      return send(res, 200, reply || b.context.doGet().getContent());
     }
     if (req.method !== 'POST') return send(res, 405, '');
     const chunks = [];
@@ -80,6 +98,7 @@ function serve(b, host, port) {
       const text = Buffer.concat(chunks).toString('utf8');
       const writes = b.ss.writes;
       let reply;
+      let held = DELAY_MS;
       if (url.pathname === '/dev/class') {
         const { batch, minutes_from_now: minutes } = JSON.parse(text);
         reply = JSON.stringify({ id: classStarted(b, -minutes, batch) });
@@ -88,16 +107,32 @@ function serve(b, host, port) {
         const { phone, starts_at: startsAt, mood } = JSON.parse(text);
         reply = JSON.stringify({ session_id: joined(b, phone, Date.parse(startsAt), mood) });
         b.context.onEdit({});
+      } else if (url.pathname === '/dev/trouble') {
+        const trouble = JSON.parse(text || '{}');
+        troubles = trouble.path ? troubles.filter((t) => t.times > 0).concat([Object.assign({ times: 1 }, trouble)]) : [];
+        reply = JSON.stringify({ troubles: troubles.length });
       } else {
+        const trouble = troubleFor(troubles, text);
+        if (trouble && trouble.status) {
+          console.log('trouble: HTTP ' + trouble.status + ' for ' + trouble.path);
+          return res.writeHead(trouble.status, { 'Content-Type': trouble.html ? 'text/html' : 'application/json' })
+            .end(trouble.html ? '<html><body>Service Unavailable</body></html>' : '');
+        }
         reply = b.context.doPost({ postData: { contents: text, type: 'application/json' } }).getContent();
         logCall(text, reply);
+        if (trouble && trouble.drop) {
+          if (b.ss.writes !== writes) b.save();
+          console.log('trouble: the answer to ' + trouble.path + ' is lost');
+          return req.socket.destroy();
+        }
+        held = trouble && trouble.delay_ms ? trouble.delay_ms : DELAY_MS;
       }
       if (b.ss.writes !== writes) b.save();
       if (url.pathname.startsWith('/dev/')) return send(res, 200, reply);
       const key = randomUUID();
       replies.set(key, reply);
       setTimeout(() => replies.delete(key), 60000).unref();
-      setTimeout(() => res.writeHead(302, { Location: 'http://' + req.headers.host + '/echo?' + key }).end(), DELAY_MS);
+      setTimeout(() => res.writeHead(302, { Location: 'http://' + req.headers.host + '/echo?' + key }).end(), held);
     });
   }).listen(port, host, () => console.log('dev backend on http://' + host + ':' + port));
 }

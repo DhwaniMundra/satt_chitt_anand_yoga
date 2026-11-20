@@ -12,8 +12,10 @@ reads in its history. She practises on her own with the stopwatch and shares a h
 ask first; the teacher moves Meera to another batch with a note, kept in the review history, and gives her a new
 password, which she changes on the Me tab; in a batch with no link yet she checks in from the faces on the card while
 the server is out of reach, and it lands once it is back. A new group code turns the old one away from a third sign-up,
-whose answers are kept when the phone turns; both sign out and in again, their data still there; and both Today tabs are
-shot in Hindi.
+whose answers are kept when the phone turns, and whose sign-up goes through though its answer is lost on the way; both
+sign out and in again, their data still there, Asha after a login the server answers with an error page, then through
+slow answers that show "Signing in…" and never "Couldn't reach the studio"; her Today tab is read in California; and
+both Today tabs are shot in Hindi.
 
 Each step saves a screenshot (.local/visualization/viz_v0.9/screens/<version>/), and a check that fails saves the
 screen and its UI dump beside them (fail_<n>.png and .xml). The debug build's run is recorded from both screens into
@@ -23,13 +25,14 @@ build alone. The pass/fail list goes to docs/evals/two_phones_<version>.md.
 
 Needs: both emulators running (scripts/run_emulator.sh, then SCA_AVD=sca_phone_2 SCA_PORT=5556 ...), the debug APK
 built, and nothing else on port 8000: each build's run starts the dev backend on an empty Sheet
-(data/two_phones_<build>.json) whose teacher signs up with `teacher_code`, and stops and starts it on the way. Uses test
-people only (98000001xx).
+(data/two_phones_<build>.json) whose teacher signs up with `teacher_code`, and stops and starts it on the way, and brings
+it a network's troubles (a lost answer, an error page, slow answers) through its /dev/trouble. Uses test people only
+(98000001xx).
 
 Usage:
-  python3 scripts/two_phone_test.py v0.9.1-two-phones PILOT1
-  python3 scripts/two_phone_test.py v0.9.1-two-phones PILOT1 --release android/app/build/outputs/apk/release/app-release.apk
-  python3 scripts/two_phone_test.py v0.9.1-two-phones PILOT1 --release-only --release <the same APK>
+  python3 scripts/two_phone_test.py v1.0-hardening PILOT1
+  python3 scripts/two_phone_test.py v1.0-hardening PILOT1 --release android/app/build/outputs/apk/release/app-release.apk
+  python3 scripts/two_phone_test.py v1.0-hardening PILOT1 --release-only --release <the same APK>
 The release APK for the emulator: in android/, ./gradlew assembleRelease -PscaServer=http://10.0.2.2:8000 -Pabi=x86_64
 -Psigning=<the properties file of any key, as scripts/build_app.sh writes one>.
 """
@@ -59,6 +62,7 @@ TEACHER, STUDENT = "emulator-5554", "emulator-5556"
 PHONES = (TEACHER, STUDENT)
 SERVER = "http://10.0.2.2:8000"  # the dev backend, as the emulators see it
 IST = timezone(timedelta(hours=5, minutes=30))
+CALIFORNIA = timezone(timedelta(hours=-8))  # Pacific Standard Time, as in November
 T = p.TEACHER_NAME
 PASSWORD = "pilot123"  # every test person's, until the teacher gives one a new password
 OWN_PASSWORD = "pilot456"  # the one Meera then chooses
@@ -372,6 +376,8 @@ def loop(run: Run, backend: p.DevBackend, teacher_code: str, debug: bool) -> Non
         run.shot("12a_teacher_class_moved")
         moved = last["id"]
         p.launch()  # the app reads the curricula once a start
+        if p.call("GET", "/teacher/home?lang=en", token)["sessions"][0]["id"] != moved:  # only the first card opens by itself
+            p.tap_scrolling(f" · {clock(iso(new_start))}")
         run.verdict("a dose of 2.5 in the Sheet shows as written in the class's sequence", any(text.startswith("2.5 ") for text in
                     labels(whole_page=True)), "no '2.5 …' in the sequence")
         p.scroll_to_top()
@@ -631,6 +637,7 @@ def loop(run: Run, backend: p.DevBackend, teacher_code: str, debug: bool) -> Non
         log_out("Me")
         log_in(MEERA)
         run.check("the old password fails", "Wrong number or password.")
+        run.check("and, the number typed as ten digits, a hint for a number from abroad", "Signed up with a country code? Type it with +")
         run.shot("31_student_old_password")
         retype("Password", new_password)
         p.hide_keyboard()
@@ -714,9 +721,20 @@ def loop(run: Run, backend: p.DevBackend, teacher_code: str, debug: bool) -> Non
         run.shot("37_student_old_code")
         retype(old_code, new_code, exact=True)
         p.hide_keyboard()
+        p.trouble("/auth/signup", drop=True)  # the server makes her account, and its answer is lost on the way back
         p.tap("Create account", exact=True, last=True)
-        time.sleep(3)
-        run.check("the new code works for a third sign-up", f"These answers go to {T}")
+        seen = watch_until(f"These answers go to {T}")
+        run.check("the new code works for a third sign-up, its answer lost on the way: the app finds the account made and "
+                  "asks about her", f"These answers go to {T}")
+        taken = [text for text in seen if "already has an account" in text or "Couldn't reach" in text]
+        run.verdict("with no word of the number having an account, or of the studio out of reach", not taken, str(taken))
+        kavya = [u for u in p.call("GET", "/teacher/students", token)["students"] if u["name"] == "Kavya (test)"]
+        run.verdict("one account for her, waiting to be placed", [u["status"] for u in kavya] == ["pending"], str(kavya))
+        logins = len([t for t in sheet_rows(run.sheet, "tokens") if kavya and t["user_id"] == kavya[0]["id"]])
+        how = {1: "the server answered the repeated sign-up as it had the first", 2: "the repeat heard the number had an account, "
+               "and the app logged in with it"}.get(logins, f"{logins} logins")
+        run.verdict(f"how the app got her in: {how}", logins in (1, 2), f"{logins} login tokens")
+        run.shot("37b_student_lost_answer_intake")
         for area in ("Neck", "Hip"):
             p.tap_scrolling(area, exact=True)
         turn(landscape=True)
@@ -749,8 +767,28 @@ def loop(run: Run, backend: p.DevBackend, teacher_code: str, debug: bool) -> Non
     with run.part("Asha signs out and in"):
         on(STUDENT)
         log_out("Me")
+        p.trouble("/auth/login", times=3, status=503, html=True)  # each of the app's three tries meets Google's error page
         log_in(ASHA)
+        run.check("a login answered with an error page says the studio's server had a problem, not the internet",
+                  "The studio's server had a problem. Please try again in a minute.")
+        run.shot("40a_student_server_error")
+        p.trouble("*", times=4, delay_ms=2500)  # slow answers, as Apps Script gives them, for the login and the first screen
+        p.tap("Log in", exact=True, last=True)
+        run.shot("40b_student_signing_in")
+        seen = watch_until("Your batch")
+        p.trouble()
+        run.verdict("logging in shows 'Signing in…' until the Today tab, and never 'Couldn't reach the studio'",
+                    "Signing in…" in seen and not any("Couldn't reach" in text for text in seen), str(seen))
         run.check("Asha signed in again, in her batch", "Your batch: Pain management")
+        p.adb("shell", "am", "force-stop", p.PACKAGE)
+        p.trouble("*", times=3, delay_ms=4000)
+        p.adb("shell", "am", "start", "-n", f"{p.PACKAGE}/.MainActivity")
+        run.check("started again with slow answers, the app says it is connecting", "Connecting to the studio…", timeout=4)
+        run.shot("40c_student_connecting")
+        seen = watch_until("Your batch")
+        p.trouble()  # any slow answer still waiting
+        run.verdict("and goes on to the Today tab, never saying the studio is out of reach", not any("Couldn't reach" in text for text in seen),
+                    str(seen))
         tab("Practice")
         time.sleep(2)
         run.check("her practice on her own is still there", "Solo practice · 1 min", scroll=True)
@@ -760,7 +798,28 @@ def loop(run: Run, backend: p.DevBackend, teacher_code: str, debug: bool) -> Non
         run.check("marked shared", f"✓ Shared with {T}", scroll=True)
         run.shot("40_student_signed_in_again")
 
-    # 20. Both Today tabs in Hindi, shot down the page for words cut off or running over; then English again.
+    # 20. Asha's Today tab in California, 13 and a half hours behind India: each class's time there with its India time
+    #     on a line of its own, and the day on the last moment to change what she said, when it is not today there.
+    with run.part("Asha's Today tab in California"):
+        p.adb("shell", "cmd", "alarm", "set-timezone", "America/Los_Angeles")
+        p.launch()
+        tab("Today")
+        after = p.call("GET", "/home?lang=en", api_login(ASHA))["after_class"]
+        texts = labels(whole_page=True)
+        ist = [text for text in texts if re.fullmatch(r"\d{1,2}:\d\d [AP]M IST", text)]
+        run.verdict("the week ahead gives each class's India time on a line of its own", bool(ist), str(texts))
+        if after and after.get("said"):  # what she said can be changed
+            closes = moment(after["starts_at"]) + timedelta(minutes=after["duration_min"], hours=12)
+            here = closes.astimezone(CALIFORNIA)
+            days = (here.date() - datetime.now(CALIFORNIA).date()).days
+            want = "you can change it until " + {0: clock_at(here), 1: "Tomorrow "}.get(days, f"{here:%a} {here.day} {here:%b} ")
+            line = next((text for text in texts if "you can change it until" in text), "")
+            run.verdict(f"the last moment to change what she said carries its day there, when it is not today ({want!r})", want in line, line)
+        shoot_down(run, "40d_student_today_california")
+        p.adb("shell", "cmd", "alarm", "set-timezone", "Asia/Kolkata")
+        p.launch()
+
+    # 21. Both Today tabs in Hindi, shot down the page for words cut off or running over; then English again.
     with run.part("both Today tabs in Hindi"):
         tab("Me")
         p.tap_scrolling("हिन्दी", exact=True)
@@ -825,6 +884,19 @@ def log_in(number: str, password: str = PASSWORD, teacher: bool = False) -> None
     p.hide_keyboard()
     p.tap("Log in", exact=True, last=True)  # the button under the form, not the switch above it
     time.sleep(3)
+
+
+def watch_until(done: str, seconds: float = 60) -> list[str]:
+    """Every line of words the screen shows, read again and again until one holds `done` or `seconds` pass: what a
+    person sees on the way."""
+    seen: list[str] = []
+    end = time.time() + seconds
+    while time.time() < end:
+        texts = labels()
+        seen += [text for text in texts if text not in seen]
+        if any(done in text for text in texts):
+            break
+    return seen
 
 
 def tab(name: str) -> None:
@@ -1028,7 +1100,11 @@ def iso(at: datetime) -> str:
 
 def clock(stamp: str) -> str:
     """A moment as the app shows the time of day, in India: "6:13 AM"."""
-    at = moment(stamp)
+    return clock_at(moment(stamp))
+
+
+def clock_at(at: datetime) -> str:
+    """A time of day as the app shows it: "6:13 AM"."""
     return f"{at.hour % 12 or 12}:{at.minute:02d} {'AM' if at.hour < 12 else 'PM'}"
 
 

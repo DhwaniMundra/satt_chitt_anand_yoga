@@ -98,6 +98,14 @@ def join_class(phone: str, starts_at: str, mood: int) -> int:
         return json.load(answer)["session_id"]
 
 
+def trouble(path: str | None = None, times: int = 1, **kind) -> None:
+    """The next `times` calls to `path` ("*": any) meet trouble on the dev backend: drop=True, the call runs but its
+    answer is lost; status=503, html=True, an error page instead, the call not run; delay_ms=3000, a slow answer. With
+    no path, the troubles still waiting go."""
+    body = json.dumps({"path": path, "times": times, **kind} if path else {}).encode()
+    urllib.request.urlopen(urllib.request.Request(BACKEND + "/dev/trouble", data=body), timeout=10).read()
+
+
 def adb(*args: str, capture: bool = True) -> str:
     return subprocess.run(["adb", *args], check=True, capture_output=capture, text=True).stdout if capture else ""
 

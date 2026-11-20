@@ -1,0 +1,297 @@
+# Two-phone test: v1.0-hardening
+
+- **Server:** the dev backend at http://10.0.2.2:8000 (the laptop as the emulators see it), on an empty Sheet for each build
+- **Phones:** emulator-5554 (teacher), emulator-5556 (students), Android 16 emulators with 2 GB and no WhatsApp, so each share button opens Android's share sheet
+- **Started:** 2026-11-20 20:10 India time. The teacher's Today tab shows the rest of the day's classes, one card per batch, so how many depends on the hour
+- **Not tested:** the Ask tab, as Gemma needs a phone with 6 GB. The Hindi pass is screenshots only (41_hindi_*, 42_hindi_*), read by eye
+
+## Debug build (app-debug.apk): 142/142 passed
+
+- ✅ no WhatsApp on the teacher's phone (pm list packages)
+- ✅ no WhatsApp on the students' phone (pm list packages)
+- ✅ teacher phone shows the server address before sign-in
+- ✅ teacher signed up
+- ✅ the Today tab has a card for each of the day's classes, one per batch (3 at 20:11 India time: Beginner, Intermediate, Advanced)
+- ✅ what is no link is refused, its reason beside its own box
+- ✅ and the other batches' links are saved
+- ✅ no class group link is set
+- ✅ the day's classes use their batch's everyday link
+- ✅ sign-up asks for a phone number, with a hint for one from outside India
+- ✅ the intake opens after sign-up, saying first who sees it
+- ✅ the answers are sent
+- ✅ then she waits to be placed
+- ✅ a wrong group code is refused, saying it comes from the teacher
+- ✅ with the code, she is asked about herself
+- ✅ and waits to be placed
+- ✅ her answers are sent from the waiting card
+- ✅ teacher sees Meera's answers
+- ✅ and the batch they point to: Beginner, for no pain and two easy poses
+- ✅ teacher sees Asha's answers, with her pain
+- ✅ teacher sees the answers and the batch they point to: Pain management
+- ✅ teacher approves each into the batch suggested
+- ✅ the placed student leaves the waiting card, after returning to the app
+- ✅ the placed student sees her batch
+- ✅ her next class, with its Meet link to join
+- ✅ with no group link set, Meera's Today tab has no button for a class group, nor any word of WhatsApp
+- ✅ and nothing on it is broken or empty: the next class to join, its sequence, the studio, no error
+- ✅ Join class opens the class's Meet link, in the browser as there is no Meet app
+- ✅ her next class carries her batch's everyday link
+- ✅ she is not asked whether she was in a class held before she was placed
+- ✅ a Telegram group link is saved
+- ✅ as the class group link
+- ✅ the student sees 'Open the class group'
+- ✅ which opens the group's link
+- ✅ cleared, the group link is saved empty
+- ✅ and removed
+- ✅ and the student's button goes
+- ✅ the teacher gives a coming class its own link
+- ✅ moved to 09:45, the class keeps its id and its own link, and the day has no second Advanced class
+- ✅ its card shows the new time
+- ✅ and its own link
+- ✅ a dose of 2.5 in the Sheet shows as written in the class's sequence
+- ✅ a class of her batch that she did not check in to is the one she is asked about
+- ✅ a student who did not check in is asked 'Were you in class?'
+- ✅ about that class, once the tab has read it again
+- ✅ and can say how it went
+- ✅ her answers are kept
+- ✅ Asha, placed, sees her batch
+- ✅ her next class, with its Meet link to join
+- ✅ with no group link set, Asha's Today tab has no button for a class group, nor any word of WhatsApp
+- ✅ and nothing on it is broken or empty: the next class to join, its sequence, the studio, no error
+- ✅ her next class carries its link: its own, or else her batch's everyday one
+- ✅ Share opens Android's share sheet
+- ✅ the message carries the link, as the server keeps it
+- ✅ and names the batch
+- ✅ the share sheet is dismissed, back in the app
+- ✅ the pasted link is accepted and kept in its plain form, as the class's own
+- ✅ and shows on the class's card
+- ✅ saved, the card's Save is off until the link changes again
+- ✅ the shared class is her next, under way
+- ✅ before-class question appears in the check-in window
+- ✅ the mood tap opens the class's Meet link at once
+- ✅ the check-in reaches the server, and the link she is given is the one shared
+- ✅ after-class question appears on returning to the app
+- ✅ turned to landscape and back, her answers are all kept: the mood, each reaction, the strain, the note
+- ✅ the answers are kept
+- ✅ a 2 GB phone says chat needs more memory
+- ✅ teacher sees the student's before and after
+- ✅ the class Meera came to without a check-in counts her, with no mood before
+- ✅ the class review opens
+- ✅ with her strain, her name and her note
+- ✅ strain or pain first: Setu Bandhasana leads, ahead of the class's order
+- ✅ the review of Meera's class counts her and what she said
+- ✅ the teacher's word on one asana is sent
+- ✅ her Practice tab shows the teacher wrote
+- ✅ and she reads it in that asana's history
+- ✅ the practice on her own is saved
+- ✅ and shows on the Practice tab
+- ✅ her streak reads 'Classes in a row': 1
+- ✅ with the hold the stopwatch timed, in Vajrasana's history
+- ✅ the note is shared
+- ✅ the teacher sees the shared health note
+- ✅ Remove asks first
+- ✅ Cancel, and she stays
+- ✅ Meera is moved to Advanced
+- ✅ her card shows the new batch
+- ✅ the move and its note are kept in her batch history (the Sheet's batch_changes tab; the app has no screen for it)
+- ✅ the teacher is asked first
+- ✅ Copy copies it
+- ✅ a tap outside leaves the dialog open
+- ✅ so does Back
+- ✅ OK closes it
+- ✅ the old password fails
+- ✅ and, the number typed as ten digits, a hint for a number from abroad
+- ✅ the new password works
+- ✅ she sees her new batch
+- ✅ and its class
+- ✅ a class with no link yet says so
+- ✅ and offers the check-in, the faces on its card
+- ✅ after the move, the class of her old batch from before it is still hers to say how it went
+- ✅ with the server out of reach, she checks in from the faces, and the tab shows it done
+- ✅ still shown done once the app has stopped trying
+- ✅ back in reach, the check-in lands in the Sheet's checkins, once, with her mood
+- ✅ for her next class, which has no link
+- ✅ her new password is saved
+- ✅ the old one fails
+- ✅ and the new one works
+- ✅ New code asks first
+- ✅ Cancel keeps the code
+- ✅ confirmed, a new group code is made
+- ✅ and shown
+- ✅ the invite opens Android's share sheet
+- ✅ the invite carries the new code
+- ✅ the share sheet is dismissed, back in the app
+- ✅ the old group code is refused
+- ✅ the new code works for a third sign-up, its answer lost on the way: the app finds the account made and asks about her
+- ✅ with no word of the number having an account, or of the studio out of reach
+- ✅ one account for her, waiting to be placed
+- ✅ how the app got her in: the server answered the repeated sign-up as it had the first
+- ✅ turned to landscape and back, the pain areas chosen are kept
+- ✅ and she waits to be placed
+- ✅ teacher signed in again
+- ✅ the new student waits for her
+- ✅ the everyday links are still set
+- ✅ Kavya is still on the Students tab
+- ✅ Meera is still on the Students tab
+- ✅ Asha is still on the Students tab
+- ✅ and the note Asha shared
+- ✅ and the classes on the Insights tab
+- ✅ a login answered with an error page says the studio's server had a problem, not the internet
+- ✅ logging in shows 'Signing in…' until the Today tab, and never 'Couldn't reach the studio'
+- ✅ Asha signed in again, in her batch
+- ✅ started again with slow answers, the app says it is connecting
+- ✅ and goes on to the Today tab, never saying the studio is out of reach
+- ✅ her practice on her own is still there
+- ✅ and the teacher's word
+- ✅ her health note, kept on this phone, is still there
+- ✅ marked shared
+- ✅ the week ahead gives each class's India time on a line of its own
+- ✅ the last moment to change what she said carries its day there, when it is not today ('you can change it until 7:01 PM')
+- ✅ the teacher's app is back in English
+- ✅ and the student's
+
+## Release build (R8-shrunk, x86_64, built with -PscaServer=http://10.0.2.2:8000 -Pabi=x86_64): 141/141 passed
+
+- ✅ no WhatsApp on the teacher's phone (pm list packages)
+- ✅ no WhatsApp on the students' phone (pm list packages)
+- ✅ teacher signed up
+- ✅ the Today tab has a card for each of the day's classes, one per batch (3 at 20:45 India time: Beginner, Intermediate, Advanced)
+- ✅ what is no link is refused, its reason beside its own box
+- ✅ and the other batches' links are saved
+- ✅ no class group link is set
+- ✅ the day's classes use their batch's everyday link
+- ✅ sign-up asks for a phone number, with a hint for one from outside India
+- ✅ the intake opens after sign-up, saying first who sees it
+- ✅ the answers are sent
+- ✅ then she waits to be placed
+- ✅ a wrong group code is refused, saying it comes from the teacher
+- ✅ with the code, she is asked about herself
+- ✅ and waits to be placed
+- ✅ her answers are sent from the waiting card
+- ✅ teacher sees Meera's answers
+- ✅ and the batch they point to: Beginner, for no pain and two easy poses
+- ✅ teacher sees Asha's answers, with her pain
+- ✅ teacher sees the answers and the batch they point to: Pain management
+- ✅ teacher approves each into the batch suggested
+- ✅ the placed student leaves the waiting card, after returning to the app
+- ✅ the placed student sees her batch
+- ✅ her next class, with its Meet link to join
+- ✅ with no group link set, Meera's Today tab has no button for a class group, nor any word of WhatsApp
+- ✅ and nothing on it is broken or empty: the next class to join, its sequence, the studio, no error
+- ✅ Join class opens the class's Meet link, in the browser as there is no Meet app
+- ✅ her next class carries her batch's everyday link
+- ✅ she is not asked whether she was in a class held before she was placed
+- ✅ a Telegram group link is saved
+- ✅ as the class group link
+- ✅ the student sees 'Open the class group'
+- ✅ which opens the group's link
+- ✅ cleared, the group link is saved empty
+- ✅ and removed
+- ✅ and the student's button goes
+- ✅ the teacher gives a coming class its own link
+- ✅ moved to 09:45, the class keeps its id and its own link, and the day has no second Advanced class
+- ✅ its card shows the new time
+- ✅ and its own link
+- ✅ a dose of 2.5 in the Sheet shows as written in the class's sequence
+- ✅ a class of her batch that she did not check in to is the one she is asked about
+- ✅ a student who did not check in is asked 'Were you in class?'
+- ✅ about that class, once the tab has read it again
+- ✅ and can say how it went
+- ✅ her answers are kept
+- ✅ Asha, placed, sees her batch
+- ✅ her next class, with its Meet link to join
+- ✅ with no group link set, Asha's Today tab has no button for a class group, nor any word of WhatsApp
+- ✅ and nothing on it is broken or empty: the next class to join, its sequence, the studio, no error
+- ✅ her next class carries its link: its own, or else her batch's everyday one
+- ✅ Share opens Android's share sheet
+- ✅ the message carries the link, as the server keeps it
+- ✅ and names the batch
+- ✅ the share sheet is dismissed, back in the app
+- ✅ the pasted link is accepted and kept in its plain form, as the class's own
+- ✅ and shows on the class's card
+- ✅ saved, the card's Save is off until the link changes again
+- ✅ the shared class is her next, under way
+- ✅ before-class question appears in the check-in window
+- ✅ the mood tap opens the class's Meet link at once
+- ✅ the check-in reaches the server, and the link she is given is the one shared
+- ✅ after-class question appears on returning to the app
+- ✅ turned to landscape and back, her answers are all kept: the mood, each reaction, the strain, the note
+- ✅ the answers are kept
+- ✅ a 2 GB phone says chat needs more memory
+- ✅ teacher sees the student's before and after
+- ✅ the class Meera came to without a check-in counts her, with no mood before
+- ✅ the class review opens
+- ✅ with her strain, her name and her note
+- ✅ strain or pain first: Setu Bandhasana leads, ahead of the class's order
+- ✅ the review of Meera's class counts her and what she said
+- ✅ the teacher's word on one asana is sent
+- ✅ her Practice tab shows the teacher wrote
+- ✅ and she reads it in that asana's history
+- ✅ the practice on her own is saved
+- ✅ and shows on the Practice tab
+- ✅ her streak reads 'Classes in a row': 1
+- ✅ with the hold the stopwatch timed, in Vajrasana's history
+- ✅ the note is shared
+- ✅ the teacher sees the shared health note
+- ✅ Remove asks first
+- ✅ Cancel, and she stays
+- ✅ Meera is moved to Advanced
+- ✅ her card shows the new batch
+- ✅ the move and its note are kept in her batch history (the Sheet's batch_changes tab; the app has no screen for it)
+- ✅ the teacher is asked first
+- ✅ Copy copies it
+- ✅ a tap outside leaves the dialog open
+- ✅ so does Back
+- ✅ OK closes it
+- ✅ the old password fails
+- ✅ and, the number typed as ten digits, a hint for a number from abroad
+- ✅ the new password works
+- ✅ she sees her new batch
+- ✅ and its class
+- ✅ a class with no link yet says so
+- ✅ and offers the check-in, the faces on its card
+- ✅ after the move, the class of her old batch from before it is still hers to say how it went
+- ✅ with the server out of reach, she checks in from the faces, and the tab shows it done
+- ✅ still shown done once the app has stopped trying
+- ✅ back in reach, the check-in lands in the Sheet's checkins, once, with her mood
+- ✅ for her next class, which has no link
+- ✅ her new password is saved
+- ✅ the old one fails
+- ✅ and the new one works
+- ✅ New code asks first
+- ✅ Cancel keeps the code
+- ✅ confirmed, a new group code is made
+- ✅ and shown
+- ✅ the invite opens Android's share sheet
+- ✅ the invite carries the new code
+- ✅ the share sheet is dismissed, back in the app
+- ✅ the old group code is refused
+- ✅ the new code works for a third sign-up, its answer lost on the way: the app finds the account made and asks about her
+- ✅ with no word of the number having an account, or of the studio out of reach
+- ✅ one account for her, waiting to be placed
+- ✅ how the app got her in: the server answered the repeated sign-up as it had the first
+- ✅ turned to landscape and back, the pain areas chosen are kept
+- ✅ and she waits to be placed
+- ✅ teacher signed in again
+- ✅ the new student waits for her
+- ✅ the everyday links are still set
+- ✅ Kavya is still on the Students tab
+- ✅ Meera is still on the Students tab
+- ✅ Asha is still on the Students tab
+- ✅ and the note Asha shared
+- ✅ and the classes on the Insights tab
+- ✅ a login answered with an error page says the studio's server had a problem, not the internet
+- ✅ logging in shows 'Signing in…' until the Today tab, and never 'Couldn't reach the studio'
+- ✅ Asha signed in again, in her batch
+- ✅ started again with slow answers, the app says it is connecting
+- ✅ and goes on to the Today tab, never saying the studio is out of reach
+- ✅ her practice on her own is still there
+- ✅ and the teacher's word
+- ✅ her health note, kept on this phone, is still there
+- ✅ marked shared
+- ✅ the week ahead gives each class's India time on a line of its own
+- ✅ the last moment to change what she said carries its day there, when it is not today ('you can change it until 7:34 PM')
+- ✅ the teacher's app is back in English
+- ✅ and the student's
+
+Test people only (98000001xx). The screenshots, with the screen and UI dump of each failed check (fail_<n>.png and .xml), and the recording are kept locally in .local/visualization/viz_v0.9/ (screens/v1.0-hardening/ and tours/).
