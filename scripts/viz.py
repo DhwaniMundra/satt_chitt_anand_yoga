@@ -5,6 +5,7 @@ No dependencies, so any script can import it."""
 import re
 import shutil
 from pathlib import Path
+from typing import Callable
 
 LOCAL = Path(__file__).resolve().parents[1] / ".local" / "visualization"
 WORK = LOCAL / "work"
@@ -43,14 +44,14 @@ def fresh_screens(version: str) -> Path:
     return new
 
 
-def keep_screens(version: str) -> None:
-    """Swaps the run's screens in for the set before, carrying over that set's files the run did not make (the
-    release's screens, say). A failed run never gets here, and the set before stays as it was."""
+def keep_screens(version: str, carry: Callable[[str], bool] = lambda name: True) -> None:
+    """Swaps the run's screens in for the set before, carrying over that set's files the run did not make and `carry`
+    accepts by name (the release's screens, say). A failed run never gets here, and the set before stays as it was."""
     old = screens(version)
     new = old.with_name(version + ".new")
     if old.exists():
         for file in old.iterdir():
-            if not (new / file.name).exists():
+            if not (new / file.name).exists() and carry(file.name):
                 shutil.copy2(file, new / file.name)
         aside = old.with_name(version + ".old")
         shutil.rmtree(aside, ignore_errors=True)

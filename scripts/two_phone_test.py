@@ -1,12 +1,16 @@
 """Two phones, one server and no WhatsApp on either: a teacher on emulator-5554 and students on emulator-5556, through
-the whole loop. The teacher signs up, sets each batch's everyday Meet link (never a WhatsApp group link) and shares a
-class through Android's share sheet. Two students sign up with the group code and tell the teacher about themselves, one
-with pain, and the teacher places each in the batch their answers point to. Asha joins the class, says how she feels
-before it and how each item went after it, with a strain on one; the teacher reads the class on Insights and in its
-review, strain first, and writes to her about that asana, which she reads in its history. She practises on her own with
-the stopwatch and shares a health note. The teacher moves Meera to another batch with a note and gives her a new
-password; a new group code turns the old one away from a third sign-up; and both sign out and in again, their data
-still there.
+the whole loop. The teacher signs up and sets each batch's everyday Meet link; one that is no link is refused beside its
+field while the others save. Two students sign up with the group code and tell the teacher about themselves, one with
+pain, and the teacher places each in the batch their answers point to. A class group link (not WhatsApp's) shows the
+students a button for it, and clearing it takes the button away. Meera, who did not check in, is asked whether she was
+in class and says how it went. The teacher shares a class, its Meet link pasted as a browser gives it, through Android's
+share sheet; Asha checks in with a mood, which opens the class, and after it says how each item went, with a strain on
+one, all of it kept when the phone turns. The teacher reads the classes on Insights and in their reviews, strain first,
+and writes to Asha about that asana, which she reads in its history. She practises on her own with the stopwatch and
+shares a health note. Remove and a new group code ask first; the teacher moves Meera to another batch with a note, kept
+in the review history, and gives her a new password, which she changes on the Me tab; in a batch with no link yet she
+checks in from the faces on the card. A new group code turns the old one away from a third sign-up, whose answers are
+kept when the phone turns; both sign out and in again, their data still there; and both Today tabs are shot in Hindi.
 
 Each step saves a screenshot (.local/visualization/viz_<major>/screens/<version>/), and a check that fails saves the
 screen and its UI dump beside them (fail_<n>.png and .xml). The debug build's run is recorded from both screens into
@@ -19,20 +23,22 @@ built, and nothing else on port 8000: each build's run starts the dev backend on
 (data/two_phones_<build>.json) whose teacher signs up with `teacher_code`. Uses test people only (98000001xx).
 
 Usage:
-  python3 scripts/two_phone_test.py v0.9-two-phones PILOT1
-  python3 scripts/two_phone_test.py v0.9-two-phones PILOT1 --release android/app/build/outputs/apk/release/app-release.apk
+  python3 scripts/two_phone_test.py v0.9.1-two-phones PILOT1
+  python3 scripts/two_phone_test.py v0.9.1-two-phones PILOT1 --release android/app/build/outputs/apk/release/app-release.apk
 The release APK for the emulator: in android/, ./gradlew assembleRelease -PscaServer=http://10.0.2.2:8000 -Pabi=x86_64
 -Psigning=<the properties file of any key, as scripts/build_app.sh writes one>.
 """
 
 import argparse
 import contextlib
+import io
 import json
 import os
 import re
 import subprocess
 import threading
 import time
+import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -49,12 +55,19 @@ SERVER = "http://10.0.2.2:8000"  # the dev backend, as the emulators see it
 IST = timezone(timedelta(hours=5, minutes=30))
 T = p.TEACHER_NAME
 PASSWORD = "pilot123"  # every test person's, until the teacher gives one a new password
+OWN_PASSWORD = "pilot456"  # the one Meera then chooses
 TEACHER_PHONE, ASHA, MEERA, KAVYA = "9800000101", "9800000102", "9800000103", "9800000104"
 BATCHES = {b["key"]: b for b in json.loads((ROOT / "content" / "studio.json").read_text(encoding="utf-8"))["batches"]}
 LINKS = {"beginner": "meet.google.com/beg-ginn-ers", "intermediate": "meet.google.com/int-erme-dia",
-         "advanced": "meet.google.com/adv-ance-dyo", "pain_management": "meet.google.com/pai-nman-age"}  # everyday links
-CLASS_LINK = "meet.google.com/pil-otte-sta"  # the shared class's own
+         "pain_management": "meet.google.com/pai-nman-age"}  # everyday links; Advanced gets no link
+NOT_A_LINK = "ask me for the link"  # typed into Advanced's box, and refused
+PASTED_LINK = "https://meet.google.com/ABC-defg-hij?authuser=0"  # the shared class's own, as a browser gives it
+CLASS_LINK = "https://meet.google.com/abc-defg-hij"  # and as it is kept
+GROUP_BOX = "Class group link (optional)"
+GROUP_LINK = "https://t.me/sca_yoga_test"
+REFUSED_LINK = "Please paste a video call link"
 FEEDBACK = "Keep the hips low today; lift only as far as the back allows."
+STRAIN_NOTE = "Lower back pinched lifting the hips"
 NOTE = "Right knee clicks when I kneel"
 MOVE_NOTE = "Steady in the standing poses; ready for longer holds"
 BUILDS = {"debug": "Debug build (app-debug.apk)",
@@ -69,9 +82,10 @@ def on(serial: str) -> None:
 class Run:
     """One build's pass through the loop: its checks so far, and where its screenshots go."""
 
-    def __init__(self, build: str, out: Path) -> None:
+    def __init__(self, build: str, out: Path, sheet: Path) -> None:
         self.build = build
         self.out = out
+        self.sheet = sheet
         self.prefix = "" if build == "debug" else build + "_"
         self.results: list[tuple[str, bool, str]] = []
 
@@ -116,13 +130,14 @@ class Run:
     @contextlib.contextmanager
     def part(self, name: str):
         """A part of the loop. A step in it that cannot go on (a button missing, say) is a failed check; then both
-        apps start again, still signed in, and the loop goes on with the next part."""
+        phones stand upright and both apps start again, still signed in, and the loop goes on with the next part."""
         try:
             yield
         except Exception as e:  # noqa: BLE001 (any of them stops only this part)
             self.verdict(f"{name}: carried through", False, f"{type(e).__name__}: {e}"[:300])
             for serial in PHONES:
                 on(serial)
+                turn(landscape=False)
                 p.launch()
 
 
@@ -138,13 +153,15 @@ def main() -> None:
     started = datetime.now(IST)
     runs = []
     for build, apk in builds:
-        run = Run(build, out)
+        sheet = ROOT / "data" / f"two_phones_{build}.json"
+        run = Run(build, out, sheet)
         runs.append(run)
-        with p.dev_backend(ROOT / "data" / f"two_phones_{build}.json", demo=False, teacher_code=args.teacher_code):
+        with p.dev_backend(sheet, demo=False, teacher_code=args.teacher_code):
             for serial in PHONES:
                 on(serial)
                 p.install(apk)
                 p.adb("shell", "cmd", "alarm", "set-timezone", "Asia/Kolkata")
+                turn(landscape=False)
                 p.demo_mode()
                 p.launch(fresh=True)
             video = SideBySide(viz.tours(args.version)) if build == "debug" else None
@@ -155,7 +172,7 @@ def main() -> None:
                     video.save(f"two_phones_{short}.mp4")
     report = ROOT / "docs" / "evals" / f"two_phones_{short}.md"
     report.write_text(summary(args.version, runs, started), encoding="utf-8")
-    viz.keep_screens(args.version)
+    viz.keep_screens(args.version, carry=lambda name: "fail_" not in name)  # a failure's screen belongs to its own run
     for run in runs:
         print(f"{run.build}: {sum(ok for _, ok, _ in run.results)}/{len(run.results)} passed")
     print(report)
@@ -185,27 +202,36 @@ def loop(run: Run, teacher_code: str, debug: bool) -> None:
                     f"cards {cards}, the day's classes {day}")
         run.shot("02_teacher_today")
 
-    # 2. Each batch's everyday Meet link; the WhatsApp group link is never set.
+    # 2. Each batch's everyday Meet link: one box holds no link and is refused beside it, and the others save.
     with run.part("the teacher sets each batch's everyday Meet link"):
-        for key, link in LINKS.items():
+        for key, link in (*LINKS.items(), ("advanced", NOT_A_LINK)):
             p.find_scrolling(link_box(key))
             p.type_into(link_box(key), link)
         p.hide_keyboard()
-        p.tap_scrolling("Save", exact=True)
-        run.check("the everyday links are saved", "Saved")
+        p.tap_under(GROUP_BOX, "Save")
+        time.sleep(2)
+        p.scroll_to_top()
+        p.find_scrolling(link_box("pain_management"))  # the box below Advanced's: both in view, and what is between
+        run.verdict("what is no link is refused, its reason beside its own box",
+                    between(link_box("advanced"), REFUSED_LINK, link_box("pain_management")), f"'{REFUSED_LINK}' not under Advanced")
         run.shot("03_teacher_links")
         home = p.call("GET", "/teacher/home?lang=en", token)
         saved = {b["key"]: b["meet_link"] for b in home["batches"]}
-        run.verdict("each batch keeps its everyday link", saved == {k: "https://" + v for k, v in LINKS.items()}, str(saved))
-        run.verdict("and the WhatsApp group link stays unset", home["settings"]["group_link"] is None, str(home["settings"]))
-        run.check("the day's classes now use their batch's everyday link", "Using the batch's everyday link", scroll=True)
+        run.verdict("and the other batches' links are saved", saved == {**{k: "https://" + v for k, v in LINKS.items()}, "advanced": None},
+                    str(saved))
+        run.verdict("no class group link is set", home["settings"]["group_link"] is None, str(home["settings"]))
+        retype(NOT_A_LINK, "")  # Advanced stays without a link
+        p.hide_keyboard()
+        run.check("the day's classes use their batch's everyday link", "Using the batch's everyday link", scroll=True)
 
     # 3. Asha signs up with the group code and tells the teacher about herself, with pain in the knee.
     with run.part("Asha signs up and answers about herself"):
         on(STUDENT)
-        sign_up("Asha (test)", ASHA, code)
+        sign_up_form()
+        run.check("sign-up asks for a phone number, with a hint for one from outside India", "Outside India? Start with +")
+        run.shot("04_student_signup")
+        fill_sign_up("Asha (test)", ASHA, code)
         run.check("the intake opens after sign-up, saying first who sees it", f"These answers go to {T}")
-        run.shot("04_student_intake")
         fill_intake("34", "160", "58", "Vegetarian", ["Knee"], "Right knee aches on the stairs",
                     [("Tadasana", "Steady"), ("Vajrasana", "With effort")])
         run.shot("05_student_intake_pain")
@@ -217,7 +243,7 @@ def loop(run: Run, teacher_code: str, debug: bool) -> None:
     # 4. Meera: a wrong code is refused; with the code she answers later, from the waiting card: no pain, two easy poses.
     with run.part("Meera signs up and answers about herself"):
         sign_up("Meera (test)", "0" + MEERA, "WRONG1")  # the number typed with a leading 0
-        run.check("a wrong group code is refused", f"Ask {T} for the group code")
+        run.check("a wrong group code is refused, saying it comes from the teacher", "It comes from your teacher")
         run.shot("06_student_wrong_code")
         retype("WRONG1", code, exact=True)
         p.hide_keyboard()
@@ -255,8 +281,8 @@ def loop(run: Run, teacher_code: str, debug: bool) -> None:
         p.scroll_to_top()
         run.shot("09_teacher_placed")
 
-    # 6. Each student's Today tab: the batch, the next class and its link; with no group link, no WhatsApp button.
-    with run.part("the students' Today tab"):
+    # 6. Meera's Today tab: the batch, the next class and its link; with no group link, no button for one.
+    with run.part("Meera's Today tab"):
         on(STUDENT)
         come_back()
         run.check_gone("the placed student leaves the waiting card, after returning to the app", "Waiting for")
@@ -264,48 +290,108 @@ def loop(run: Run, teacher_code: str, debug: bool) -> None:
         today_tab(run, "Meera")
         run.shot("10_student_today")
         joins(run, "Join class opens the class's Meet link, in the browser as there is no Meet app")
-        mine = p.call("GET", "/home?lang=en", api_login(MEERA))["sessions"][0]
-        run.verdict("her next class carries her batch's everyday link", (mine["batch"]["key"], mine["meet_link"]) == (
-            "beginner", "https://" + LINKS["beginner"]), f"{mine['batch']['key']}: {mine['meet_link']}")
+        mine = p.call("GET", "/home?lang=en", api_login(MEERA))
+        nxt, after, since = mine["sessions"][0], mine["after_class"], mine["user"]["batch_since"]
+        run.verdict("her next class carries her batch's everyday link", (nxt["batch"]["key"], nxt["meet_link"]) == (
+            "beginner", "https://" + LINKS["beginner"]), f"{nxt['batch']['key']}: {nxt['meet_link']}")
+        early = after and not after["checked_in"] and after["starts_at"] < since
+        run.verdict("she is not asked whether she was in a class held before she was placed", not early,
+                    f"asked about {after['batch']['name']} at {clock(after['starts_at'])}, placed at {clock(since)}" if early else "")
+
+    # 7. A class group link that is not WhatsApp's: the student gets a button for it; cleared, the button goes.
+    with run.part("the class group link"):
+        on(TEACHER)
+        tab("Today")
+        p.find_scrolling(GROUP_BOX)
+        p.type_into(GROUP_BOX, GROUP_LINK)
+        p.hide_keyboard()
+        p.tap_under(GROUP_BOX, "Save")
+        run.check("a Telegram group link is saved", "Saved")
+        group = p.call("GET", "/teacher/home?lang=en", token)["settings"]["group_link"]
+        run.verdict("as the class group link", group == GROUP_LINK, str(group))
+        on(STUDENT)
+        come_back()
+        run.check("the student sees 'Open the class group'", "Open the class group", scroll=True)
+        run.shot("11_student_group_link")
+        p.clear_log()
+        p.tap("Open the class group")
+        time.sleep(3)
+        run.verdict("which opens the group's link", any(link.startswith("https://t.me/") for link in p.opened()), str(p.opened()))
+        come_back()
+        p.adb("shell", "am", "force-stop", "com.android.chrome")
+        on(TEACHER)
+        p.scroll_to_top()
+        p.find_scrolling(GROUP_LINK, exact=True)
+        retype(GROUP_LINK, "", exact=True)
+        p.hide_keyboard()
+        p.tap_under(GROUP_BOX, "Save")
+        run.check("cleared, the group link is saved empty", "Saved")
+        group = p.call("GET", "/teacher/home?lang=en", token)["settings"]["group_link"]
+        run.verdict("and removed", group is None, str(group))
+        on(STUDENT)
+        come_back()
+        run.verdict("and the student's button goes", "Open the class group" not in labels(whole_page=True), "the button still shows")
+
+    # 8. Meera did not check in to a class of her batch: asked whether she was in it, she says how it went.
+    with run.part("Meera says how a class went, with no check-in"):
+        unchecked = p.add_class("beginner", -50)  # began 50 minutes ago; the after-class window is open
+        asked = p.call("GET", "/home?lang=en", api_login(MEERA))["after_class"]
+        run.verdict("a class of her batch that she did not check in to is the one she is asked about", (asked["id"], asked["checked_in"])
+                    == (unchecked, False), f"{asked['id']}, checked in {asked['checked_in']}")
+        come_back()
+        run.check("a student who did not check in is asked 'Were you in class?'", "Were you in class?")
+        run.check("about that class, once the tab has read it again", f"Beginner · Today · {clock(asked['starts_at'])}")
+        run.shot("12_student_were_you_in_class")
+        p.tap(f"Tell {T}")
+        run.check("and can say how it went", "How do you feel now?")
+        p.tap("Good", exact=True)
+        p.tap_under("Sectional", "Steady")
+        p.tap_under("Omkar", "At ease")
+        p.tap_scrolling("Done", exact=True)
+        run.check("her answers are kept", f"You told {T} how it went")
+        run.shot("13_student_told_no_checkin")
         log_out("Me")
         log_in(ASHA)
         run.check("Asha, placed, sees her batch", "Your batch: Pain management")
         today_tab(run, "Asha")
-        mine = p.call("GET", "/home?lang=en", api_login(ASHA))["sessions"][0]
-        run.verdict("her next class carries her batch's everyday link", (mine["batch"]["key"], mine["meet_link"]) == (
-            "pain_management", "https://" + LINKS["pain_management"]), f"{mine['batch']['key']}: {mine['meet_link']}")
-        run.shot("11_student_a_today")
+        nxt = p.call("GET", "/home?lang=en", api_login(ASHA))["sessions"][0]
+        run.verdict("her next class carries her batch's everyday link", (nxt["batch"]["key"], nxt["meet_link"]) == (
+            "pain_management", "https://" + LINKS["pain_management"]), f"{nxt['batch']['key']}: {nxt['meet_link']}")
+        run.shot("14_student_a_today")
 
-    # 7. The teacher shares a class with its own link. With no WhatsApp the share sheet opens; dismissed, the link stays.
+    # 9. The teacher shares a class, its link pasted as a browser gives it: Share saves it, then opens the share sheet.
     with run.part("the teacher shares a class"):
         on(TEACHER)
-        tab("Today")
         staged = p.add_class("pain_management", -47)  # under way, 8 minutes left: both check-ins are open
         come_back()
+        p.scroll_to_top()
         first = p.call("GET", "/teacher/home?lang=en", token)["sessions"][0]
         if first["id"] != staged:  # a class that began earlier is still on, and its card is the open one
             starts = next(s for s in p.call("GET", "/teacher/home?lang=en", token)["sessions"] if s["id"] == staged)["starts_at"]
-            p.scroll_to_top()
             p.tap_scrolling(f"Today · {clock(starts)}", exact=True)
         p.find_scrolling("Google Meet link")
-        p.type_into("Google Meet link", CLASS_LINK)
+        p.type_into("Google Meet link", PASTED_LINK)
         p.hide_keyboard()
-        p.tap("Save and share on WhatsApp")
+        p.tap_under("Google Meet link", "Share")
         time.sleep(2)
-        run.verdict("with no WhatsApp, Save and share opens Android's share sheet",
-                    p.resumed().startswith("com.android.intentresolver/"), p.resumed())
-        run.check("WhatsApp message carries the link", CLASS_LINK)
+        run.verdict("Share opens Android's share sheet", p.resumed().startswith("com.android.intentresolver/"), p.resumed())
+        run.check("the message carries the link, as the server keeps it", CLASS_LINK)
         run.check("and names the batch", "Pain management")
-        run.shot("12_teacher_share_sheet")
+        run.shot("15_teacher_share_sheet")
         p.back()  # dismissed, shared with no one
         run.verdict("the share sheet is dismissed, back in the app", p.resumed().endswith("/.MainActivity"), p.resumed())
-        run.check("the link is still saved, on the class's card", "https://" + CLASS_LINK, scroll=True)
         session = next(s for s in p.call("GET", "/teacher/home?lang=en", token)["sessions"] if s["id"] == staged)
-        run.verdict("and on the server, as the class's own link", session["own_link"] and session["meet_link"] == "https://"
-                    + CLASS_LINK, str(session["meet_link"]))
-        run.shot("13_teacher_link_saved")
+        run.verdict("the pasted link is accepted and kept in its plain form, as the class's own", session["own_link"]
+                    and session["meet_link"] == CLASS_LINK, str(session["meet_link"]))
+        run.check("and shows on the class's card", CLASS_LINK, scroll=True)
+        p.find_scrolling("Google Meet link")
+        save = tappable_around("Google Meet link", "Save")
+        run.verdict("saved, the card's Save is off until the link changes again", save.get("enabled") == "false",
+                    "Save stays on: the box keeps the link as typed, not as saved")
+        run.shot("16_teacher_link_saved")
 
-    # 8. Asha checks in before the class with a mood; after it, a reaction per item, a strain on one, and a note.
+    # 10. Asha checks in with a mood, which opens the class; after it, a reaction per item, a strain and a note, kept
+    #     when the phone turns.
     with run.part("Asha's class"):
         on(STUDENT)
         come_back()
@@ -313,40 +399,55 @@ def loop(run: Run, teacher_code: str, debug: bool) -> None:
         p.clear_log()
         p.tap("Join class")
         run.check("before-class question appears in the check-in window", "How do you feel right now?")
-        p.tap("Okay")
+        p.tap("Okay", exact=True)
         time.sleep(3)
-        run.verdict("checked in, Join opens the class's Meet link", any(link.startswith("https://meet.google.com/") for link in
-                                                                         p.opened()), str(p.opened()))
+        run.verdict("the mood tap opens the class's Meet link at once", any(link.startswith("https://meet.google.com/") for link in
+                                                                            p.opened()), str(p.opened()))
         mine = p.call("GET", "/home?lang=en", api_login(ASHA))["sessions"][0]
-        run.verdict("the link she is given is the one the teacher shared", (mine["id"], mine["meet_link"], mine["checked_in"])
-                    == (staged, "https://" + CLASS_LINK, True), f"{mine['id']}: {mine['meet_link']}, checked in {mine['checked_in']}")
+        run.verdict("the check-in reaches the server, and the link she is given is the one shared", (mine["id"], mine["meet_link"],
+                    mine["checked_in"]) == (staged, CLASS_LINK, True), f"{mine['id']}: {mine['meet_link']}, checked in {mine['checked_in']}")
         come_back()  # from Meet in the browser, without restarting the app
         p.adb("shell", "am", "force-stop", "com.android.chrome")
         p.tap(f"Tell {T}")
         run.check("after-class question appears on returning to the app", "Class done! How do you feel now?")
         p.tap("Great")
-        p.tap_under("Sectional", "Steady")
-        p.tap_under("Pavanamuktasana", "At ease")
-        p.tap_under("Setu Bandhasana", "With effort")
+        reactions = (("Sectional", "Steady"), ("Pavanamuktasana", "At ease"), ("Setu Bandhasana", "With effort"), ("Makarasana", "Steady"))
+        for item, reaction in reactions[:3]:
+            p.tap_under(item, reaction)
         p.tap_under("Setu Bandhasana", "Felt strain or pain")
         p.tap_under("Setu Bandhasana", "Add a note")
-        p.type_under("Setu Bandhasana", "Lower back pinched lifting the hips")
-        p.tap_under("Makarasana", "Steady")
-        run.shot("14_student_after_class")
+        p.type_under("Setu Bandhasana", STRAIN_NOTE)
+        p.tap_under(*reactions[3])
+        run.shot("17_student_after_class")
+        turn(landscape=True)
+        run.shot("17b_student_after_class_landscape")
+        turn(landscape=False)
+        p.scroll_to_top()
+        lost = [] if any(n.get("text") == "Great" for n, _ in p.nodes()) else ["the mood"]
+        for item, reaction in reactions:  # down the list, each read while its card is in view
+            lost += [] if chosen(item, reaction) else [f"{item}: {reaction}"]
+            if item == "Setu Bandhasana":
+                lost += [] if chosen(item, "Felt strain or pain") else ["the strain"]
+                note = p.under(item, lambda n: n.get("class") == "android.widget.EditText", "the note").get("text")
+                lost += [] if note == STRAIN_NOTE else [f"the note ({note!r})"]
+        run.verdict("turned to landscape and back, her answers are all kept: the mood, each reaction, the strain, the note",
+                    not lost, f"lost: {lost}")
         p.tap_scrolling("Done", exact=True)
         run.check("the answers are kept", f"You told {T} how it went")
-        run.shot("15_student_told")
+        run.shot("18_student_told")
         tab("Ask")
         run.check("a 2 GB phone says chat needs more memory", "Cloud model support coming soon")
-        run.shot("16_student_ask")
 
-    # 9. The teacher sees the class on Insights and in its review, strain first.
-    with run.part("the teacher reads the class"):
+    # 11. The teacher reads both classes on Insights and in their reviews, strain first; Meera counts with no mood before.
+    with run.part("the teacher reads the classes"):
         on(TEACHER)
         tab("Insights")
         time.sleep(2)
         run.check("teacher sees the student's before and after", "1 joined")
-        run.shot("17_teacher_insights")
+        run.shot("19_teacher_insights")
+        counted = {s["id"]: s for s in p.call("GET", "/teacher/insights?lang=en", token)["sessions"]}.get(unchecked, {})
+        run.verdict("the class Meera came to without a check-in counts her, with no mood before", (counted.get("joined"),
+                    counted.get("mood_before")) == (1, None), str(counted))
         p.tap_scrolling("How each item went")
         run.check("the class review opens", "How the class went")
         run.check("with her strain, her name and her note", "Felt strain or pain: Asha (test)")
@@ -354,10 +455,16 @@ def loop(run: Run, teacher_code: str, debug: bool) -> None:
         top = next((item for text in labels() for item in items if item in text), None)
         run.verdict("strain or pain first: Setu Bandhasana leads, ahead of the class's order", top == "Setu Bandhasana",
                     f"first item: {top}")
-        run.shot("18_teacher_class_review")
+        run.shot("20_teacher_class_review")
+        p.back()
+        p.scroll_to_top()
+        p.find_scrolling("Beginner")
+        p.tap_under("Beginner", "How each item went")
+        run.check("the review of Meera's class counts her and what she said", "1 joined · 1 said how it went")
+        run.shot("21_teacher_review_no_checkin")
         p.back()
 
-    # 10. The teacher writes to Asha about that asana; she reads it in its history on the Practice tab.
+    # 12. The teacher writes to Asha about that asana; she reads it in its history on the Practice tab.
     with run.part("the teacher's word on one asana"):
         tab("Students")
         time.sleep(2)
@@ -369,7 +476,7 @@ def loop(run: Run, teacher_code: str, debug: bool) -> None:
         p.hide_keyboard()
         p.tap("Send", exact=True)
         run.check("the teacher's word on one asana is sent", "YOU WROTE")
-        run.shot("19_teacher_feedback")
+        run.shot("22_teacher_feedback")
         p.back()
         p.back()
         on(STUDENT)
@@ -379,10 +486,10 @@ def loop(run: Run, teacher_code: str, debug: bool) -> None:
         p.scroll_to_top()
         p.tap_scrolling("Setu Bandhasana")
         run.check("and she reads it in that asana's history", FEEDBACK[:40])
-        run.shot("20_student_item_history")
+        run.shot("23_student_item_history")
         p.back()
 
-    # 11. A practice on her own with the stopwatch, saved; it shows on the Practice tab.
+    # 13. A practice on her own with the stopwatch, saved; it shows on the Practice tab, with her run of classes.
     with run.part("Asha practises on her own"):
         p.scroll_to_top()
         p.tap("Practise on your own")
@@ -396,17 +503,22 @@ def loop(run: Run, teacher_code: str, debug: bool) -> None:
         p.tap("Steady", exact=True)
         p.type_into("Add a note", "Cushion under the ankles")
         p.hide_keyboard()
-        run.shot("21_student_solo")
+        run.shot("24_student_solo")
         p.tap_scrolling("Finish", exact=True)
         run.check("the practice on her own is saved", "Saved to your practice")
         run.check("and shows on the Practice tab", "Solo practice · 1 min", scroll=True)
-        run.shot("22_student_practice")
         p.scroll_to_top()
+        texts = labels()
+        streak = p.call("GET", "/me", api_login(ASHA))["stats"]["streak_days"]
+        tile = texts[texts.index("Classes in a row") - 1] if "Classes in a row" in texts else None
+        run.verdict(f"her streak reads 'Classes in a row': {tile}", tile == str(streak) and streak >= 1,
+                    f"tile {tile!r}, server {streak}")
+        run.shot("25_student_practice")
         p.tap_scrolling("Vajrasana")
         run.check("with the hold the stopwatch timed, in Vajrasana's history", "Solo · held 0:1")
         p.back()
 
-    # 12. A health note shared from the Me tab; the teacher sees it.
+    # 14. A health note shared from the Me tab; the teacher sees it.
     with run.part("Asha shares a health note"):
         tab("Me")
         p.type_into("For example: my left knee", NOTE)
@@ -415,24 +527,37 @@ def loop(run: Run, teacher_code: str, debug: bool) -> None:
         p.tap(f"Share with {T}")
         p.tap("Share", exact=True)  # in the dialog that asks first
         run.check("the note is shared", f"Shared with {T}")
-        run.shot("23_student_note_shared")
+        run.shot("26_student_note_shared")
         on(TEACHER)
         tab("Students")
         time.sleep(2)
         run.check("the teacher sees the shared health note", NOTE)
-        run.shot("24_teacher_shared_note")
+        run.shot("27_teacher_shared_note")
 
-    # 13. Meera moved to another batch, with a note; then a new password, which signs her out everywhere.
+    # 15. Remove asks first; the move to another batch, with its note in the review history; a new password, shown
+    #     until OK.
+    with run.part("the teacher asked before removing Meera"):
+        p.scroll_to_top()
+        p.tap_under("Meera (test)", "Remove")
+        run.check("Remove asks first", "Remove Meera (test)?")
+        run.shot("28_teacher_remove_asks")
+        p.tap("Cancel", exact=True)
+        status = next(u for u in p.call("GET", "/teacher/students", token)["students"] if u["name"] == "Meera (test)")["status"]
+        run.verdict("Cancel, and she stays", status == "approved", status)
     with run.part("the teacher moves Meera"):
+        p.scroll_to_top()
         p.tap_under("Meera (test)", "Move to batch")
-        p.tap_under("Meera (test)", "Intermediate")
+        p.tap_under("Meera (test)", "Advanced")
         p.type_under("Meera (test)", MOVE_NOTE)
-        run.shot("25_teacher_move")
-        p.tap_under("Meera (test)", "Move to Intermediate")
+        run.shot("29_teacher_move")
+        p.tap_under("Meera (test)", "Move to Advanced")
         time.sleep(2)
         moved = next(u for u in p.call("GET", "/teacher/students", token)["students"] if u["name"] == "Meera (test)")
-        run.verdict("Meera is moved to Intermediate", moved["batch"] == "intermediate", str(moved["batch"]))
-        run.check("her card shows the new batch", "Intermediate · since", scroll=True)
+        run.verdict("Meera is moved to Advanced", moved["batch"] == "advanced", str(moved["batch"]))
+        run.check("her card shows the new batch", "Advanced · since", scroll=True)
+        noted = [c for c in sheet_rows(run.sheet, "batch_changes") if c["student_id"] == moved["id"] and c["to"] == "advanced"]
+        run.verdict("the move and its note are kept in her batch history (the Sheet's batch_changes tab; the app has no "
+                    "screen for it)", [c["note"] for c in noted] == [MOVE_NOTE], str(noted))
     with run.part("the teacher gives Meera a new password"):
         p.scroll_to_top()
         p.tap_under("Meera (test)", "New password")
@@ -440,62 +565,109 @@ def loop(run: Run, teacher_code: str, debug: bool) -> None:
         p.tap_under("New password for Meera (test)?", "New password")
         shown = p.label(p.find("New password for Meera (test):"))
         new_password = shown.rsplit(": ", 1)[1].strip()
-        run.shot("26_teacher_new_password")
+        p.tap("Copy", exact=True)
+        run.check("Copy copies it", "Copied", exact=True)
+        p.tap_xy(540, 300)
+        run.check("a tap outside leaves the dialog open", "New password for Meera (test):", timeout=4)
+        p.back()
+        run.check("so does Back", "New password for Meera (test):", timeout=4)
+        run.shot("30_teacher_new_password")
         p.tap("OK", exact=True)
+        run.check_gone("OK closes it", "New password for Meera (test):")
 
-    # 14. Meera: the old password fails, the new one works; her new batch, its class and the teacher's note.
-    with run.part("Meera signs in again"):
+    # 16. Meera: the old password fails and the new one works; her new batch, which has no link yet, and its class,
+    #     which she checks in to from the faces on its card; then her own password, from the Me tab.
+    with run.part("Meera signs in again, in a batch with no link yet"):
+        p.add_class("advanced", -10)  # under way; Advanced has no everyday link
         on(STUDENT)
         log_out("Me")
         log_in(MEERA)
         run.check("the old password fails", "Wrong number or password.")
-        run.shot("27_student_old_password")
+        run.shot("31_student_old_password")
         retype("Password", new_password)
         p.hide_keyboard()
         p.tap("Log in", exact=True, last=True)
         time.sleep(3)
         run.check("the new password works", "Namaste, Meera")
-        run.check("she sees her new batch", "Your batch: Intermediate")
-        run.check("and its class", "Intermediate", exact=True)
-        page = labels(whole_page=True)
-        run.verdict("and the teacher's note on the move", any(MOVE_NOTE[:24] in text for text in page),
-                    "the note shows nowhere on her Today tab")
-        run.shot("28_student_moved")
+        run.check("she sees her new batch", "Your batch: Advanced")
+        run.check("and its class", "Advanced", exact=True)
+        run.check("a class with no link yet says so", "The class link will appear here before class.")
+        run.check("and offers the check-in, the faces on its card", "How do you feel right now?")
+        run.shot("32_student_no_link_checkin")
+        p.tap("Good", exact=True)
+        run.check("she checks in from the faces", "You checked in")
+        mine = p.call("GET", "/home?lang=en", api_login(MEERA, new_password))["sessions"][0]
+        run.verdict("and the server has it, for her next class, which has no link", (mine["meet_link"], mine["checked_in"]) == (None, True),
+                    f"{mine['batch']['key']}: link {mine['meet_link']}, checked in {mine['checked_in']}")
+        run.shot("33_student_checked_in")
+    with run.part("Meera changes her own password"):
+        tab("Me")
+        p.tap_scrolling("Change password")
+        p.type_into("Current password", new_password)
+        p.type_into("Password (6", OWN_PASSWORD)
+        p.type_into("New password again", OWN_PASSWORD)
+        p.hide_keyboard()
+        run.shot("34_student_change_password")
+        p.tap_under("New password again", "Save")
+        run.check("her new password is saved", "Password changed")
+        log_out("Me")
+        log_in(MEERA, new_password)
+        run.check("the old one fails", "Wrong number or password.")
+        retype("Password", OWN_PASSWORD)
+        p.hide_keyboard()
+        p.tap("Log in", exact=True, last=True)
+        time.sleep(3)
+        run.check("and the new one works", "Namaste, Meera")
 
-    # 15. A new group code; the invite opens the share sheet. The old code is turned away from a third sign-up.
+    # 17. A new group code asks first; the invite opens the share sheet. The old code is turned away from a third
+    #     sign-up, whose pain areas are kept when the phone turns.
     with run.part("the teacher makes a new group code"):
         on(TEACHER)
         tab("Today")
         old_code = p.call("GET", "/teacher/home?lang=en", token)["settings"]["group_code"]
         p.tap_scrolling("New code", exact=True)
+        run.check("New code asks first", "Make a new group code?")
+        run.shot("35_teacher_new_code_asks")
+        p.tap("Cancel", exact=True)
+        kept = p.call("GET", "/teacher/home?lang=en", token)["settings"]["group_code"]
+        run.verdict("Cancel keeps the code", kept == old_code, f"{old_code} -> {kept}")
+        p.tap_scrolling("New code", exact=True)
+        p.tap_under("Make a new group code?", "New code")
         time.sleep(2)
         new_code = p.call("GET", "/teacher/home?lang=en", token)["settings"]["group_code"]
-        run.verdict("a new group code is made", new_code != old_code, f"{old_code} -> {new_code}")
+        run.verdict("confirmed, a new group code is made", new_code != old_code, f"{old_code} -> {new_code}")
         run.check("and shown", new_code, exact=True)
-        p.tap_scrolling("Invite students on WhatsApp")
+        p.tap_scrolling("Invite students", exact=True)
         time.sleep(2)
-        run.verdict("with no WhatsApp, the invite opens Android's share sheet", p.resumed().startswith("com.android.intentresolver/"),
-                    p.resumed())
-        run.check("the invite carries the new code", f"*{new_code}*")
-        run.shot("29_teacher_invite")
+        run.verdict("the invite opens Android's share sheet", p.resumed().startswith("com.android.intentresolver/"), p.resumed())
+        run.check("the invite carries the new code", f"group code: {new_code}")
+        run.shot("36_teacher_invite")
         p.back()
         run.verdict("the share sheet is dismissed, back in the app", p.resumed().endswith("/.MainActivity"), p.resumed())
     with run.part("a third student signs up"):
         on(STUDENT)
         log_out("Me")
         sign_up("Kavya (test)", KAVYA, old_code)
-        run.check("the old group code is refused", f"Ask {T} for the group code")
-        run.shot("30_student_old_code")
+        run.check("the old group code is refused", "It comes from your teacher")
+        run.shot("37_student_old_code")
         retype(old_code, new_code, exact=True)
         p.hide_keyboard()
         p.tap("Create account", exact=True, last=True)
         time.sleep(3)
         run.check("the new code works for a third sign-up", f"These answers go to {T}")
+        for area in ("Neck", "Hip"):
+            p.tap_scrolling(area, exact=True)
+        turn(landscape=True)
+        turn(landscape=False)
+        p.scroll_to_top()
+        lost = [area for area in ("Neck", "Hip") if not chosen("ANY PAIN OR CONDITION?", area)]
+        run.verdict("turned to landscape and back, the pain areas chosen are kept", not lost, f"lost: {lost}")
+        run.shot("38_student_intake_turned")
+        p.scroll_to_top()
         p.tap("Back", exact=True)
         run.check("and she waits to be placed", "Waiting for")
-        run.shot("31_student_third")
 
-    # 16. Both sign out and in again; what they did is still there.
+    # 18. Both sign out and in again; what they did is still there.
     with run.part("the teacher signs out and in"):
         on(TEACHER)
         log_out("Today")
@@ -510,8 +682,8 @@ def loop(run: Run, teacher_code: str, debug: bool) -> None:
         run.check("and the note Asha shared", NOTE, scroll=True)
         tab("Insights")
         time.sleep(2)
-        run.check("and the class on the Insights tab", "1 joined")
-        run.shot("32_teacher_signed_in_again")
+        run.check("and the classes on the Insights tab", "1 joined")
+        run.shot("39_teacher_signed_in_again")
     with run.part("Asha signs out and in"):
         on(STUDENT)
         log_out("Me")
@@ -524,24 +696,53 @@ def loop(run: Run, teacher_code: str, debug: bool) -> None:
         tab("Me")
         run.check("her health note, kept on this phone, is still there", NOTE, scroll=True)
         run.check("marked shared", f"✓ Shared with {T}", scroll=True)
-        run.shot("33_student_signed_in_again")
+        run.shot("40_student_signed_in_again")
+
+    # 19. Both Today tabs in Hindi, shot down the page for words cut off or running over; then English again.
+    with run.part("both Today tabs in Hindi"):
+        tab("Me")
+        p.tap_scrolling("हिन्दी", exact=True)
+        time.sleep(4)
+        tab("आज")
+        time.sleep(2)
+        shoot_down(run, "41_hindi_student_today")
+        on(TEACHER)
+        tab("Today")
+        p.tap_scrolling("हिन्दी", exact=True)
+        time.sleep(4)
+        shoot_down(run, "42_hindi_teacher_today")
+        p.tap_scrolling("English", exact=True)
+        time.sleep(4)
+        run.check("the teacher's app is back in English", "Students", exact=True)
+        on(STUDENT)
+        tab("मैं")
+        p.tap_scrolling("English", exact=True)
+        time.sleep(4)
+        run.check("and the student's", "Practice", exact=True)
 
 
 # ---- steps ----
 
 def come_back() -> None:
-    """Home, then back to the running app, as a person returning from Meet or the share sheet would."""
+    """Home, then back to the running app, as a person returning from Meet or the share sheet would, and the page pulled
+    down to be read again: coming back reads it only if the last read is half a minute old."""
     p.adb("shell", "input", "keyevent", "KEYCODE_HOME")
     time.sleep(1)
     p.adb("shell", "am", "start", "-n", f"{p.PACKAGE}/.MainActivity")
+    time.sleep(2)
+    p.scroll_to_top()
+    p.adb("shell", "input", "swipe", "540", "600", "540", "1600", "400")
     time.sleep(3)
 
 
-def sign_up(name: str, number: str, code: str, teacher: bool = False) -> None:
+def sign_up_form(teacher: bool = False) -> None:
     p.tap("I'm the teacher" if teacher else "I'm a student")
     p.tap("Create account", exact=True)  # the switch above the form; the teacher's form opens on "Log in"
+
+
+def fill_sign_up(name: str, number: str, code: str, teacher: bool = False) -> None:
     p.type_into("Your name", name)
-    p.type_into("WhatsApp number", number)
+    p.type_into("Phone number", number)
     p.type_into("Password", PASSWORD)
     p.type_into("Teacher code" if teacher else "Group code", code)
     p.hide_keyboard()
@@ -549,10 +750,15 @@ def sign_up(name: str, number: str, code: str, teacher: bool = False) -> None:
     time.sleep(3)
 
 
+def sign_up(name: str, number: str, code: str, teacher: bool = False) -> None:
+    sign_up_form(teacher)
+    fill_sign_up(name, number, code, teacher)
+
+
 def log_in(number: str, password: str = PASSWORD, teacher: bool = False) -> None:
     p.tap("I'm the teacher" if teacher else "I'm a student")
     p.tap("Log in", exact=True)
-    p.type_into("WhatsApp number", number)
+    p.type_into("Phone number", number)
     p.type_into("Password", password)
     p.hide_keyboard()
     p.tap("Log in", exact=True, last=True)  # the button under the form, not the switch above it
@@ -571,10 +777,20 @@ def log_out(screen: str) -> None:
 
 
 def retype(box: str, value: str, exact: bool = False) -> None:
-    """Empties the filled text box showing `box` (its words, or its label) and types `value` into it."""
+    """Empties the filled text box showing `box` (its words, or its label) and types `value` into it. The tap leaves the
+    cursor where it landed, so the words are deleted on both sides of it."""
     p.tap(box, exact=exact)
-    p.adb("shell", "input", "keyevent", "KEYCODE_MOVE_END", *["KEYCODE_DEL"] * 24)
-    p.type_text(value)
+    time.sleep(0.5)
+    p.adb("shell", "input", "keyevent", *["KEYCODE_DEL"] * 64, *["KEYCODE_FORWARD_DEL"] * 64)
+    if value:
+        p.type_text(value)
+
+
+def turn(landscape: bool) -> None:
+    """Turns the phone, auto-rotate off: to landscape, or upright again. The app's screen is made anew each way."""
+    p.adb("shell", "settings", "put", "system", "accelerometer_rotation", "0")
+    p.adb("shell", "settings", "put", "system", "user_rotation", "1" if landscape else "0")
+    time.sleep(3)
 
 
 def fill_intake(age: str, height: str, weight: str, food: str, pain: list[str], pain_note: str,
@@ -598,11 +814,11 @@ def fill_intake(age: str, height: str, weight: str, food: str, pain: list[str], 
 
 def today_tab(run: Run, who: str) -> None:
     """A placed student's Today tab, all of it: the next class with a link to join, nothing missing or failed, and with
-    no group link set, no button for a WhatsApp group."""
+    no group link set, no button for a class group."""
     page = labels(whole_page=True)
     run.check("her next class, with its Meet link to join", "Join class")
-    run.verdict(f"with no group link set, {who}'s Today tab has no 'Open WhatsApp group' button",
-                "Open WhatsApp group" not in page, "the button shows")
+    run.verdict(f"with no group link set, {who}'s Today tab has no button for a class group, nor any word of WhatsApp",
+                not any("Open the class group" in text or "WhatsApp" in text for text in page), "a button or WhatsApp shows")
     wanted = ["NEXT CLASS", "Join class", "Your first class is free."]
     wrong = ["Something went wrong.", "This could not be loaded.", "The class link will appear here before class.", "Loading…"]
     missing = [w for w in wanted if w not in page] + [w for w in wrong if any(w in text for text in page)]
@@ -623,6 +839,20 @@ def joins(run: Run, what: str) -> None:
     p.adb("shell", "am", "force-stop", "com.android.chrome")
 
 
+def shoot_down(run: Run, name: str) -> None:
+    """Screenshots of the page from its top, a screenful at a time, until its end: name_1, name_2…"""
+    p.scroll_to_top()
+    seen: list[str] = []
+    for n in range(1, 7):
+        run.shot(f"{name}_{n}")
+        texts = labels()
+        if all(text in seen for text in texts):
+            break
+        seen += texts
+        p.scroll_down()
+    p.scroll_to_top()
+
+
 # ---- reading the screen and the server ----
 
 def labels(whole_page: bool = False) -> list[str]:
@@ -639,6 +869,43 @@ def labels(whole_page: bool = False) -> list[str]:
         p.scroll_down()
     p.scroll_to_top()
     return seen
+
+
+def between(upper: str, text: str, lower: str) -> bool:
+    """Whether the words `text` show below those holding `upper` and above those holding `lower`, on screen now."""
+    at: dict[str, int] = {}
+    for node, _ in p.nodes():
+        for key in (upper, text, lower):
+            if key in p.label(node):
+                at.setdefault(key, p.center(node)[1])
+    return len(at) == 3 and at[upper] < at[text] < at[lower]
+
+
+def tappable_around(anchor: str, label: str) -> ET.Element:
+    """The tappable element (a button, a chip) holding the words `label`, the first below `anchor`."""
+    words = p.bounds(p.under(anchor, lambda n: p.label(n) == label, label))
+    root = ET.fromstring(p.hierarchy())
+    parents = {child: node for node in root.iter() for child in node}
+    node = next(n for n in root.iter() if p.label(n) == label and p.bounds(n) == words)
+    while node.get("clickable") != "true" and node in parents:
+        node = parents[node]
+    return node
+
+
+def chosen(anchor: str, label: str) -> bool:
+    """Whether the chip `label`, the first below `anchor`, is chosen. A chip tells it only by its colour, filled (green,
+    or red for strain or pain) where one not chosen is outlined, so it is read off the screen: where its words are, a
+    chosen chip is mostly its dark fill, one not chosen mostly the light page."""
+    x1, y1, x2, y2 = p.bounds(p.under(anchor, lambda n: p.label(n) == label, label))
+    screen = Image.open(io.BytesIO(subprocess.run(["adb", "exec-out", "screencap", "-p"], check=True, capture_output=True).stdout))
+    box = list(screen.convert("L").crop((x1, y1, x2, y2)).getdata())
+    return sum(v < 160 for v in box) > len(box) / 2
+
+
+def sheet_rows(sheet: Path, tab_name: str) -> list[dict]:
+    """A tab of the dev backend's Sheet, as it is saved: one dict per row, by the header."""
+    data = next(s for s in json.loads(sheet.read_text(encoding="utf-8"))["sheets"] if s["name"] == tab_name)["data"]
+    return [dict(zip(data[0], row)) for row in data[1:] if any(cell != "" for cell in row)]
 
 
 def class_cards() -> list[str]:
@@ -721,14 +988,15 @@ class SideBySide:
         self.stopping.set()
         self.thread.join()
         joined = []
+        fit = "scale=540:1200:force_original_aspect_ratio=decrease,pad=540:1200:(ow-iw)/2:(oh-ih)/2:color=black,fps=24"
         for part in range(self.parts):
             teacher, student = (self.out / f"part{part}_{who}.mp4" for who in ("teacher", "student"))
             if not (teacher.exists() and student.exists()):
                 continue
             joined.append(self.out / f"part{part}.mp4")
-            subprocess.run(
+            subprocess.run(  # a part begun with the phone turned is landscape: each is fitted into the same frame
                 ["ffmpeg", "-y", "-loglevel", "error", "-i", str(teacher), "-i", str(student), "-filter_complex",
-                 "[0:v]scale=540:-2,fps=24[a];[1:v]scale=540:-2,fps=24[b];[a][b]hstack=inputs=2:shortest=1[v]",
+                 f"[0:v]{fit}[a];[1:v]{fit}[b];[a][b]hstack=inputs=2:shortest=1[v]",
                  "-map", "[v]", "-c:v", "libx264", "-crf", "30", "-preset", "slow", "-an", str(joined[-1])],
                 check=True,
             )
@@ -748,7 +1016,8 @@ def summary(version: str, runs: list[Run], started: datetime) -> str:
         "share button opens Android's share sheet",
         f"- **Started:** {started:%Y-%m-%d %H:%M} India time. The teacher's Today tab shows the rest of the day's classes, "
         "one card per batch, so how many depends on the hour",
-        "- **Not tested:** the Ask tab, as Gemma needs a phone with 6 GB", "",
+        "- **Not tested:** the Ask tab, as Gemma needs a phone with 6 GB. The Hindi pass is screenshots only "
+        "(41_hindi_*, 42_hindi_*), read by eye", "",
     ]
     for run in runs:
         passed = sum(ok for _, ok, _ in run.results)
