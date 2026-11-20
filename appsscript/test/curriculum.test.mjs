@@ -55,6 +55,20 @@ test('the curricula in the student\'s language, items in order', () => {
   assert.ok(shirshasana('mr').cue.startsWith('फक्त ' + TEACHER.mr + ' यांच्यासोबत.'));
 });
 
+test('a dose the owner types as words, or leaves empty, is a number or nothing: one odd row breaks nothing', () => {
+  const b = freshBackend();
+  const { t } = teacherAndCode(b);
+  const sheet = b.ss.getSheetByName('curriculum_items');
+  const dose = sheet.rows()[0].indexOf('dose') + 1;
+  const values = ['5 breaths', '', 'slowly', 2.5, "'12"];
+  values.forEach((v, i) => sheet.getRange(i + 2, dose).setValue(v));
+  b.context.onEdit({});
+  const r = b.call('GET', '/curricula', { token: t.token });
+  assert.equal(r.status, 200);
+  assert.deepEqual(r.body.curricula[0].items.slice(0, 5).map((i) => i.dose), [5, null, null, null, 12]);
+  assert.equal(r.body.curricula[0].items[0].unit, 'minutes', 'the unit as it was');
+});
+
 test('a class follows its own curriculum, else its batch\'s', () => {
   const b = freshBackend({ now: WEDNESDAY_6AM });
   const { t, code } = teacherAndCode(b);
@@ -98,8 +112,8 @@ test('the after-class window and the checks on what is sent', () => {
   assert.equal(practice(b, s.token, id, [{ item: 'vajrasana', reaction: 3 }]).body.detail, 'checkin_closed');
   b.state.offsetMs += 30 * MIN;
   assert.equal(practice(b, s.token, id, [{ item: 'vajrasana', reaction: 3 }]).status, 200);
-  const other = signup(b, '9000000003', { code: b.call('GET', '/teacher/home', { token: t.token }).body.settings.group_code });
-  assert.equal(practice(b, other.token, id, []).body.detail, 'checkin_closed', 'did not check in before class');
+  const other = signup(b, '9000000003', { code: b.call('GET', '/teacher/home', { token: t.token }).body.settings.group_code, batch: 'intermediate' });
+  assert.equal(practice(b, other.token, id, []).body.detail, 'checkin_closed', 'neither checked in nor of the class\'s batch');
   assert.equal(practice(b, s.token, id, [{ item: 'flying carpet', reaction: 3 }]).body.detail, 'unknown_item');
   const bad = practice(b, s.token, id, [{ item: 'vajrasana', reaction: 5, pain: 2 }, 'x']).body.detail;
   assert.deepEqual(bad.map((e) => e.type + ' ' + e.loc.join('.')),

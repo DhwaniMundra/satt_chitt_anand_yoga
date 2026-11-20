@@ -81,12 +81,20 @@ test('the practice summary lists the sessions on one\'s own, with the item names
   assert.deepEqual(hi.solo[0].items, ['वज्रासन', 'भुजंगासन']);
 });
 
+test('a hold over an hour is kept as an hour, and the rest of the practice with it', () => {
+  const { b, s } = student();
+  const r = solo(b, s.token, 70, [{ item: 'vajrasana', hold_s: 3700, reaction: 3 }, { item: 'tadasana', hold_s: 30, reaction: 3 }]);
+  assert.deepEqual(r, { status: 200, body: { ok: true, id: 1, saved: 2 } });
+  const holds = (item) => b.call('GET', '/me/asanas/' + item, { token: s.token }).body.holds;
+  assert.deepEqual([holds('vajrasana'), holds('tadasana')], [{ recent_seconds: 3600, longest_seconds: 3600 }, { recent_seconds: 30, longest_seconds: 30 }]);
+});
+
 test('the rules: something said, items from the library, a sensible length, members only', () => {
   const { b, s } = student();
   assert.deepEqual(solo(b, s.token, 5, [{ item: 'tadasana' }]), { status: 400, body: { detail: 'nothing_said' } });
   assert.deepEqual(solo(b, s.token, 5, [{ item: 'flying carpet', hold_s: 30 }]), { status: 400, body: { detail: 'unknown_item' } });
   assert.equal(solo(b, s.token, 241, [{ item: 'tadasana', hold_s: 30 }]).status, 422);
-  assert.equal(solo(b, s.token, 5, [{ item: 'tadasana', hold_s: 3601 }]).status, 422);
+  assert.equal(solo(b, s.token, 5, [{ item: 'tadasana', hold_s: -1 }]).status, 422);
   assert.equal(solo(b, 'nope', 5, [{ item: 'tadasana', hold_s: 30 }]).status, 401);
   const pending = signup(b, '9000000003');
   assert.deepEqual(solo(b, pending.token, 5, [{ item: 'tadasana', hold_s: 30 }]), { status: 403, body: { detail: 'pending' } });

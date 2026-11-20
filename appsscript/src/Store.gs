@@ -4,6 +4,8 @@
 // written with a leading apostrophe, so Sheets keeps "+919876543210", "2E5K7Q" or "=..." exactly as typed instead of
 // reading a number, a date or a formula. Times are real date cells (shown in India time); the API sends them as
 // UTC ISO-8601 strings. Writes happen under the script lock; ids are the largest id + 1, worked out under that lock.
+// Two types are for cells the owner types by hand: `clock`, a time of day kept as text ("07:00"), and `count`, a
+// whole number that may come with words after it ("5 breaths" is 5).
 
 const TABLES_ = {
   // A student's batch (a key of the batches tab) and since when; empty until the teacher places them.
@@ -30,13 +32,13 @@ const TABLES_ = {
   // The batches: seeded by setup() from content/studio.json while the tab is empty, then the owner's to edit. `days`
   // like "mon, tue, wed", `time` like "07:00" in India; `curriculum` is its classes' default.
   batches: [['key', 'text'], ['name', 'text'], ['name_hi', 'text'], ['name_mr', 'text'], ['curriculum', 'text'], ['days', 'text'],
-    ['time', 'text'], ['duration_min', 'int'], ['meet_link', 'text?'], ['about', 'text'], ['about_hi', 'text'], ['about_mr', 'text']],
+    ['time', 'clock'], ['duration_min', 'int'], ['meet_link', 'text?'], ['about', 'text'], ['about_hi', 'text'], ['about_mr', 'text']],
   // The curriculum: seeded by setup() from content/curriculum.json while the tabs are empty, then the owner's to edit.
   library: [['key', 'text'], ['type', 'text'], ['level', 'int'], ['sanskrit', 'text'], ['name', 'text'], ['english', 'text'],
     ['aliases', 'text'], ['source', 'text']],
   curricula: [['key', 'text'], ['name', 'text'], ['name_hi', 'text'], ['name_mr', 'text'], ['level', 'int'], ['about', 'text'],
     ['about_hi', 'text'], ['about_mr', 'text'], ['source', 'text']],
-  curriculum_items: [['curriculum', 'text'], ['position', 'int'], ['item', 'text'], ['dose', 'int'], ['unit', 'text'], ['cue', 'text'],
+  curriculum_items: [['curriculum', 'text'], ['position', 'int'], ['item', 'text'], ['dose', 'count'], ['unit', 'text'], ['cue', 'text'],
     ['cue_hi', 'text'], ['cue_mr', 'text']],
   // How each item went for a student, in a class (session_id) or on their own (solo_id): reaction 1 (not yet) to 4
   // (at ease), pain 1 for strain or pain, and on their own the stopwatch's seconds (hold_s). `item_name` and `week`
@@ -78,6 +80,11 @@ class Db_ {
   dropAll() {
     this.tables = {};
     this._settings = null;
+  }
+
+  /** Reads one tab afresh on its next use: under a lock that keeps the other reads, the tab it writes. */
+  forget(name) {
+    delete this.tables[name];
   }
 
   settings() {
@@ -196,16 +203,20 @@ function isDate_(v) {
   return Object.prototype.toString.call(v) === '[object Date]';
 }
 
+const TEXT_TYPES_ = ['text', 'text?', 'clock'];
+
 function encode_(value, type) {
   if (value === null || value === undefined) return '';
-  if (type === 'text' || type === 'text?') return value === '' ? '' : "'" + String(value);
-  if (type === 'int') return Number(value);
+  if (TEXT_TYPES_.indexOf(type) >= 0) return value === '' ? '' : "'" + String(value);
+  if (type === 'int' || type === 'count') return Number(value);
   return new Date(Math.floor(value / 1000) * 1000); // time, date: milliseconds since 1970, kept to the second as the API sends them
 }
 
 /** A cell as the app's value: text, a number, or milliseconds for times. `own` marks a value just encoded. */
 function decode_(value, type, own) {
-  if (own && (type === 'text' || type === 'text?') && typeof value === 'string' && value.charAt(0) === "'") value = value.slice(1);
+  if (own && TEXT_TYPES_.indexOf(type) >= 0 && typeof value === 'string' && value.charAt(0) === "'") value = value.slice(1);
+  if (type === 'clock') return clockText_(value);
+  if (type === 'count') return wholeNumber_(value);
   if (type === 'text' || type === 'text?') {
     if (value === '' || value === null) return type === 'text?' ? null : '';
     return isDate_(value) ? isoTime_(value.getTime()) : String(value);
@@ -216,6 +227,26 @@ function decode_(value, type, own) {
   if (typeof value === 'number') return Math.round(((value - 25569) * 86400000 - IST_OFFSET_MS_) / 1000) * 1000; // a serial day number
   const parsed = Date.parse(String(value));
   return isNaN(parsed) ? null : parsed;
+}
+
+/** A time of day as the Sheet shows it: the text as typed, or, for a cell Sheets took as a time, "07:00" in the
+ * spreadsheet's time zone. A time-only cell is dated 30 December 1899, when India's offset was +5:21:10, so its hours
+ * and minutes are read as the Sheet shows them, never worked out from a fixed offset. */
+function clockText_(value) {
+  const two = (n) => (n < 10 ? '0' : '') + n;
+  if (isDate_(value)) return Utilities.formatDate(value, SpreadsheetApp.getActiveSpreadsheet().getSpreadsheetTimeZone(), 'HH:mm');
+  if (typeof value === 'number') { // a time stored as a fraction of a day
+    const minutes = Math.round((value - Math.floor(value)) * 1440) % 1440;
+    return two(Math.floor(minutes / 60)) + ':' + two(minutes % 60);
+  }
+  return value === null ? '' : String(value);
+}
+
+/** A whole number from a cell typed by hand: 5, or "5 breaths"; null for anything else (empty, "slowly", 2.5). */
+function wholeNumber_(value) {
+  if (typeof value === 'number') return Number.isInteger(value) ? value : null;
+  const m = /^\s*(\d+)(?![\d.,])/.exec(value === null ? '' : String(value));
+  return m ? Number(m[1]) : null;
 }
 
 // ---------- the cache ----------

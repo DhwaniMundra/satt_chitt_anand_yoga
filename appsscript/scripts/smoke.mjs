@@ -50,6 +50,8 @@ const CHECKS = [
   ['wrong method', () => call('DELETE', '/home'), (r) => assert.deepEqual(r, { status: 405, body: { detail: 'Method Not Allowed' } })],
   ['/home signed out', () => call('GET', '/home'), (r) => assert.deepEqual(r, { status: 401, body: { detail: 'signed_out' } })],
   ['/home bad token', () => call('GET', '/home', { token: 'not-a-real-token' }), (r) => assert.equal(r.status, 401)],
+  ['/me/password signed out', () => call('POST', '/me/password', { body: { current_password: 'x', new_password: 'secret1' } }),
+    (r) => assert.deepEqual(r, { status: 401, body: { detail: 'signed_out' } })],
   ['/teacher/home bad token', () => call('GET', '/teacher/home', { token: 'not-a-real-token' }), (r) => assert.equal(r.status, 401)],
   ['signup bad phone', () => call('POST', '/auth/signup', { body: { name: 'x', phone: '12345', password: 'secret1' } }),
     (r) => assert.deepEqual(r, { status: 400, body: { detail: 'bad_phone' } })],

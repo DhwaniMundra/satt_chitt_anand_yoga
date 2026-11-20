@@ -1614,10 +1614,12 @@ const CURRICULUM = {
 //   {"method": "GET", "path": "/home", "query": {"lang": "hi"}, "token": "<login token>", "body": null}
 // and every answer is HTTP 200 with
 //   {"status": <the HTTP status of the answer: 200, 400, 401, ...>, "body": <the answer's JSON>}.
+// A write may carry a "request_id": the same id again (the app retrying after a timeout) gets the first answer back.
 // A GET with no envelope answers /health. appsscript/README.md describes the envelope and every route.
 
 const METHODS_ = ['GET', 'POST', 'PUT', 'DELETE'];
 const LOCK_ = true; // the route writes: it runs under the script lock from start to finish
+const REPLAY_S_ = 600; // how long the answer to a write with a request id is kept for a repeat of it
 
 class HttpError_ extends Error {
   constructor(status, detail) {
@@ -1683,7 +1685,8 @@ function parseEnvelope_(text) {
   }
   let token = typeof env.token === 'string' ? env.token : '';
   if (token.indexOf('Bearer ') === 0) token = token.slice(7);
-  return { method: method, path: path, query: query, token: token.trim(), body: env.body === undefined ? null : env.body };
+  const requestId = typeof env.request_id === 'string' ? env.request_id.trim().slice(0, 64) : '';
+  return { method: method, path: path, query: query, token: token.trim(), body: env.body === undefined ? null : env.body, requestId: requestId };
 }
 
 function decodeQuery_(text) {
@@ -1721,9 +1724,10 @@ function routes_() {
     ['GET', '/me/asanas', myItems_],
     ['GET', '/me/asanas/{item}', myItem_],
     ['POST', '/me/shared', shareNote_, LOCK_],
+    ['POST', '/me/password', changePassword_],
     ['GET', '/home', home_],
     ['GET', '/curricula', curricula_],
-    ['POST', '/sessions/{session_id}/checkin', checkin_, LOCK_],
+    ['POST', '/sessions/{session_id}/checkin', checkin_],
     ['POST', '/sessions/{session_id}/practice', sessionPractice_, LOCK_],
     ['POST', '/feedback', feedback_, LOCK_],
     ['GET', '/teacher/home', teacherHome_],
@@ -1769,10 +1773,24 @@ function route_(request) {
     pathMatched = true;
     if (method !== request.method) continue;
     const ctx = new Context_(request, params);
-    return lock ? ctx.lock(() => handler(ctx)) : handler(ctx);
+    const run = () => once_(request, () => handler(ctx));
+    return lock ? ctx.lock(run) : run();
   }
   if (pathMatched) throw new HttpError_(405, 'Method Not Allowed');
   throw new HttpError_(404, 'Not Found');
+}
+
+/** Runs a write once per request id: a repeat from the same login (a retry after a timeout) gets the answer kept from
+ * the first time, for REPLAY_S_, instead of writing again. Only answers that succeeded are kept. A route that holds the
+ * lock throughout looks inside it, so two copies arriving together write once. */
+function once_(request, fn) {
+  if (request.method === 'GET' || !request.requestId || !request.token) return fn();
+  const key = 'req:' + sha256Hex_(request.token) + ':' + request.requestId;
+  const kept = cache_().get(key);
+  if (kept) return JSON.parse(kept);
+  const answer = fn();
+  cache_().put(key, JSON.stringify(answer), REPLAY_S_);
+  return answer;
 }
 
 /** One request: its inputs, its view of the Sheet (each tab read at most once), the time, and the lock. */
@@ -1789,7 +1807,8 @@ class Context_ {
   }
 
   /** Runs `fn` holding the script lock; re-entrant. Tabs read before the lock are read again inside it (unless
-   * `keepReads`, for a lock that writes no tab), and writes are flushed before the lock is let go. */
+   * `keepReads`, for a lock that writes no tab or reads afresh the one it writes), and writes are flushed before the
+   * lock is let go. */
   lock(fn, keepReads) {
     if (this.locked) return fn();
     const lock = LockService.getScriptLock();
@@ -1829,9 +1848,10 @@ class Context_ {
 
 // ---------- Validate: request checks ----------
 //
-// A failed check is a 422 whose detail is a list of problems, [{"type", "loc", "msg", "input"}]. The app shows any
-// list as a generic error; the other errors carry a code it translates. Text is not coerced: a number where text is
-// expected is an error. Integers may come as "3".
+// A failed check is a 422 whose detail is a list of problems, [{"type", "loc", "msg", "input"}]; the app names the
+// field from `loc`. The other errors carry a code it translates. Text is not coerced: a number where text is expected
+// is an error. Integers may come as "3". Lengths are counted in code points, as the app counts them: a Devanagari
+// vowel sign is one.
 
 const LANGS_ = ['en', 'hi', 'mr'];
 
@@ -1854,23 +1874,26 @@ const BODY_ = {
     lang: F_.oneOf(LANGS_, { def: 'en' }),
   },
   login: { phone: F_.str(REQUIRED_), password: F_.str(REQUIRED_) },
+  password: { current_password: F_.str(REQUIRED_), new_password: F_.str({ required: true, min: 6, max: 200 }) },
   me: {
     name: F_.str({ min: 1, max: 80, nullable: true, def: null }),
     lang: F_.oneOf(LANGS_, { nullable: true, def: null }),
   },
   checkin: { phase: F_.oneOf(['before', 'after'], REQUIRED_), mood: F_.int({ required: true, ge: 1, le: 5 }) },
   feedback: { screen: F_.str({ required: true, max: 40 }), text: F_.str({ required: true, min: 1, max: 2000 }) },
-  link: { meet_link: F_.str(REQUIRED_) },
-  settings: { group_link: F_.str({ nullable: true, def: null }) },
-  place: { batch: F_.str({ required: true, min: 1, max: 40 }), note: F_.str({ nullable: true, def: null, max: 300 }) },
+  // A batch's everyday link: empty or null removes it.
+  link: { meet_link: F_.str({ required: true, nullable: true, max: 500 }) },
+  // Left out, the group link stays as it is; empty or null removes it.
+  settings: { group_link: F_.str({ nullable: true, max: 500 }) },
+  place: { batch: F_.str({ required: true, min: 1, max: 40 }), note: F_.str({ nullable: true, def: null, max: 600 }) },
   intake: {
     age: F_.int({ required: true, ge: 5, le: 100 }),
     height_cm: F_.int({ required: true, ge: 80, le: 230 }),
     weight_kg: F_.int({ required: true, ge: 15, le: 250 }),
     food: F_.oneOf(['vegetarian', 'eggetarian', 'non_vegetarian', 'vegan'], REQUIRED_),
-    meals: F_.str({ nullable: true, def: null, max: 300 }),
+    meals: F_.str({ nullable: true, def: null, max: 600 }),
     pain: F_.str({ nullable: true, def: null, max: 100 }),
-    pain_note: F_.str({ nullable: true, def: null, max: 300 }),
+    pain_note: F_.str({ nullable: true, def: null, max: 600 }),
     ratings: F_.list({
       item: F_.str({ required: true, min: 1, max: 40 }),
       reaction: F_.int({ nullable: true, def: null, ge: 1, le: 4 }),
@@ -1878,7 +1901,7 @@ const BODY_ = {
     }, { required: true, max: 20 }),
   },
   status: { status: F_.oneOf(['approved', 'rejected'], REQUIRED_) },
-  shared: { text: F_.str({ required: true, min: 1, max: 500 }) },
+  shared: { text: F_.str({ required: true, min: 1, max: 1000 }) },
   curriculum: { curriculum: F_.str({ required: true, min: 1, max: 40 }) },
   itemFeedback: { item: F_.str({ required: true, min: 1, max: 40 }), text: F_.str({ required: true, min: 1, max: 1000 }) },
   practice: {
@@ -1886,17 +1909,17 @@ const BODY_ = {
       item: F_.str({ required: true, min: 1, max: 40 }),
       reaction: F_.int({ nullable: true, def: null, ge: 1, le: 4 }),
       pain: F_.int({ def: 0, ge: 0, le: 1 }),
-      note: F_.str({ nullable: true, def: null, max: 500 }),
+      note: F_.str({ nullable: true, def: null, max: 1000 }),
     }, { required: true, max: 60 }),
   },
   solo: {
     minutes: F_.int({ required: true, ge: 0, le: 240 }),
     entries: F_.list({
       item: F_.str({ required: true, min: 1, max: 40 }),
-      hold_s: F_.int({ nullable: true, def: null, ge: 0, le: 3600 }),
+      hold_s: F_.int({ nullable: true, def: null, ge: 0 }), // the stopwatch's seconds; over an hour is kept as an hour
       reaction: F_.int({ nullable: true, def: null, ge: 1, le: 4 }),
       pain: F_.int({ def: 0, ge: 0, le: 1 }),
-      note: F_.str({ nullable: true, def: null, max: 500 }),
+      note: F_.str({ nullable: true, def: null, max: 1000 }),
     }, { required: true, max: 60 }),
   },
 };
@@ -2022,6 +2045,8 @@ function plural_(n, word) {
 // written with a leading apostrophe, so Sheets keeps "+919876543210", "2E5K7Q" or "=..." exactly as typed instead of
 // reading a number, a date or a formula. Times are real date cells (shown in India time); the API sends them as
 // UTC ISO-8601 strings. Writes happen under the script lock; ids are the largest id + 1, worked out under that lock.
+// Two types are for cells the owner types by hand: `clock`, a time of day kept as text ("07:00"), and `count`, a
+// whole number that may come with words after it ("5 breaths" is 5).
 
 const TABLES_ = {
   // A student's batch (a key of the batches tab) and since when; empty until the teacher places them.
@@ -2048,13 +2073,13 @@ const TABLES_ = {
   // The batches: seeded by setup() from content/studio.json while the tab is empty, then the owner's to edit. `days`
   // like "mon, tue, wed", `time` like "07:00" in India; `curriculum` is its classes' default.
   batches: [['key', 'text'], ['name', 'text'], ['name_hi', 'text'], ['name_mr', 'text'], ['curriculum', 'text'], ['days', 'text'],
-    ['time', 'text'], ['duration_min', 'int'], ['meet_link', 'text?'], ['about', 'text'], ['about_hi', 'text'], ['about_mr', 'text']],
+    ['time', 'clock'], ['duration_min', 'int'], ['meet_link', 'text?'], ['about', 'text'], ['about_hi', 'text'], ['about_mr', 'text']],
   // The curriculum: seeded by setup() from content/curriculum.json while the tabs are empty, then the owner's to edit.
   library: [['key', 'text'], ['type', 'text'], ['level', 'int'], ['sanskrit', 'text'], ['name', 'text'], ['english', 'text'],
     ['aliases', 'text'], ['source', 'text']],
   curricula: [['key', 'text'], ['name', 'text'], ['name_hi', 'text'], ['name_mr', 'text'], ['level', 'int'], ['about', 'text'],
     ['about_hi', 'text'], ['about_mr', 'text'], ['source', 'text']],
-  curriculum_items: [['curriculum', 'text'], ['position', 'int'], ['item', 'text'], ['dose', 'int'], ['unit', 'text'], ['cue', 'text'],
+  curriculum_items: [['curriculum', 'text'], ['position', 'int'], ['item', 'text'], ['dose', 'count'], ['unit', 'text'], ['cue', 'text'],
     ['cue_hi', 'text'], ['cue_mr', 'text']],
   // How each item went for a student, in a class (session_id) or on their own (solo_id): reaction 1 (not yet) to 4
   // (at ease), pain 1 for strain or pain, and on their own the stopwatch's seconds (hold_s). `item_name` and `week`
@@ -2096,6 +2121,11 @@ class Db_ {
   dropAll() {
     this.tables = {};
     this._settings = null;
+  }
+
+  /** Reads one tab afresh on its next use: under a lock that keeps the other reads, the tab it writes. */
+  forget(name) {
+    delete this.tables[name];
   }
 
   settings() {
@@ -2214,16 +2244,20 @@ function isDate_(v) {
   return Object.prototype.toString.call(v) === '[object Date]';
 }
 
+const TEXT_TYPES_ = ['text', 'text?', 'clock'];
+
 function encode_(value, type) {
   if (value === null || value === undefined) return '';
-  if (type === 'text' || type === 'text?') return value === '' ? '' : "'" + String(value);
-  if (type === 'int') return Number(value);
+  if (TEXT_TYPES_.indexOf(type) >= 0) return value === '' ? '' : "'" + String(value);
+  if (type === 'int' || type === 'count') return Number(value);
   return new Date(Math.floor(value / 1000) * 1000); // time, date: milliseconds since 1970, kept to the second as the API sends them
 }
 
 /** A cell as the app's value: text, a number, or milliseconds for times. `own` marks a value just encoded. */
 function decode_(value, type, own) {
-  if (own && (type === 'text' || type === 'text?') && typeof value === 'string' && value.charAt(0) === "'") value = value.slice(1);
+  if (own && TEXT_TYPES_.indexOf(type) >= 0 && typeof value === 'string' && value.charAt(0) === "'") value = value.slice(1);
+  if (type === 'clock') return clockText_(value);
+  if (type === 'count') return wholeNumber_(value);
   if (type === 'text' || type === 'text?') {
     if (value === '' || value === null) return type === 'text?' ? null : '';
     return isDate_(value) ? isoTime_(value.getTime()) : String(value);
@@ -2234,6 +2268,26 @@ function decode_(value, type, own) {
   if (typeof value === 'number') return Math.round(((value - 25569) * 86400000 - IST_OFFSET_MS_) / 1000) * 1000; // a serial day number
   const parsed = Date.parse(String(value));
   return isNaN(parsed) ? null : parsed;
+}
+
+/** A time of day as the Sheet shows it: the text as typed, or, for a cell Sheets took as a time, "07:00" in the
+ * spreadsheet's time zone. A time-only cell is dated 30 December 1899, when India's offset was +5:21:10, so its hours
+ * and minutes are read as the Sheet shows them, never worked out from a fixed offset. */
+function clockText_(value) {
+  const two = (n) => (n < 10 ? '0' : '') + n;
+  if (isDate_(value)) return Utilities.formatDate(value, SpreadsheetApp.getActiveSpreadsheet().getSpreadsheetTimeZone(), 'HH:mm');
+  if (typeof value === 'number') { // a time stored as a fraction of a day
+    const minutes = Math.round((value - Math.floor(value)) * 1440) % 1440;
+    return two(Math.floor(minutes / 60)) + ':' + two(minutes % 60);
+  }
+  return value === null ? '' : String(value);
+}
+
+/** A whole number from a cell typed by hand: 5, or "5 breaths"; null for anything else (empty, "slowly", 2.5). */
+function wholeNumber_(value) {
+  if (typeof value === 'number') return Number.isInteger(value) ? value : null;
+  const m = /^\s*(\d+)(?![\d.,])/.exec(value === null ? '' : String(value));
+  return m ? Number(m[1]) : null;
 }
 
 // ---------- the cache ----------
@@ -2356,10 +2410,11 @@ function checkPassword_(password, stored) {
 }
 
 /**
- * The WhatsApp number as +<country><number>, so one person always gets one account however they type it:
- * "98765 43210", "098765 43210", "+91 98765 43210" and "0091 98765 43210" are the same number. A bare 10-digit
- * number, or 11 digits with the trunk prefix 0, is taken as Indian (+91). Devanagari digits count as digits.
- * Throws a 400 bad_phone if it is not a plausible phone number.
+ * The phone number as +<country><number>, so one person always gets one account however they type it:
+ * "98765 43210", "098765 43210", "+91 98765 43210", "+91 098765 43210" and "0091 98765 43210" are the same number. A
+ * bare 10-digit number, or 11 digits with the trunk prefix 0, is taken as Indian (+91); a number from abroad starts
+ * with + and its country code. Devanagari digits count as digits. Throws a 400 bad_phone if it is not a plausible
+ * phone number.
  */
 function normalizePhone_(raw) {
   let digits = String(raw)
@@ -2367,9 +2422,19 @@ function normalizePhone_(raw) {
     .replace(/\D/g, '');
   if (digits.indexOf('00') === 0) digits = digits.slice(2); // international prefix
   else if (digits.length === 11 && digits.charAt(0) === '0') digits = digits.slice(1); // Indian trunk prefix
+  if (digits.length === 13 && digits.indexOf('910') === 0) digits = '91' + digits.slice(3); // the trunk 0 after +91
   if (digits.length === 10) digits = '91' + digits;
   if (digits.length < 11 || digits.length > 15 || digits.charAt(0) === '0') throw new HttpError_(400, 'bad_phone');
   return '+' + digits;
+}
+
+/** A user's stored number as normalizePhone_ reads it, so an account stored as "+910…" still matches "+91…". */
+function phoneOf_(user) {
+  try {
+    return normalizePhone_(user.phone);
+  } catch (err) {
+    return user.phone;
+  }
 }
 
 // After ATTEMPT_LIMIT_ failures for one key (a phone number logging in, the teacher code, a number signing up with a
@@ -2448,8 +2513,7 @@ const DAY_MS_ = 86400000;
 const DAYS_ = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
 const MONTH_NAMES_ = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const CHECKIN_BEFORE_MIN_ = 60; // how early before class the "before" check-in opens
-const MEET_LINK_ = /^https:\/\/(meet\.google\.com\/[a-z]{3}-[a-z]{4}-[a-z]{3}|([\w-]+\.)?zoom\.us\/j\/\d+(\?pwd=[\w.-]+)?)$/;
-const GROUP_LINK_ = /^https:\/\/chat\.whatsapp\.com\/[A-Za-z0-9]+$/;
+const MEET_CODE_ = /^[a-z]{3}-[a-z]{4}-[a-z]{3}$/i;
 
 /** UTC ISO-8601 to the second: "2026-11-18T02:30:00Z". */
 function isoTime_(ms) {
@@ -2487,21 +2551,66 @@ function pick_(text, lang) {
   return text[lang] || text.en;
 }
 
-function cleanLink_(raw, pattern, detail) {
-  let link = raw.trim();
-  if (link.indexOf('https://') !== 0) link = 'https://' + (link.indexOf('http://') === 0 ? link.slice(7) : link);
-  if (!pattern.test(link)) throw new HttpError_(400, detail);
-  return link;
+/** A link's parts, with or without its https:// (or http://): the host in small letters, the path ("/" when none),
+ * the query string and the fragment as written, and the query's values by name; null if it is not a web link. */
+function linkParts_(text) {
+  const m = /^(?:https?:\/\/)?([a-z0-9-]+(?:\.[a-z0-9-]+)+)(\/[^?#\s]*)?(?:\?([^#\s]*))?(?:#(\S*))?$/i.exec(text);
+  if (!m) return null;
+  const values = {};
+  (m[3] || '').split('&').forEach((pair) => {
+    const eq = pair.indexOf('=');
+    if (eq > 0) values[pair.slice(0, eq)] = pair.slice(eq + 1);
+  });
+  return { host: m[1].toLowerCase(), path: m[2] || '/', query: m[3] || '', fragment: m[4] || '', values: values };
 }
 
-/** A Google Meet or Zoom link, with https:// added when it was left off; else 400 bad_meet_link. */
+/** The first word of what was pasted that `clean` makes a link of, the punctuation around it aside ("Join:
+ * https://meet.google.com/abc-defg-hij."), else 400 `detail`. */
+function firstLink_(raw, clean, detail) {
+  const words = String(raw).trim().split(/\s+/);
+  for (let i = 0; i < words.length; i++) {
+    const parts = linkParts_(words[i].replace(/^[("'<[]+|[)"'>\].,;:!?]+$/g, ''));
+    const link = parts && clean(parts);
+    if (link) return link;
+  }
+  throw new HttpError_(400, detail);
+}
+
+/** A link to a video call, made plain: Google Meet (its code in small letters; g.co/meet/ too), Zoom (a meeting, /j/
+ * with its pwd, or a personal room, /my/, on any zoom.us address), Microsoft Teams or Jitsi Meet, always https. Else
+ * 400 bad_meet_link. */
 function cleanMeetLink_(raw) {
-  return cleanLink_(raw, MEET_LINK_, 'bad_meet_link');
+  return firstLink_(raw, (p) => {
+    const path = p.path.replace(/\/+$/, '');
+    let m;
+    if (p.host === 'meet.google.com' && (m = /^\/([\w-]+)$/.exec(path)) && MEET_CODE_.test(m[1])) return 'https://meet.google.com/' + m[1].toLowerCase();
+    if (p.host === 'g.co' && (m = /^\/meet\/([\w-]+)$/i.exec(path))) {
+      return MEET_CODE_.test(m[1]) ? 'https://meet.google.com/' + m[1].toLowerCase() : 'https://g.co/meet/' + m[1];
+    }
+    if (/^([\w-]+\.)*zoom\.us$/.test(p.host)) {
+      const pwd = /^[\w.-]+$/.test(p.values.pwd || '') ? '?pwd=' + p.values.pwd : '';
+      if ((m = /^\/j\/(\d+)$/.exec(path))) return 'https://' + p.host + '/j/' + m[1] + pwd;
+      if ((m = /^\/my\/([\w.-]+)$/.exec(path))) return 'https://' + p.host + '/my/' + m[1];
+    }
+    if ((p.host === 'teams.microsoft.com' && /^\/l\/meetup-join\/./.test(path)) || (p.host === 'teams.live.com' && /^\/meet\/./.test(path))) {
+      return 'https://' + p.host + p.path + (p.query ? '?' + p.query : '');
+    }
+    if (p.host === 'meet.jit.si' && (m = /^\/([\w-]+)$/.exec(path))) return 'https://meet.jit.si/' + m[1];
+    return null;
+  }, 'bad_meet_link');
 }
 
-/** A WhatsApp group invite link, with https:// added when it was left off; else 400 bad_group_link. */
+/** The class group's link: a WhatsApp group invite (its code alone, the rest of the address dropped), or any other
+ * https link as written (a Telegram or Signal group, say), always https. Else 400 bad_group_link. */
 function cleanGroupLink_(raw) {
-  return cleanLink_(raw, GROUP_LINK_, 'bad_group_link');
+  return firstLink_(raw, (p) => {
+    if (p.host === 'chat.whatsapp.com') {
+      const m = /^\/(?:invite\/)?([A-Za-z0-9]+)\/?$/.exec(p.path);
+      return m ? 'https://chat.whatsapp.com/' + m[1] : null;
+    }
+    const rest = (p.query ? '?' + p.query : '') + (p.fragment ? '#' + p.fragment : '');
+    return 'https://' + p.host + (p.path === '/' && !rest ? '' : p.path) + rest;
+  }, 'bad_group_link');
 }
 
 /** The batches, from the batches tab, by key: names and words in each language, the default curriculum, the days
@@ -2524,13 +2633,12 @@ function batches_(ctx) {
   return out;
 }
 
-/** "07:00" (or a time the owner typed, which Sheets keeps as a time of day) as minutes after midnight in India. */
+/** A batch's time as the owner typed it ("07:00", "7.00", "5:30 pm", "7 am") as minutes after midnight in India. */
 function startMinutes_(time) {
-  const text = String(time || '');
-  const iso = /T(\d\d):(\d\d)/.exec(text); // a time-of-day cell, read back as a UTC moment
-  if (iso) return (Number(iso[1]) * 60 + Number(iso[2]) + IST_OFFSET_MS_ / 60000) % 1440;
-  const plain = /(\d{1,2})[:.](\d\d)/.exec(text);
-  return plain ? Number(plain[1]) * 60 + Number(plain[2]) : 0;
+  const m = /(\d{1,2})(?:[:.](\d\d))?\s*([ap])?\.?\s*m?\b/i.exec(String(time || ''));
+  if (!m || (m[2] === undefined && !m[3])) return 0;
+  const hour = m[3] ? (Number(m[1]) % 12) + (m[3].toLowerCase() === 'p' ? 12 : 0) : Number(m[1]);
+  return (hour * 60 + Number(m[2] || 0)) % 1440;
 }
 
 /** A batch for the app, in `lang`: its key, name, words, days and start ("07:00"). */
@@ -2652,17 +2760,18 @@ function sessionsById_(ctx) {
   return out;
 }
 
-/** The average mood change over (before, after) pairs of the given check-ins: [average or null, pairs]. */
+/** The average mood change over (before, after) pairs of the given check-ins: [average or null, pairs]. A class
+ * attended with no mood before (said how it went without checking in first) makes no pair. */
 function moodChange_(checkins) {
   const after = {};
   checkins.forEach((c) => {
-    if (c.phase === 'after') after[c.user_id + ':' + c.session_id] = c.mood;
+    if (c.phase === 'after' && c.mood !== null) after[c.user_id + ':' + c.session_id] = c.mood;
   });
   let sum = 0;
   let pairs = 0;
   checkins.forEach((c) => {
     const key = c.user_id + ':' + c.session_id;
-    if (c.phase === 'before' && Object.prototype.hasOwnProperty.call(after, key)) {
+    if (c.phase === 'before' && c.mood !== null && Object.prototype.hasOwnProperty.call(after, key)) {
       sum += after[key] - c.mood;
       pairs++;
     }
@@ -2670,27 +2779,36 @@ function moodChange_(checkins) {
   return [pairs ? sum / pairs : null, pairs];
 }
 
-/** Classes joined, the current run of consecutive days with a class, and the average mood change. */
-function practiceStats_(ctx, userId) {
-  const sessions = sessionsById_(ctx);
-  const mine = ctx.db.t('checkins').rows.filter((c) => c.user_id === userId);
-  const today = istDay_(ctx.now);
-  const seen = {};
-  mine.forEach((c) => {
-    if (c.phase === 'before' && sessions[c.session_id]) seen[istDay_(sessions[c.session_id].starts_at)] = true;
+/** The batch a student was in at a moment, from their placements and moves in batch_changes; for a student placed
+ * by hand in the Sheet, with no change logged, the batch they are in now. */
+function batchAt_(ctx, user) {
+  const changes = ctx.db.t('batch_changes').rows.filter((c) => c.student_id === user.id).sort((a, b) => a.created_at - b.created_at);
+  return (at) => changes.reduce((batch, c) => (c.created_at <= at ? c.to : batch), changes.length ? changes[0].from : user.batch);
+}
+
+/** Classes joined, the run of classes in a row the student came to, and the average mood change. The run goes back
+ * through the classes of the batch the student was in at the time of each (so a move starts no new count), and any
+ * other they joined; one checked in to counts at once. A class still to come or under way does not break it, nor
+ * one nobody came to: it was probably not held. Sent as streak_days. */
+function practiceStats_(ctx, user) {
+  const sessions = ctx.db.t('class_sessions').rows;
+  const checkins = ctx.db.t('checkins').rows;
+  const held = {};
+  const mine = {};
+  checkins.forEach((c) => {
+    if (c.phase !== 'before') return;
+    held[c.session_id] = true;
+    if (c.user_id === user.id) mine[c.session_id] = true;
   });
-  // a check-in for a later class does not count yet
-  const days = Object.keys(seen).map(Number).filter((d) => d <= today).sort((a, b) => b - a);
+  const batchAt = batchAt_(ctx, user);
+  const ended = (s) => s.starts_at + s.duration_min * 60000 <= ctx.now;
+  const run = sessions
+    .filter((s) => mine[s.id] || (held[s.id] && ended(s) && batchAt(s.starts_at) === s.batch))
+    .sort((a, b) => b.starts_at - a.starts_at);
   let streak = 0;
-  let expected = today;
-  if (days.length && days[0] < expected) expected -= 1; // today's class may not have happened yet
-  for (let i = 0; i < days.length; i++) {
-    if (days[i] !== expected) break;
-    streak++;
-    expected--;
-  }
-  const [change, pairs] = moodChange_(mine);
-  return { classes_joined: days.length, streak_days: streak, mood_change: change, mood_pairs: pairs };
+  while (streak < run.length && mine[run[streak].id]) streak++;
+  const [change, pairs] = moodChange_(checkins.filter((c) => c.user_id === user.id));
+  return { classes_joined: sessions.filter((s) => mine[s.id]).length, streak_days: streak, mood_change: change, mood_pairs: pairs };
 }
 
 /** Rounds to one decimal, a tie to the even digit as Python's round() does: 2.25 is 2.2 and 2.75 is 2.8. Among averages
@@ -2709,7 +2827,8 @@ function average1_(values) {
 }
 
 /** The student's classes over the last `days` days (1 to 90), with the sums done: classes joined, average mood
- * before and after, and the same per class, class names in `lang`. */
+ * before and after (a class attended with no mood before counts in neither), and the same per class, class names in
+ * `lang`. */
 function practiceSummary_(ctx, userId, days, lang) {
   days = Math.max(1, Math.min(days, 90));
   const sessions = sessionsById_(ctx);
@@ -2735,7 +2854,7 @@ function practiceSummary_(ctx, userId, days, lang) {
       mood_before: r.before, mood_after: r.after });
     const entry = byClass[name] || (byClass[name] = { times: 0, before: [], after: [] });
     entry.times += 1;
-    entry.before.push(r.before);
+    if (r.before !== null) entry.before.push(r.before);
     if (r.after !== null) entry.after.push(r.after);
   });
   const summary = {};
@@ -2779,7 +2898,7 @@ function practiceSummary_(ctx, userId, days, lang) {
   return {
     period_days: days,
     classes_joined: classes.length,
-    average_mood_before: average1_(rows.map((r) => r.before)),
+    average_mood_before: average1_(rows.filter((r) => r.before !== null).map((r) => r.before)),
     average_mood_after: average1_(rows.filter((r) => r.after !== null).map((r) => r.after)),
     by_class: summary,
     classes: classes,
@@ -2795,7 +2914,7 @@ function itemTitle_(entry, key, lang) {
   return lang === 'en' ? entry.name : entry.sanskrit;
 }
 
-/** The WhatsApp message for one session. */
+/** The message for one session, for the teacher to share with the class. */
 function shareFor_(ctx, row, lang) {
   const batch = batches_(ctx)[row.batch];
   const link = row.meet_link || (batch && batch.meet_link);
@@ -2804,8 +2923,14 @@ function shareFor_(ctx, row, lang) {
   return { text: classMessage_(name, row.starts_at, row.duration_min, link, lang) };
 }
 
-// ---------- WhatsApp messages ----------
-// The app never reads the WhatsApp group; the teacher posts from the app through Android's share sheet.
+/** What a check-in row copies from its class for the owner's queries: the batch's name and the India date. */
+function checkinCopy_(ctx, session) {
+  return { class: batchJson_(batches_(ctx)[session.batch], session.batch, 'en').name, class_date: istMidnight_(istDay_(session.starts_at)) };
+}
+
+// ---------- messages for the class ----------
+// The app reads no chat. The teacher shares from the app through Android's share sheet, to the class's group on
+// WhatsApp or anywhere else; the messages are plain text, for any app or an SMS.
 
 const TEXT_ = {
   class: {
@@ -2814,10 +2939,17 @@ const TEXT_ = {
     mr: '🧘 {studio} · {name}\n📅 {day}, {time} IST ({minutes} मिनिटे)\n🔗 सामील व्हा: {link}\n\nवर्गापूर्वी ॲपमध्ये चेक-इन करा.',
   },
   invite: {
-    en: '🙏 Join {studio} in the app.\nSign up with your WhatsApp number and this group code: *{code}*',
-    hi: '🙏 ऐप में {studio} से जुड़ें।\nअपने व्हाट्सऐप नंबर और इस ग्रुप कोड से साइन अप करें: *{code}*',
-    mr: '🙏 ॲपमध्ये {studio} मध्ये सामील व्हा.\nतुमचा व्हॉट्सॲप नंबर आणि हा ग्रुप कोड वापरून साइन अप करा: *{code}*',
+    en: '🙏 Join {studio} in the app.\n{app}Sign up with your phone number and this group code: {code}',
+    hi: '🙏 ऐप में {studio} से जुड़ें।\n{app}अपने फ़ोन नंबर और इस ग्रुप कोड से साइन अप करें: {code}',
+    mr: '🙏 ॲपमध्ये {studio} मध्ये सामील व्हा.\n{app}तुमचा फोन नंबर आणि हा ग्रुप कोड वापरून साइन अप करा: {code}',
   },
+  get_app: {
+    en: '📲 Get the app: {link}\n',
+    hi: '📲 ऐप यहाँ से लें: {link}\n',
+    mr: '📲 ॲप इथून घ्या: {link}\n',
+  },
+  // In a class review, for one whose row the owner deleted from the users tab.
+  former_student: { en: 'A former student', hi: 'एक पूर्व विद्यार्थी', mr: 'एक माजी विद्यार्थी' },
 };
 const DAY_NAMES_ = {
   en: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
@@ -2836,8 +2968,10 @@ function classMessage_(className, startsAt, minutes, link, lang) {
     minutes: minutes, link: link });
 }
 
-function inviteMessage_(code, lang) {
-  return fill_(pick_(TEXT_.invite, lang), { studio: pick_(STUDIO.name, lang), code: code });
+/** The invite: the group code, and where to get the app when the settings tab has an app_link. */
+function inviteMessage_(code, appLink, lang) {
+  const app = appLink ? fill_(pick_(TEXT_.get_app, lang), { link: appLink }) : '';
+  return fill_(pick_(TEXT_.invite, lang), { studio: pick_(STUDIO.name, lang), app: app, code: code });
 }
 
 // ---------- Practice: the curriculum, each class's plan, how each item went, and each student's history ----------
@@ -2845,6 +2979,8 @@ function inviteMessage_(code, lang) {
 // The teacher picks one curriculum per class; students react to its items after class, one tap each, and practise
 // on their own with a stopwatch; the teacher reads each student's history per item and can write feedback on an
 // item, which the student sees with it.
+
+const MAX_HOLD_S_ = 3600; // the app's stopwatch stops at an hour
 
 /** The curriculum as the Sheet holds it: the library by key, the curricula in tab order, each one's items in order. */
 function curriculum_(ctx) {
@@ -2878,7 +3014,8 @@ function sessionCurricula_(ctx) {
   return out;
 }
 
-/** The library and the curricula in the student's language (the Devanagari names serve Hindi and Marathi). */
+/** The library and the curricula in the student's language (the Devanagari names serve Hindi and Marathi). An item's
+ * dose is a whole number, or null when its cell holds none (the app then shows the unit or the cue alone). */
 function curricula_(ctx) {
   currentUser_(ctx);
   const { query } = ctx.check({ query: QUERY_LANG_ });
@@ -2906,17 +3043,24 @@ function setCurriculum_(ctx) {
   return { ok: true, curriculum: body.curriculum };
 }
 
-/** After class, how each item went for this student. Open while the "after" check-in is; a second send replaces the
- * first. Entries with no reaction, no pain and no note are not kept. */
+/** After class, how each item went for this student. Open while the "after" check-in is, to one who checked in or
+ * any of the class's batch; a second send replaces the first. Entries with no reaction, no pain and no note are not
+ * kept. */
 function sessionPractice_(ctx) {
   const user = currentUser_(ctx);
   const { path, body } = ctx.check({ path: PATH_SESSION_, body: BODY_.practice });
   if (user.status !== 'approved') throw new HttpError_(403, 'pending');
   const row = sessionRow_(ctx, path.session_id);
-  const joined = ctx.db.t('checkins').rows.some((c) => c.user_id === user.id && c.session_id === row.id && c.phase === 'before');
-  if (!joined || !afterOpen_(row, ctx.now)) throw new HttpError_(400, 'checkin_closed');
+  const checkins = ctx.db.t('checkins');
+  const joined = checkins.rows.some((c) => c.user_id === user.id && c.session_id === row.id && c.phase === 'before');
+  const own = row.batch === user.batch; // never for the teacher, who has no batch
+  if (!(joined || own) || !afterOpen_(row, ctx.now)) throw new HttpError_(400, 'checkin_closed');
   const library = curriculum_(ctx).library;
   const kept = saidEntries_(body.entries, library);
+  // Saying how it went records coming to the class, with no mood before, for one who did not check in.
+  if (!joined && kept.length) {
+    checkins.insert([Object.assign({ user_id: user.id, session_id: row.id, phase: 'before', mood: null, created_at: ctx.now }, checkinCopy_(ctx, row))]);
+  }
   const table = ctx.db.t('practice');
   table.remove(table.rows.filter((r) => r.user_id === user.id && r.session_id === row.id));
   let id = table.nextId();
@@ -2925,8 +3069,9 @@ function sessionPractice_(ctx) {
   return { ok: true, saved: kept.length };
 }
 
-/** Practice on the student's own: each item with the stopwatch's seconds, how it went, strain or pain and a note. The
- * server dates it: the session ends now and began `minutes` ago. Items with nothing timed or said are not kept. */
+/** Practice on the student's own: each item with the stopwatch's seconds (an hour at most: a longer hold is kept as
+ * an hour), how it went, strain or pain and a note. The server dates it: the session ends now and began `minutes`
+ * ago. Items with nothing timed or said are not kept. */
 function soloPractice_(ctx) {
   const user = member_(ctx);
   const { body } = ctx.check({ body: BODY_.solo });
@@ -2938,7 +3083,7 @@ function soloPractice_(ctx) {
   const row = solo.insert([{ id: solo.nextId(), user_id: user.id, started_at: started, ended_at: ctx.now }])[0];
   const table = ctx.db.t('practice');
   let id = table.nextId();
-  table.insert(kept.map((e) => ({ id: id++, user_id: user.id, solo_id: row.id, item: e.item, hold_s: e.hold_s || null,
+  table.insert(kept.map((e) => ({ id: id++, user_id: user.id, solo_id: row.id, item: e.item, hold_s: Math.min(e.hold_s || 0, MAX_HOLD_S_) || null,
     reaction: e.reaction, pain: e.pain, note: e.note, created_at: ctx.now, item_name: library[e.item].name, week: mondayOf_(started) })));
   return { ok: true, id: row.id, saved: kept.length };
 }
@@ -2963,15 +3108,17 @@ function mondayOf_(ms) {
 }
 
 /** How a class went, item by item, for the teacher: the reactions counted (not yet, with effort, steady, at ease),
- * items with strain or pain first, each with who and what they wrote, then the other notes. */
+ * items with strain or pain first, each with who and what they wrote, then the other notes. One whose row the owner
+ * deleted is named "A former student", in `lang`. */
 function classReview_(ctx) {
   teacher_(ctx);
-  const { path } = ctx.check({ path: PATH_SESSION_ });
+  const { path, query } = ctx.check({ path: PATH_SESSION_, query: QUERY_LANG_ });
   const row = sessionRow_(ctx, path.session_id);
   const names = {};
   ctx.db.t('users').rows.forEach((u) => {
     names[u.id] = u.name;
   });
+  const nameOf = (id) => names[id] || pick_(TEXT_.former_student, query.lang);
   const plan = sessionCurricula_(ctx)[row.id];
   const entries = ctx.db.t('practice').rows.filter((r) => r.session_id === row.id).sort((a, b) => a.id - b.id);
   const order = (curriculum_(ctx).items[plan] || []).map((i) => i.item);
@@ -2983,8 +3130,8 @@ function classReview_(ctx) {
     return {
       item: item,
       reactions: [1, 2, 3, 4].map((n) => mine.filter((e) => e.reaction === n).length),
-      pain: mine.filter((e) => e.pain === 1).map((e) => ({ name: names[e.user_id], note: e.note })),
-      notes: mine.filter((e) => e.pain !== 1 && e.note).map((e) => ({ name: names[e.user_id], text: e.note })),
+      pain: mine.filter((e) => e.pain === 1).map((e) => ({ name: nameOf(e.user_id), note: e.note })),
+      notes: mine.filter((e) => e.pain !== 1 && e.note).map((e) => ({ name: nameOf(e.user_id), text: e.note })),
     };
   });
   const answered = {};
@@ -3203,8 +3350,10 @@ function studio_(ctx) {
 function signup_(ctx) {
   const { body } = ctx.check({ body: BODY_.signup });
   const phone = normalizePhone_(body.phone);
-  const code = body.code.trim().toUpperCase();
+  // A code copied from a message may bring spaces, stars or a full stop with it.
+  const code = body.code.replace(/^[^A-Za-z0-9]+|[^A-Za-z0-9]+$/g, '').toUpperCase();
   const hasTeacher = () => ctx.db.t('users').rows.some((u) => u.role === 'teacher');
+  const taken = (users) => users.rows.some((u) => phoneOf_(u) === phone);
   let status;
   // The quick refusals come first, before the slow password hash; the lock below checks again.
   if (body.role === 'teacher') {
@@ -3218,8 +3367,8 @@ function signup_(ctx) {
     }, true);
     status = 'approved';
   } else {
-    // The group code, from the class's WhatsApp invite, keeps sign-ups to the class; the teacher then places each
-    // student in a batch.
+    // The group code, which the teacher gives with the invite, keeps sign-ups to the class; the teacher then places
+    // each student in a batch.
     const key = 'group-code:' + phone;
     ctx.lock(() => {
       if (attemptsBlocked_(key)) throw new HttpError_(429, 'too_many_attempts');
@@ -3230,12 +3379,12 @@ function signup_(ctx) {
     }, true);
     status = 'pending';
   }
-  if (ctx.db.t('users').rows.some((u) => u.phone === phone)) throw new HttpError_(409, 'phone_taken');
+  if (taken(ctx.db.t('users'))) throw new HttpError_(409, 'phone_taken');
   const pwHash = hashPassword_(body.password);
   return ctx.lock(() => {
     const users = ctx.db.t('users');
     if (body.role === 'teacher' && hasTeacher()) throw new HttpError_(409, 'teacher_exists');
-    if (users.rows.some((u) => u.phone === phone)) throw new HttpError_(409, 'phone_taken');
+    if (taken(users)) throw new HttpError_(409, 'phone_taken');
     const user = users.insert([{
       id: users.nextId(), name: body.name.trim(), phone: phone, role: body.role, status: status, pw_hash: pwHash,
       lang: body.lang, created_at: ctx.now,
@@ -3259,7 +3408,7 @@ function login_(ctx) {
     if (attemptsBlocked_(key)) throw new HttpError_(429, 'too_many_attempts');
     attemptsFail_(key);
   }, true);
-  const user = ctx.db.t('users').rows.filter((u) => u.phone === phone)[0];
+  const user = ctx.db.t('users').rows.filter((u) => phoneOf_(u) === phone)[0];
   const ok = checkPassword_(body.password, user ? user.pw_hash : DUMMY_HASH_); // the same work for an unknown number
   if (!user || !ok) throw new HttpError_(401, 'bad_login');
   return ctx.lock(() => {
@@ -3287,7 +3436,34 @@ function logout_(ctx) {
 
 function me_(ctx) {
   const user = currentUser_(ctx);
-  return { user: userJson_(user), stats: practiceStats_(ctx, user.id) };
+  return { user: userJson_(user), stats: practiceStats_(ctx, user) };
+}
+
+/** A student (or the teacher) changing their own password: the current one first, under the login's brake on
+ * guessing. This login stays signed in; every other is signed out. */
+function changePassword_(ctx) {
+  const user = currentUser_(ctx);
+  const { body } = ctx.check({ body: BODY_.password });
+  const key = 'login:' + phoneOf_(user);
+  // Counted as a failure until the password proves right, as at login.
+  ctx.lock(() => {
+    if (attemptsBlocked_(key)) throw new HttpError_(429, 'too_many_attempts');
+    attemptsFail_(key);
+  }, true);
+  if (!checkPassword_(body.current_password, user.pw_hash)) throw new HttpError_(400, 'bad_password');
+  const pwHash = hashPassword_(body.new_password);
+  const mine = sha256Hex_(ctx.token);
+  return ctx.lock(() => {
+    attemptsClear_(key);
+    const users = ctx.db.t('users');
+    const me = users.rows.filter((u) => u.id === user.id)[0];
+    if (!me) throw new HttpError_(401, 'signed_out');
+    users.update(me, { pw_hash: pwHash });
+    const tokens = ctx.db.t('tokens');
+    tokens.remove(tokens.rows.filter((r) => r.user_id === user.id && r.token_hash !== mine));
+    ctx.db.changedCache = true;
+    return { ok: true };
+  });
 }
 
 function updateMe_(ctx) {
@@ -3320,12 +3496,15 @@ function shareNote_(ctx) {
   return { ok: true, id: row.id };
 }
 
-/** Everything the student's Today screen needs in one call. */
+/** Everything the student's Today tab needs in one call. */
 function home_(ctx) {
   const user = currentUser_(ctx);
   const { query } = ctx.check({ query: QUERY_LANG_ });
   const lang = query.lang;
   const member = user.status === 'approved';
+  // A student sees only their batch's classes, once placed. Made first, so the classes this call adds have their
+  // curriculum below.
+  const coming = member && user.batch ? upcoming_(ctx, 7, user.batch) : [];
   const batches = batches_(ctx);
   const checkins = ctx.db.t('checkins').rows.filter((c) => c.user_id === user.id);
   const joined = {};
@@ -3338,69 +3517,79 @@ function home_(ctx) {
     if (p.user_id === user.id) answered[p.session_id] = true;
   });
   const plan = sessionCurricula_(ctx);
-  // A student sees only their batch's classes, once placed.
-  const sessions = (member && user.batch ? upcoming_(ctx, 7, user.batch) : []).map((r) => {
+  const sessions = coming.map((r) => {
     const s = sessionJson_(r, lang, member, batches);
     s.checked_in = Boolean(joined[r.id]);
     s.curriculum = plan[r.id];
     return s;
   });
-  // The last class this person joined whose after-class window is open, with what they have said about it so far
-  // (null before they answer), so they can say it or change it.
-  const byId = sessionsById_(ctx);
-  const open = Object.keys(joined)
-    .map((id) => byId[id])
-    .filter((s) => s && afterOpen_(s, ctx.now))
-    .sort((a, b) => b.starts_at - a.starts_at)[0];
-  let after = null;
-  if (open) {
-    after = sessionJson_(open, lang, false, batches);
-    after.curriculum = plan[open.id];
+  // The class to say how it went: the latest whose after-class window is open, with what was said about it so far
+  // (null before an answer), so it can be said or changed. `after_checkin` is one the student checked in to;
+  // `after_class` may also be one of their batch's they did not (having joined from the class's message), with
+  // `checked_in` saying which.
+  const all = ctx.db.t('class_sessions').rows;
+  const latest = (list) => list.filter((s) => afterOpen_(s, ctx.now)).sort((a, b) => b.starts_at - a.starts_at)[0];
+  const said = (open) => {
+    if (!open) return null;
+    const out = sessionJson_(open, lang, false, batches);
+    out.curriculum = plan[open.id];
+    out.checked_in = Boolean(joined[open.id]);
     const mood = checkins.filter((c) => c.session_id === open.id && c.phase === 'after').map((c) => c.mood)[0];
-    after.said = !answered[open.id] ? null : {
+    out.said = !answered[open.id] ? null : {
       mood: mood === undefined ? null : mood,
       items: ctx.db.t('practice').rows.filter((p) => p.user_id === user.id && p.session_id === open.id)
         .map((p) => ({ item: p.item, reaction: p.reaction, pain: p.pain, note: p.note })),
     };
-  }
+    return out;
+  };
+  const afterJoined = latest(all.filter((s) => joined[s.id]));
+  const afterOwn = latest(all.filter((s) => joined[s.id] || (user.batch && s.batch === user.batch)));
   // Classes are for approved students only: one waiting or removed gets none, nor a class to say how it went.
   return {
     user: userJson_(user),
     batch: member && user.batch ? batchJson_(batches[user.batch], user.batch, lang) : null,
     studio: studioJson_(ctx, lang),
     sessions: sessions,
-    after_checkin: member ? after : null,
+    after_checkin: member ? said(afterJoined) : null,
+    after_class: member ? said(afterOwn) : null,
     group_link: member ? ctx.db.setting('group_link') : null,
   };
 }
 
+/** A mood before class ("before", from an hour before it to its end) or after it ("after", in the after-class
+ * window). Many students check in as class starts, so everything but the check-ins tab is read before the lock, and
+ * under it only that tab, read afresh, and the one write. */
 function checkin_(ctx) {
   const user = currentUser_(ctx);
   const { path, body } = ctx.check({ path: PATH_SESSION_, body: BODY_.checkin });
   if (user.status !== 'approved') throw new HttpError_(403, 'pending');
   const row = sessionRow_(ctx, path.session_id);
+  const own = row.batch === user.batch; // never for the teacher, who has no batch
   // Joining is for one's own batch's classes; a class joined before a move can still be answered after it.
-  if (body.phase === 'before' && user.role === 'student' && row.batch !== user.batch) throw new HttpError_(403, 'other_batch');
+  if (body.phase === 'before' && user.role === 'student' && !own) throw new HttpError_(403, 'other_batch');
   const start = row.starts_at;
   const end = start + row.duration_min * 60000;
-  const now = ctx.now;
-  const checkins = ctx.db.t('checkins');
-  const mine = (phase) => checkins.rows.filter((c) => c.user_id === user.id && c.session_id === row.id && c.phase === phase)[0];
-  let open;
-  if (body.phase === 'before') {
-    open = start - CHECKIN_BEFORE_MIN_ * 60000 <= now && now <= end;
-  } else {
-    open = Boolean(mine('before')) && afterOpen_(row, now);
-  }
-  if (!open) throw new HttpError_(400, 'checkin_closed');
-  const existing = mine(body.phase);
-  if (existing) {
-    checkins.update(existing, { mood: body.mood });
-  } else {
-    checkins.insert([{ user_id: user.id, session_id: row.id, phase: body.phase, mood: body.mood, created_at: now,
-      class: batchJson_(batches_(ctx)[row.batch], row.batch, 'en').name, class_date: istMidnight_(istDay_(start)) }]);
-  }
-  return { ok: true, stats: practiceStats_(ctx, user.id) };
+  const entry = (phase, mood) => Object.assign({ user_id: user.id, session_id: row.id, phase: phase, mood: mood, created_at: ctx.now },
+    checkinCopy_(ctx, row));
+  const before = entry('before', body.phase === 'before' ? body.mood : null);
+  const after = entry('after', body.mood);
+  ctx.lock(() => {
+    ctx.db.forget('checkins');
+    const checkins = ctx.db.t('checkins');
+    const mine = (phase) => checkins.rows.filter((c) => c.user_id === user.id && c.session_id === row.id && c.phase === phase)[0];
+    const joined = mine('before');
+    const open = body.phase === 'before'
+      ? start - CHECKIN_BEFORE_MIN_ * 60000 <= ctx.now && ctx.now <= end
+      : afterOpen_(row, ctx.now) && Boolean(joined || own);
+    if (!open) throw new HttpError_(400, 'checkin_closed');
+    const existing = mine(body.phase);
+    if (existing) checkins.update(existing, { mood: body.mood });
+    else if (body.phase === 'before') checkins.insert([before]);
+    // Saying how class went with no check-in before it (having joined from the class's message) records coming to
+    // it, with no mood before.
+    else checkins.insert(joined ? [after] : [before, after]);
+  }, true);
+  return { ok: true, stats: practiceStats_(ctx, user) };
 }
 
 function feedback_(ctx) {
@@ -3418,13 +3607,13 @@ function feedback_(ctx) {
 function teacherHome_(ctx) {
   teacher_(ctx);
   const { query } = ctx.check({ query: QUERY_LANG_ });
+  const ahead = upcoming_(ctx, 100); // first, so the classes this call adds have their curriculum below
   const batches = batches_(ctx);
   const joined = {};
   ctx.db.t('checkins').rows.forEach((c) => {
     if (c.phase === 'before') joined[c.session_id] = (joined[c.session_id] || 0) + 1;
   });
   const plan = sessionCurricula_(ctx);
-  const ahead = upcoming_(ctx, 100);
   const day = ahead.length ? istDay_(ahead[0].starts_at) : null;
   const sessions = ahead.filter((r) => istDay_(r.starts_at) === day).map((r) => {
     const s = sessionJson_(r, query.lang, true, batches);
@@ -3441,21 +3630,22 @@ function teacherHome_(ctx) {
   };
 }
 
-/** A batch's everyday Meet link, for its classes without their own. */
+/** A batch's everyday Meet link, for its classes without their own; an empty one removes it. */
 function setBatchLink_(ctx) {
   teacher_(ctx);
   const { path, body } = ctx.check({ path: PATH_BATCH_, body: BODY_.link });
   const row = ctx.db.t('batches').rows.filter((r) => r.key === path.key)[0];
   if (!row) throw new HttpError_(404, 'no_batch');
-  ctx.db.t('batches').update(row, { meet_link: cleanMeetLink_(body.meet_link) });
+  ctx.db.t('batches').update(row, { meet_link: (body.meet_link || '').trim() ? cleanMeetLink_(body.meet_link) : null });
   return { ok: true, meet_link: row.meet_link };
 }
 
+/** One class's own link, and the message to share it. */
 function setLink_(ctx) {
   teacher_(ctx);
   const { path, query, body } = ctx.check({ path: PATH_SESSION_, query: QUERY_LANG_, body: BODY_.link });
   const row = sessionRow_(ctx, path.session_id);
-  const link = cleanMeetLink_(body.meet_link);
+  const link = cleanMeetLink_(body.meet_link || '');
   ctx.db.t('class_sessions').update(row, { meet_link: link, updated_at: ctx.now });
   return shareFor_(ctx, row, query.lang);
 }
@@ -3466,10 +3656,13 @@ function share_(ctx) {
   return shareFor_(ctx, sessionRow_(ctx, path.session_id), query.lang);
 }
 
+/** The class group's link, optional: given, it is checked before it is saved; empty or null, it is removed. */
 function updateSettings_(ctx) {
   teacher_(ctx);
   const { body } = ctx.check({ body: BODY_.settings });
-  if (body.group_link !== null) ctx.db.setSetting('group_link', cleanGroupLink_(body.group_link));
+  if (body.group_link !== undefined) {
+    ctx.db.setSetting('group_link', (body.group_link || '').trim() ? cleanGroupLink_(body.group_link) : null);
+  }
   return { group_link: ctx.db.setting('group_link'), group_code: ctx.db.setting('group_code') };
 }
 
@@ -3482,7 +3675,7 @@ function rotateGroupCode_(ctx) {
 function invite_(ctx) {
   teacher_(ctx);
   const { query } = ctx.check({ query: QUERY_LANG_ });
-  return { text: inviteMessage_(ctx.db.setting('group_code'), query.lang) };
+  return { text: inviteMessage_(ctx.db.setting('group_code'), ctx.db.setting('app_link'), query.lang) };
 }
 
 function students_(ctx) {
@@ -3521,8 +3714,8 @@ function placeInBatch_(ctx) {
   return { ok: true, student: userJson_(student) };
 }
 
-/** A new temporary password for a student who forgot theirs; the teacher passes it on in person or on WhatsApp.
- * Signs the student out everywhere. */
+/** A new temporary password for a student who forgot theirs, for the teacher to pass on however the class keeps in
+ * touch; the student can change it from the Me tab. Signs the student out everywhere. */
 function resetPassword_(ctx) {
   teacher_(ctx);
   const { path } = ctx.check({ path: PATH_USER_ });
@@ -3559,10 +3752,10 @@ function insights_(ctx) {
     .sort((a, b) => b.starts_at - a.starts_at)
     .map((s) => {
       const list = bySession[s.id] || [];
-      const before = list.filter((c) => c.phase === 'before').map((c) => c.mood);
-      const after = list.filter((c) => c.phase === 'after').map((c) => c.mood);
+      const before = list.filter((c) => c.phase === 'before');
+      const moods = (rows) => rows.map((c) => c.mood).filter((m) => m !== null); // one who came with no mood before has none
       return { id: s.id, starts_at: isoTime_(s.starts_at), class: batchJson_(batches[s.batch], s.batch, query.lang).name, joined: before.length,
-        mood_before: mean(before), mood_after: mean(after) };
+        mood_before: mean(moods(before)), mood_after: mean(moods(list.filter((c) => c.phase === 'after'))) };
     });
   const [change, pairs] = moodChange_(checkins);
   const users = ctx.db.t('users').rows;
@@ -3612,8 +3805,9 @@ const OWNER_TABS_ = ['batches'].concat(CURRICULUM_TABS_); // the owner's to edit
 const HIDDEN_TABS_ = ['intake', 'intake_ratings', 'tokens', 'settings']; // health answers, login-token hashes, the codes
 const SETTING_NOTES_ = [
   ['teacher_code', 'The one-time code the teacher signs up with. It stops working once the teacher has an account.'],
-  ['group_code', 'Students sign up with this code, from the class\'s WhatsApp invite; the teacher then places them in a batch. The teacher can change it in the app.'],
-  ['group_link', 'The WhatsApp group invite link, set by the teacher in the app.'],
+  ['group_code', 'Students sign up with this code, which the teacher gives them with the invite; the teacher then places them in a batch. The teacher can change it in the app.'],
+  ['group_link', 'Optional: the link to the class\'s group (WhatsApp, Telegram, Signal or any other), set by the teacher in the app. Students see it on the Today tab.'],
+  ['app_link', 'Optional: where students get the app, typed here by hand (a download link). When set, the invite the teacher shares says where to get it.'],
 ];
 const TIME_FORMAT_ = 'yyyy-mm-dd hh:mm:ss';
 const DATE_FORMAT_ = 'yyyy-mm-dd';
@@ -3627,6 +3821,7 @@ function setup() {
     ss.setSpreadsheetTimeZone('Asia/Kolkata');
     DATA_TABS_.concat(OWNER_TABS_).forEach((name) => ensureTab_(ss, name));
     seedBatches_(ss);
+    plainTextTimes_(ss);
     seedCurriculum_(ss);
     codes = ensureSettings_(ss);
     if (!ss.getSheetByName('Dashboard')) writeDashboard_(ss);
@@ -3675,6 +3870,21 @@ function seedBatches_(ss) {
   table.insert(STUDIO.batches.map((b) => ({ key: b.key, name: b.name.en, name_hi: b.name.hi, name_mr: b.name.mr, curriculum: b.curriculum,
     days: b.days.join(', '), time: b.time, duration_min: b.duration_min, meet_link: null, about: b.about.en, about_hi: b.about.hi,
     about_mr: b.about.mr })));
+}
+
+/** The batches tab's time column as plain text, so a time the owner types stays as typed ("07:00", not a time of day
+ * on 30 December 1899). A cell Sheets already took as a time is written back as the time it shows, so what the owner
+ * sees is unchanged. */
+function plainTextTimes_(ss) {
+  const sheet = ss.getSheetByName('batches');
+  const header = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map((h) => String(h).trim());
+  const column = header.indexOf('time') + 1;
+  const range = sheet.getRange(2, column, sheet.getMaxRows() - 1, 1);
+  const values = range.getValues();
+  range.setNumberFormat('@');
+  values.forEach(([value], i) => {
+    if (isDate_(value)) sheet.getRange(i + 2, column).setValue(clockText_(value));
+  });
 }
 
 /** The curriculum tabs, filled from content/curriculum.json while they are empty, with "{teacher}" in its text

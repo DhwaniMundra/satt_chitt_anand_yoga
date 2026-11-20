@@ -1,7 +1,7 @@
 // The API end to end through the envelope, route by route: sign-up and login, links, check-ins, the teacher's routes.
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { attend, classStarted, DAY, freshBackend, MIN, setting, signup, teacherAndCode, WEDNESDAY_6AM } from './helpers.mjs';
+import { attend, classStarted, DAY, freshBackend, MIN, setSetting, setting, signup, teacherAndCode, WEDNESDAY_6AM } from './helpers.mjs';
 
 test('the teacher needs the teacher code, in any case', () => {
   const b = freshBackend();
@@ -61,13 +61,32 @@ test('one account per number, and logging in however it is typed', () => {
 
 test('one number however it is typed', () => {
   const b = freshBackend();
-  for (const typed of ['98765 43210', '098765 43210', '+91 98765-43210', '0091 98765 43210', '919876543210', '९८७६५ ४३२१०']) {
+  for (const typed of ['98765 43210', '098765 43210', '+91 98765-43210', '0091 98765 43210', '919876543210', '९८७६५ ४३२१०',
+    '+91 098765 43210', '0091 098765 43210']) {
     assert.equal(b.evaluate('normalizePhone_(' + JSON.stringify(typed) + ')'), '+919876543210', typed);
   }
-  assert.equal(b.evaluate("normalizePhone_('+44 20 7946 0958')"), '+442079460958');
+  for (const [typed, number] of [['+44 20 7946 0958', '+442079460958'], ['+44 7911 123456', '+447911123456'], ['+1 415 555 1234', '+14155551234'],
+    ['+971 50 123 4567', '+971501234567'], ['00971 50 123 4567', '+971501234567']]) {
+    assert.equal(b.evaluate('normalizePhone_(' + JSON.stringify(typed) + ')'), number, typed);
+  }
   for (const bad of ['12345', '0123456789012', '+1234567890123456', 'abc', '']) {
     assert.throws(() => b.evaluate('normalizePhone_(' + JSON.stringify(bad) + ')'), /bad_phone/, bad);
   }
+});
+
+test('an account stored with the trunk 0 after +91 still logs in, however the number is typed, and keeps its number', () => {
+  const b = freshBackend();
+  signup(b, '9000000002');
+  const users = b.ss.getSheetByName('users');
+  const row = users.rows().findIndex((r) => r[2] === '+919000000002') + 1;
+  users.getRange(row, 3).setValue("'+9109000000002"); // as "+91 090000 00002" was stored before the 0 was dropped
+  b.context.onEdit({});
+  for (const typed of ['+91 090000 00002', '9000000002', '09000000002', '+91 90000 00002']) {
+    const r = b.call('POST', '/auth/login', { body: { phone: typed, password: 'secret1' } });
+    assert.deepEqual([r.status, r.body.user.phone], [200, '+9109000000002'], typed);
+  }
+  assert.deepEqual(b.call('POST', '/auth/signup', { body: { name: 'x', phone: '9000000002', password: 'secret1', code: setting(b, 'group_code') } }),
+    { status: 409, body: { detail: 'phone_taken' } });
 });
 
 test('login locks after five wrong passwords, and unlocks after fifteen minutes', () => {
@@ -148,7 +167,7 @@ test('bad links are refused', () => {
   const session = b.call('GET', '/teacher/home', { token: t.token }).body.sessions[0];
   const r = b.call('PUT', '/teacher/sessions/' + session.id, { token: t.token, body: { meet_link: 'https://evil.example/meet' } });
   assert.deepEqual(r, { status: 400, body: { detail: 'bad_meet_link' } });
-  assert.equal(b.call('PUT', '/teacher/settings', { token: t.token, body: { group_link: 'https://example.com' } }).body.detail, 'bad_group_link');
+  assert.equal(b.call('PUT', '/teacher/settings', { token: t.token, body: { group_link: 'not a link' } }).body.detail, 'bad_group_link');
   const ok = b.call('PUT', '/teacher/settings', { token: t.token, body: { group_link: 'https://chat.whatsapp.com/AbC123' } });
   assert.equal(ok.body.group_link, 'https://chat.whatsapp.com/AbC123');
   assert.equal(b.call('PUT', '/teacher/batches/beginner', { token: t.token, body: { meet_link: 'https://evil.example/meet' } }).body.detail, 'bad_meet_link');
@@ -157,19 +176,69 @@ test('bad links are refused', () => {
   for (const link of ['zoom.us/j/123456789', 'https://us02web.zoom.us/j/8765?pwd=ab.C-d_9', 'http://meet.google.com/abc-defg-hij']) {
     assert.equal(b.call('PUT', '/teacher/sessions/' + session.id, { token: t.token, body: { meet_link: link } }).status, 200, link);
   }
-  for (const link of ['meet.google.com/ABC-defg-hij', 'https://meet.google.com/abc-defg-hij/x', 'https://zoom.us/j/abc', '']) {
+  for (const link of ['https://meet.google.com/abc-defg-hij/x', 'https://meet.google.com/abcd-efg-hij', 'https://zoom.us/j/abc', 'https://zoom.us/',
+    'https://teams.microsoft.com/', 'https://meet.jit.si/', 'https://youtube.com/watch?v=abc', 'meet google com', '', null]) {
     assert.equal(b.call('PUT', '/teacher/sessions/' + session.id, { token: t.token, body: { meet_link: link } }).body.detail, 'bad_meet_link', link);
   }
 });
 
-test('the group link is checked before it is saved', () => {
+test('the call links people paste are taken, made plain', () => {
   const b = freshBackend();
   const { t } = teacherAndCode(b);
-  assert.equal(b.call('PUT', '/teacher/settings', { token: t.token, body: { group_link: 'https://example.com/x' } }).body.detail, 'bad_group_link');
+  const meet = 'https://meet.google.com/abc-defg-hij';
+  const cases = [
+    ['https://meet.google.com/abc-defg-hij?authuser=0', meet], ['https://meet.google.com/abc-defg-hij?pli=1', meet],
+    ['meet.google.com/abc-defg-hij/', meet], ['https://meet.google.com/ABC-DEFG-HIJ', meet], ['HTTPS://Meet.Google.com/abc-defg-hij', meet],
+    ['Join: https://meet.google.com/abc-defg-hij.', meet], ['https://g.co/meet/abc-defg-hij', meet], ['g.co/meet/yoga-morning', 'https://g.co/meet/yoga-morning'],
+    ['https://us02web.zoom.us/j/12345678901?pwd=AbCd.1', 'https://us02web.zoom.us/j/12345678901?pwd=AbCd.1'],
+    ['https://zoom.us/j/123?pwd=a&uname=x', 'https://zoom.us/j/123?pwd=a'], ['zoom.us/j/98765432100', 'https://zoom.us/j/98765432100'],
+    ['https://zoom.us/my/ramit', 'https://zoom.us/my/ramit'], ['https://us06web.zoom.us/my/ramit.yoga', 'https://us06web.zoom.us/my/ramit.yoga'],
+    ['https://teams.microsoft.com/l/meetup-join/19%3ameeting_ab%40thread.v2/0?context=%7b%22Tid%22%3a%22x%22%7d',
+      'https://teams.microsoft.com/l/meetup-join/19%3ameeting_ab%40thread.v2/0?context=%7b%22Tid%22%3a%22x%22%7d'],
+    ['teams.live.com/meet/9876543210?p=AbC', 'https://teams.live.com/meet/9876543210?p=AbC'],
+    ['https://meet.jit.si/SattChitt', 'https://meet.jit.si/SattChitt'], ['http://meet.jit.si/SattChitt', 'https://meet.jit.si/SattChitt'],
+  ];
+  for (const [pasted, kept] of cases) {
+    const r = b.call('PUT', '/teacher/batches/beginner', { token: t.token, body: { meet_link: pasted } });
+    assert.deepEqual(r, { status: 200, body: { ok: true, meet_link: kept } }, pasted);
+  }
+});
+
+test('the class group link is optional: any group, any https link, and cleared by an empty one', () => {
+  const b = freshBackend();
+  const { t } = teacherAndCode(b);
+  const save = (body) => b.call('PUT', '/teacher/settings', { token: t.token, body });
+  const cases = [
+    ['chat.whatsapp.com/AbC123', 'https://chat.whatsapp.com/AbC123'], ['https://chat.whatsapp.com/AbC123?mode=r_c', 'https://chat.whatsapp.com/AbC123'],
+    ['https://chat.whatsapp.com/invite/AbC123', 'https://chat.whatsapp.com/AbC123'], ['https://t.me/joinchat/AbC123', 'https://t.me/joinchat/AbC123'],
+    ['telegram.me/sattchitt', 'https://telegram.me/sattchitt'], ['https://signal.group/#CjQKIAb_c-D', 'https://signal.group/#CjQKIAb_c-D'],
+    ['https://example.com', 'https://example.com'], ['http://classroom.example.org/c/yoga?x=1', 'https://classroom.example.org/c/yoga?x=1'],
+  ];
+  for (const [pasted, kept] of cases) {
+    assert.deepEqual(save({ group_link: pasted }).body, { group_link: kept, group_code: setting(b, 'group_code') }, pasted);
+    assert.equal(setting(b, 'group_link'), kept);
+  }
+  for (const bad of ['not a link', 'chat.whatsapp.com/', 'javascript:alert(1)']) {
+    assert.deepEqual(save({ group_link: bad }), { status: 400, body: { detail: 'bad_group_link' } }, bad);
+    assert.equal(setting(b, 'group_link'), 'https://classroom.example.org/c/yoga?x=1', 'a refused link changes nothing');
+  }
+  assert.equal(save({}).body.group_link, 'https://classroom.example.org/c/yoga?x=1', 'left out: unchanged');
+  assert.equal(save({ group_link: '' }).body.group_link, null);
   assert.ok(!setting(b, 'group_link'));
-  const ok = b.call('PUT', '/teacher/settings', { token: t.token, body: { group_link: 'chat.whatsapp.com/AbC123' } });
-  assert.deepEqual(ok.body, { group_link: 'https://chat.whatsapp.com/AbC123', group_code: setting(b, 'group_code') });
-  assert.equal(setting(b, 'group_link'), 'https://chat.whatsapp.com/AbC123');
+  save({ group_link: 't.me/x' });
+  assert.equal(save({ group_link: null }).body.group_link, null);
+  assert.equal(b.call('GET', '/teacher/home', { token: t.token }).body.settings.group_link, null);
+});
+
+test('a batch\'s everyday link can be removed', () => {
+  const b = freshBackend();
+  const { t } = teacherAndCode(b);
+  const set = (meet_link) => b.call('PUT', '/teacher/batches/beginner', { token: t.token, body: { meet_link } });
+  set('meet.google.com/abc-defg-hij');
+  assert.deepEqual(set('').body, { ok: true, meet_link: null });
+  set('meet.google.com/abc-defg-hij');
+  assert.deepEqual(set(null).body, { ok: true, meet_link: null });
+  assert.equal(b.call('GET', '/teacher/home', { token: t.token }).body.batches[0].meet_link, null);
 });
 
 test('a batch\'s everyday link serves its classes without their own; a class\'s own link wins', () => {
@@ -281,24 +350,64 @@ test('check-ins only around class time', () => {
     'checkin_closed'); // tomorrow's class cannot be checked into today
   const old = classStarted(b, 60 * 24 * 3);
   assert.equal(b.call('POST', '/sessions/' + old + '/checkin', { token: s.token, body: { phase: 'before', mood: 3 } }).body.detail, 'checkin_closed');
-  const now = classStarted(b, 50);
-  assert.equal(b.call('POST', '/sessions/' + now + '/checkin', { token: s.token, body: { phase: 'after', mood: 3 } }).body.detail,
-    'checkin_closed'); // no "after" without a "before"
+  const other = classStarted(b, 50, 'intermediate');
+  assert.equal(b.call('POST', '/sessions/' + other + '/checkin', { token: s.token, body: { phase: 'after', mood: 3 } }).body.detail,
+    'checkin_closed'); // another batch's class, not joined
   const soon = classStarted(b, -55);
   assert.equal(b.call('POST', '/sessions/' + soon + '/checkin', { token: s.token, body: { phase: 'before', mood: 3 } }).status, 200);
   assert.deepEqual(b.call('POST', '/sessions/424242/checkin', { token: s.token, body: { phase: 'before', mood: 3 } }),
     { status: 404, body: { detail: 'no_session' } });
 });
 
-test('the streak counts consecutive days with a class', () => {
+test('the streak counts the batch\'s classes in a row the student came to', () => {
   const b = freshBackend();
   const { code } = teacherAndCode(b);
   const s = signup(b, '9000000002', { code });
+  const mate = signup(b, '9000000003', { code });
   for (const daysAgo of [1, 2, 3, 5]) attend(b, s.user.id, 'beginner', daysAgo, 3, 4);
+  attend(b, mate.user.id, 'beginner', 4, 3, 4); // the class missed: a classmate came, so it was held
   const stats = b.call('GET', '/me', { token: s.token }).body.stats;
-  assert.deepEqual(stats, { classes_joined: 4, streak_days: 3, mood_change: 1, mood_pairs: 4 }); // today's class may not have happened
-  attend(b, s.user.id, 'beginner', 0, 2, null);
+  assert.deepEqual(stats, { classes_joined: 4, streak_days: 3, mood_change: 1, mood_pairs: 4 });
+  const live = classStarted(b, 20); // under way, the classmate in it: not missed yet
+  b.call('POST', '/sessions/' + live + '/checkin', { token: mate.token, body: { phase: 'before', mood: 3 } });
+  assert.equal(b.call('GET', '/me', { token: s.token }).body.stats.streak_days, 3);
+  attend(b, s.user.id, 'beginner', 0, 2, null); // checked in to a class under way: it counts already
   assert.equal(b.call('GET', '/me', { token: s.token }).body.stats.streak_days, 4);
+  assert.equal(b.call('GET', '/me', { token: mate.token }).body.stats.streak_days, 1, 'the classmate: today\'s, then yesterday\'s missed');
+});
+
+test('a Mon, Wed, Fri batch: the streak goes up each class, over the days between and the weekend', () => {
+  const monday = Date.parse('2026-11-16T10:30:00Z'); // 16:00 in India, before Pain management at 17:30
+  const b = freshBackend({ now: monday });
+  const { t, code } = teacherAndCode(b);
+  const s = signup(b, '9000000004', { code, batch: 'pain_management' });
+  const checkIn = (days) => {
+    b.state.offsetMs = days * DAY + 85 * MIN; // 17:25, five minutes before class
+    const next = b.call('GET', '/home', { token: s.token }).body.sessions[0];
+    return b.call('POST', '/sessions/' + next.id + '/checkin', { token: s.token, body: { phase: 'before', mood: 3 } }).body.stats.streak_days;
+  };
+  assert.deepEqual([checkIn(0), checkIn(2), checkIn(4)], [1, 2, 3], 'Monday, Wednesday, Friday');
+  b.state.offsetMs = 7 * DAY; // the next Monday, 16:00: no class since Friday's
+  b.call('GET', '/teacher/home', { token: t.token });
+  assert.equal(b.call('GET', '/me', { token: s.token }).body.stats.streak_days, 3);
+  b.state.offsetMs = 7 * DAY + 2 * 60 * MIN + 30 * MIN; // 18:30, Monday's class over and missed, but nobody came: not held
+  assert.equal(b.call('GET', '/me', { token: s.token }).body.stats.streak_days, 3);
+});
+
+test('a move between batches keeps the streak: each class counts in the batch the student was in then', () => {
+  const b = freshBackend();
+  const { t, code } = teacherAndCode(b);
+  const s = signup(b, '9000000002', { code });
+  const mate = signup(b, '9000000003', { code, batch: 'intermediate' });
+  for (const daysAgo of [3, 2]) attend(b, s.user.id, 'beginner', daysAgo, 3, 4);
+  b.state.offsetMs = -36 * 3600000; // a day and a half ago, after those two
+  assert.equal(b.call('PUT', '/teacher/students/' + s.user.id + '/batch', { token: t.token, body: { batch: 'intermediate' } }).status, 200);
+  b.state.offsetMs = 0;
+  attend(b, mate.user.id, 'beginner', 1, 3, 4); // Beginner's class after the move: no longer the student's
+  attend(b, s.user.id, 'intermediate', 1, 3, 4);
+  assert.equal(b.call('GET', '/me', { token: s.token }).body.stats.streak_days, 3);
+  attend(b, mate.user.id, 'intermediate', 2, 3, 4); // Intermediate's class before the move: not the student's then
+  assert.equal(b.call('GET', '/me', { token: s.token }).body.stats.streak_days, 3);
 });
 
 test('the chat and the health notes have no routes: they stay on the phone', () => {
@@ -408,13 +517,28 @@ test('the insights cover the last two weeks of classes', () => {
   assert.equal(insights.mood_pairs, 2);
 });
 
-test('the invite carries the group code', () => {
+test('the invite carries the group code, as plain text for any app, and where to get the app once the owner sets it', () => {
   const b = freshBackend();
   const { t, code } = teacherAndCode(b);
-  const invite = b.call('GET', '/teacher/invite', { token: t.token, query: { lang: 'hi' } }).body;
-  assert.ok(invite.text.includes('*' + code + '*'));
-  assert.ok(invite.text.startsWith('🙏 ऐप में सत्·चित्·आनन्द योग से जुड़ें।'));
-  assert.deepEqual(Object.keys(invite), ['text']);
+  const invite = (lang) => b.call('GET', '/teacher/invite', { token: t.token, query: { lang } }).body;
+  assert.deepEqual(invite('en'), { text: '🙏 Join Satt Chitt Anand Yoga in the app.\nSign up with your phone number and this group code: ' + code });
+  assert.ok(invite('hi').text.startsWith('🙏 ऐप में सत्·चित्·आनन्द योग से जुड़ें।\nअपने फ़ोन नंबर'));
+  assert.ok(!invite('mr').text.includes('*'), 'no stars: they show as stars in an SMS');
+  setSetting(b, 'app_link', 'https://example.org/sca.apk');
+  assert.equal(invite('en').text, '🙏 Join Satt Chitt Anand Yoga in the app.\n📲 Get the app: https://example.org/sca.apk\n' +
+    'Sign up with your phone number and this group code: ' + code);
+  assert.ok(invite('mr').text.includes('📲 ॲप इथून घ्या: https://example.org/sca.apk\n'));
+});
+
+test('a group code pasted with stars, spaces or a full stop around it works, and is not counted as a wrong one', () => {
+  const b = freshBackend();
+  const { code } = teacherAndCode(b);
+  const attempt = (phone, c) => b.call('POST', '/auth/signup', { body: { name: 'x', phone, password: 'secret1', code: c } });
+  for (let i = 0; i < 4; i++) assert.equal(attempt('9000000002', 'WRONG' + i).body.detail, 'bad_group_code');
+  assert.equal(attempt('9000000002', ' *' + code + '*. ').status, 200, 'the fifth try, right: no lockout');
+  assert.equal(attempt('9000000003', code.toLowerCase() + '.').status, 200);
+  assert.equal(attempt('9000000005', '"' + code + '"').status, 200);
+  assert.equal(attempt('9000000006', code.slice(0, 3) + ' ' + code.slice(3)).body.detail, 'bad_group_code', 'a space inside is not forgiven');
 });
 
 test('a new group code works and the old one does not', () => {
@@ -502,7 +626,8 @@ test('the owner\'s edits to the batches tab are the schedule: new days, a time t
   const sheet = b.ss.getSheetByName('batches');
   const header = sheet.rows()[0];
   sheet.getRange(5, header.indexOf('days') + 1).setValue("'Tue, Thu");
-  sheet.getRange(5, header.indexOf('time') + 1).setValue(new Date(Date.parse('1899-12-30T12:30:00Z'))); // 18:00 in India, typed as a time
+  // 18:00 typed as a time of day: Sheets dates it 30 December 1899, when India's offset was +5:21:10
+  sheet.getRange(5, header.indexOf('time') + 1).setValue(new Date(Date.parse('1899-12-30T12:38:50Z')));
   b.context.onEdit({});
   const pain = b.call('GET', '/studio').body.batches[3];
   assert.deepEqual([pain.days, pain.time], [['tue', 'thu'], '18:00']);
@@ -510,4 +635,132 @@ test('the owner\'s edits to the batches tab are the schedule: new days, a time t
   const starts = b.ss.getSheetByName('class_sessions').rows().slice(1).filter((r) => r[1] === 'pain_management')
     .map((r) => new Date(r[2].getTime() + 330 * MIN));
   assert.deepEqual(starts.map((d) => [d.getUTCDay(), d.getUTCHours()]), [[4, 18], [2, 18]], 'Thursday and Tuesday; Monday\'s, Wednesday\'s and Friday\'s removed');
+});
+
+test('a time the owner types reads as typed, whatever the cell: text, a time of day dated 1899, or 5:30 pm', () => {
+  const b = freshBackend({ now: WEDNESDAY_6AM });
+  const { t } = teacherAndCode(b);
+  const sheet = b.ss.getSheetByName('batches');
+  const column = sheet.rows()[0].indexOf('time') + 1;
+  const type = (row, value) => sheet.getRange(row, column).setValue(value);
+  type(2, new Date(Date.parse('1899-12-30T01:38:50Z'))); // 07:00, as Sheets keeps a time of day: +5:21:10 that year
+  type(3, "'8.15");
+  type(4, "'5:30 pm");
+  type(5, 0.75); // 18:00 as a fraction of a day
+  b.context.onEdit({});
+  assert.deepEqual(b.call('GET', '/studio').body.batches.map((x) => x.time), ['07:00', '08:15', '17:30', '18:00']);
+  const beginner = b.call('GET', '/teacher/home', { token: t.token }).body.sessions.find((s) => s.batch.key === 'beginner');
+  assert.equal(beginner.starts_at, '2026-11-18T01:30:00Z', '7:00 in India');
+  for (const [typed, minutes] of [['07:00', 420], ['7 am', 420], ['7:05 AM', 425], ['12:30 pm', 750], ['12 am', 0], ['17:30', 1050], ['08:00 IST', 480]]) {
+    assert.equal(b.evaluate('startMinutes_(' + JSON.stringify(typed) + ')'), minutes, typed);
+  }
+});
+
+test('setup makes the batches\' times plain text, keeping a time Sheets took as a time of day as the text it showed', () => {
+  const b = freshBackend();
+  const sheet = b.ss.getSheetByName('batches');
+  const column = sheet.rows()[0].indexOf('time') + 1;
+  sheet.getRange(3, column).setValue(new Date(Date.parse('1899-12-30T02:38:50Z'))); // 08:00
+  b.context.setup();
+  assert.deepEqual(sheet.rows().slice(1).map((r) => r[column - 1]), ['07:00', '08:00', '09:00', '17:30']);
+});
+
+test('the first view that makes a day\'s classes shows each with its curriculum', () => {
+  const b = freshBackend({ now: WEDNESDAY_6AM });
+  const t = signup(b, '9000000001', { role: 'teacher', code: 'TEACH123' });
+  assert.deepEqual(b.call('GET', '/teacher/home', { token: t.token }).body.sessions.map((s) => s.curriculum),
+    ['beginner', 'intermediate', 'advanced', 'pain_management']);
+  const s = signup(b, '9000000002', { code: setting(b, 'group_code') });
+  b.state.offsetMs = 7 * DAY; // a week on: the student's visit makes the new day's classes
+  const sessions = b.call('GET', '/home', { token: s.token }).body.sessions;
+  assert.ok(sessions.length === 6 && sessions.every((x) => x.curriculum === 'beginner'), JSON.stringify(sessions.map((x) => x.curriculum)));
+});
+
+test('after class, one who joined from the class\'s message, with no check-in, can still say how it went: that records coming', () => {
+  const b = freshBackend();
+  const { t, code } = teacherAndCode(b);
+  const s = signup(b, '9000000002', { code });
+  const mate = signup(b, '9000000003', { code });
+  const id = classStarted(b, 50); // five minutes left: the after-class window is open
+  b.call('POST', '/sessions/' + id + '/checkin', { token: mate.token, body: { phase: 'before', mood: 2 } });
+  const home = () => b.call('GET', '/home', { token: s.token }).body;
+  assert.equal(home().after_checkin, null, 'for the apps that offer only a class checked in to');
+  assert.deepEqual([home().after_class.id, home().after_class.checked_in, home().after_class.said], [id, false, null]);
+  const after = b.call('POST', '/sessions/' + id + '/checkin', { token: s.token, body: { phase: 'after', mood: 4 } });
+  assert.deepEqual(after.body.stats, { classes_joined: 1, streak_days: 1, mood_change: null, mood_pairs: 0 });
+  const rows = b.ss.getSheetByName('checkins').rows().slice(1).filter((r) => r[0] === s.user.id);
+  assert.deepEqual(rows.map((r) => [r[2], r[3], r[5]]), [['before', '', 'Beginner'], ['after', 4, 'Beginner']], 'coming, with no mood before');
+  assert.deepEqual([home().after_checkin.id, home().after_class.checked_in, home().after_class.said.mood], [id, true, 4]);
+  const insights = b.call('GET', '/teacher/insights', { token: t.token }).body;
+  const row = insights.sessions.find((x) => x.id === id);
+  assert.deepEqual([row.joined, row.mood_before, row.mood_after, insights.mood_pairs], [2, 2, 4, 0]);
+  const practice = b.call('GET', '/me/practice', { token: s.token }).body;
+  assert.deepEqual([practice.classes_joined, practice.average_mood_before, practice.average_mood_after], [1, null, 4]);
+  assert.deepEqual(practice.classes.map((c) => [c.mood_before, c.mood_after]), [[null, 4]]);
+  assert.equal(b.call('GET', '/teacher/sessions/' + id + '/practice', { token: t.token }).body.joined, 2);
+});
+
+test('saying how each item went, with no check-in, records coming too; another batch\'s class stays closed', () => {
+  const b = freshBackend();
+  const { code } = teacherAndCode(b);
+  const s = signup(b, '9000000002', { code });
+  const id = classStarted(b, 60); // just over
+  const said = b.call('POST', '/sessions/' + id + '/practice', { token: s.token, body: { entries: [{ item: 'tadasana', reaction: 3 }] } });
+  assert.deepEqual(said, { status: 200, body: { ok: true, saved: 1 } });
+  assert.equal(b.call('GET', '/me', { token: s.token }).body.stats.classes_joined, 1);
+  b.call('POST', '/sessions/' + id + '/practice', { token: s.token, body: { entries: [{ item: 'tadasana', reaction: 4 }] } });
+  assert.equal(b.ss.getSheetByName('checkins').rows().length - 1, 1, 'recorded once');
+  const other = classStarted(b, 60, 'intermediate');
+  assert.equal(b.call('POST', '/sessions/' + other + '/practice', { token: s.token, body: { entries: [] } }).body.detail, 'checkin_closed');
+  b.state.offsetMs = 13 * 3600000;
+  assert.equal(b.call('POST', '/sessions/' + id + '/checkin', { token: s.token, body: { phase: 'after', mood: 3 } }).body.detail, 'checkin_closed');
+});
+
+test('a check-in takes the lock once, and answers busy when it stays taken', () => {
+  const b = freshBackend();
+  const { code } = teacherAndCode(b);
+  const s = signup(b, '9000000002', { code });
+  const id = classStarted(b, 10);
+  b.state.lockFree = false; // another write holds it
+  assert.deepEqual(b.call('POST', '/sessions/' + id + '/checkin', { token: s.token, body: { phase: 'before', mood: 3 } }), { status: 503, body: { detail: 'busy' } });
+  b.state.lockFree = true;
+  const locks = b.state.locks;
+  assert.equal(b.call('POST', '/sessions/' + id + '/checkin', { token: s.token, body: { phase: 'before', mood: 3 } }).status, 200);
+  assert.deepEqual([b.state.locks, b.state.lockHeld], [locks + 1, 0]);
+});
+
+test('a student changes their own password: the current one first, under the login\'s brake; this login stays', () => {
+  const b = freshBackend();
+  const s = signup(b, '9000000002');
+  const other = b.call('POST', '/auth/login', { body: { phone: '9000000002', password: 'secret1' } }).body.token;
+  const change = (current, next, token = s.token) => b.call('POST', '/me/password', { token, body: { current_password: current, new_password: next } });
+  assert.deepEqual(change('wrong!', 'better1'), { status: 400, body: { detail: 'bad_password' } });
+  assert.equal(change('secret1', 'short').status, 422);
+  assert.deepEqual(change('secret1', 'better1'), { status: 200, body: { ok: true } });
+  assert.equal(b.call('GET', '/me', { token: s.token }).status, 200, 'this login stays signed in');
+  assert.deepEqual(b.call('GET', '/me', { token: other }), { status: 401, body: { detail: 'signed_out' } }, 'every other is signed out');
+  assert.equal(b.call('POST', '/auth/login', { body: { phone: '9000000002', password: 'secret1' } }).status, 401);
+  assert.equal(b.call('POST', '/auth/login', { body: { phone: '9000000002', password: 'better1' } }).status, 200);
+  for (let i = 0; i < 5; i++) change('wrong!', 'better2');
+  assert.deepEqual(change('better1', 'better2'), { status: 429, body: { detail: 'too_many_attempts' } });
+  assert.equal(b.call('POST', '/auth/login', { body: { phone: '9000000002', password: 'better1' } }).body.detail, 'too_many_attempts', 'the same brake');
+  b.state.offsetMs += 15 * MIN + 1000;
+  assert.deepEqual(change('better1', 'better2'), { status: 200, body: { ok: true } });
+  assert.deepEqual(b.call('POST', '/me/password', { body: { current_password: 'x', new_password: 'secret9' } }), { status: 401, body: { detail: 'signed_out' } });
+});
+
+test('a class review names a student whose row was deleted "a former student", in the teacher\'s language', () => {
+  const b = freshBackend();
+  const { t, code } = teacherAndCode(b);
+  const s = signup(b, '9000000002', { code, name: 'Test Student' });
+  const id = classStarted(b, 50);
+  b.call('POST', '/sessions/' + id + '/checkin', { token: s.token, body: { phase: 'before', mood: 3 } });
+  b.call('POST', '/sessions/' + id + '/practice', { token: s.token, body: { entries: [{ item: 'tadasana', reaction: 2, pain: 1, note: 'knee' }] } });
+  const users = b.ss.getSheetByName('users');
+  users.deleteRow(users.rows().findIndex((r) => r[0] === s.user.id) + 1);
+  b.context.onEdit({});
+  const review = (lang) => b.call('GET', '/teacher/sessions/' + id + '/practice', { token: t.token, query: { lang } }).body.items[0];
+  assert.deepEqual(review('en'), { item: 'tadasana', reactions: [0, 1, 0, 0], pain: [{ name: 'A former student', note: 'knee' }], notes: [] });
+  assert.equal(review('hi').pain[0].name, 'एक पूर्व विद्यार्थी');
+  assert.equal(review('mr').pain[0].name, 'एक माजी विद्यार्थी');
 });

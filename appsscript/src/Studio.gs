@@ -5,8 +5,7 @@ const DAY_MS_ = 86400000;
 const DAYS_ = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
 const MONTH_NAMES_ = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const CHECKIN_BEFORE_MIN_ = 60; // how early before class the "before" check-in opens
-const MEET_LINK_ = /^https:\/\/(meet\.google\.com\/[a-z]{3}-[a-z]{4}-[a-z]{3}|([\w-]+\.)?zoom\.us\/j\/\d+(\?pwd=[\w.-]+)?)$/;
-const GROUP_LINK_ = /^https:\/\/chat\.whatsapp\.com\/[A-Za-z0-9]+$/;
+const MEET_CODE_ = /^[a-z]{3}-[a-z]{4}-[a-z]{3}$/i;
 
 /** UTC ISO-8601 to the second: "2026-11-18T02:30:00Z". */
 function isoTime_(ms) {
@@ -44,21 +43,66 @@ function pick_(text, lang) {
   return text[lang] || text.en;
 }
 
-function cleanLink_(raw, pattern, detail) {
-  let link = raw.trim();
-  if (link.indexOf('https://') !== 0) link = 'https://' + (link.indexOf('http://') === 0 ? link.slice(7) : link);
-  if (!pattern.test(link)) throw new HttpError_(400, detail);
-  return link;
+/** A link's parts, with or without its https:// (or http://): the host in small letters, the path ("/" when none),
+ * the query string and the fragment as written, and the query's values by name; null if it is not a web link. */
+function linkParts_(text) {
+  const m = /^(?:https?:\/\/)?([a-z0-9-]+(?:\.[a-z0-9-]+)+)(\/[^?#\s]*)?(?:\?([^#\s]*))?(?:#(\S*))?$/i.exec(text);
+  if (!m) return null;
+  const values = {};
+  (m[3] || '').split('&').forEach((pair) => {
+    const eq = pair.indexOf('=');
+    if (eq > 0) values[pair.slice(0, eq)] = pair.slice(eq + 1);
+  });
+  return { host: m[1].toLowerCase(), path: m[2] || '/', query: m[3] || '', fragment: m[4] || '', values: values };
 }
 
-/** A Google Meet or Zoom link, with https:// added when it was left off; else 400 bad_meet_link. */
+/** The first word of what was pasted that `clean` makes a link of, the punctuation around it aside ("Join:
+ * https://meet.google.com/abc-defg-hij."), else 400 `detail`. */
+function firstLink_(raw, clean, detail) {
+  const words = String(raw).trim().split(/\s+/);
+  for (let i = 0; i < words.length; i++) {
+    const parts = linkParts_(words[i].replace(/^[("'<[]+|[)"'>\].,;:!?]+$/g, ''));
+    const link = parts && clean(parts);
+    if (link) return link;
+  }
+  throw new HttpError_(400, detail);
+}
+
+/** A link to a video call, made plain: Google Meet (its code in small letters; g.co/meet/ too), Zoom (a meeting, /j/
+ * with its pwd, or a personal room, /my/, on any zoom.us address), Microsoft Teams or Jitsi Meet, always https. Else
+ * 400 bad_meet_link. */
 function cleanMeetLink_(raw) {
-  return cleanLink_(raw, MEET_LINK_, 'bad_meet_link');
+  return firstLink_(raw, (p) => {
+    const path = p.path.replace(/\/+$/, '');
+    let m;
+    if (p.host === 'meet.google.com' && (m = /^\/([\w-]+)$/.exec(path)) && MEET_CODE_.test(m[1])) return 'https://meet.google.com/' + m[1].toLowerCase();
+    if (p.host === 'g.co' && (m = /^\/meet\/([\w-]+)$/i.exec(path))) {
+      return MEET_CODE_.test(m[1]) ? 'https://meet.google.com/' + m[1].toLowerCase() : 'https://g.co/meet/' + m[1];
+    }
+    if (/^([\w-]+\.)*zoom\.us$/.test(p.host)) {
+      const pwd = /^[\w.-]+$/.test(p.values.pwd || '') ? '?pwd=' + p.values.pwd : '';
+      if ((m = /^\/j\/(\d+)$/.exec(path))) return 'https://' + p.host + '/j/' + m[1] + pwd;
+      if ((m = /^\/my\/([\w.-]+)$/.exec(path))) return 'https://' + p.host + '/my/' + m[1];
+    }
+    if ((p.host === 'teams.microsoft.com' && /^\/l\/meetup-join\/./.test(path)) || (p.host === 'teams.live.com' && /^\/meet\/./.test(path))) {
+      return 'https://' + p.host + p.path + (p.query ? '?' + p.query : '');
+    }
+    if (p.host === 'meet.jit.si' && (m = /^\/([\w-]+)$/.exec(path))) return 'https://meet.jit.si/' + m[1];
+    return null;
+  }, 'bad_meet_link');
 }
 
-/** A WhatsApp group invite link, with https:// added when it was left off; else 400 bad_group_link. */
+/** The class group's link: a WhatsApp group invite (its code alone, the rest of the address dropped), or any other
+ * https link as written (a Telegram or Signal group, say), always https. Else 400 bad_group_link. */
 function cleanGroupLink_(raw) {
-  return cleanLink_(raw, GROUP_LINK_, 'bad_group_link');
+  return firstLink_(raw, (p) => {
+    if (p.host === 'chat.whatsapp.com') {
+      const m = /^\/(?:invite\/)?([A-Za-z0-9]+)\/?$/.exec(p.path);
+      return m ? 'https://chat.whatsapp.com/' + m[1] : null;
+    }
+    const rest = (p.query ? '?' + p.query : '') + (p.fragment ? '#' + p.fragment : '');
+    return 'https://' + p.host + (p.path === '/' && !rest ? '' : p.path) + rest;
+  }, 'bad_group_link');
 }
 
 /** The batches, from the batches tab, by key: names and words in each language, the default curriculum, the days
@@ -81,13 +125,12 @@ function batches_(ctx) {
   return out;
 }
 
-/** "07:00" (or a time the owner typed, which Sheets keeps as a time of day) as minutes after midnight in India. */
+/** A batch's time as the owner typed it ("07:00", "7.00", "5:30 pm", "7 am") as minutes after midnight in India. */
 function startMinutes_(time) {
-  const text = String(time || '');
-  const iso = /T(\d\d):(\d\d)/.exec(text); // a time-of-day cell, read back as a UTC moment
-  if (iso) return (Number(iso[1]) * 60 + Number(iso[2]) + IST_OFFSET_MS_ / 60000) % 1440;
-  const plain = /(\d{1,2})[:.](\d\d)/.exec(text);
-  return plain ? Number(plain[1]) * 60 + Number(plain[2]) : 0;
+  const m = /(\d{1,2})(?:[:.](\d\d))?\s*([ap])?\.?\s*m?\b/i.exec(String(time || ''));
+  if (!m || (m[2] === undefined && !m[3])) return 0;
+  const hour = m[3] ? (Number(m[1]) % 12) + (m[3].toLowerCase() === 'p' ? 12 : 0) : Number(m[1]);
+  return (hour * 60 + Number(m[2] || 0)) % 1440;
 }
 
 /** A batch for the app, in `lang`: its key, name, words, days and start ("07:00"). */
@@ -209,17 +252,18 @@ function sessionsById_(ctx) {
   return out;
 }
 
-/** The average mood change over (before, after) pairs of the given check-ins: [average or null, pairs]. */
+/** The average mood change over (before, after) pairs of the given check-ins: [average or null, pairs]. A class
+ * attended with no mood before (said how it went without checking in first) makes no pair. */
 function moodChange_(checkins) {
   const after = {};
   checkins.forEach((c) => {
-    if (c.phase === 'after') after[c.user_id + ':' + c.session_id] = c.mood;
+    if (c.phase === 'after' && c.mood !== null) after[c.user_id + ':' + c.session_id] = c.mood;
   });
   let sum = 0;
   let pairs = 0;
   checkins.forEach((c) => {
     const key = c.user_id + ':' + c.session_id;
-    if (c.phase === 'before' && Object.prototype.hasOwnProperty.call(after, key)) {
+    if (c.phase === 'before' && c.mood !== null && Object.prototype.hasOwnProperty.call(after, key)) {
       sum += after[key] - c.mood;
       pairs++;
     }
@@ -227,27 +271,36 @@ function moodChange_(checkins) {
   return [pairs ? sum / pairs : null, pairs];
 }
 
-/** Classes joined, the current run of consecutive days with a class, and the average mood change. */
-function practiceStats_(ctx, userId) {
-  const sessions = sessionsById_(ctx);
-  const mine = ctx.db.t('checkins').rows.filter((c) => c.user_id === userId);
-  const today = istDay_(ctx.now);
-  const seen = {};
-  mine.forEach((c) => {
-    if (c.phase === 'before' && sessions[c.session_id]) seen[istDay_(sessions[c.session_id].starts_at)] = true;
+/** The batch a student was in at a moment, from their placements and moves in batch_changes; for a student placed
+ * by hand in the Sheet, with no change logged, the batch they are in now. */
+function batchAt_(ctx, user) {
+  const changes = ctx.db.t('batch_changes').rows.filter((c) => c.student_id === user.id).sort((a, b) => a.created_at - b.created_at);
+  return (at) => changes.reduce((batch, c) => (c.created_at <= at ? c.to : batch), changes.length ? changes[0].from : user.batch);
+}
+
+/** Classes joined, the run of classes in a row the student came to, and the average mood change. The run goes back
+ * through the classes of the batch the student was in at the time of each (so a move starts no new count), and any
+ * other they joined; one checked in to counts at once. A class still to come or under way does not break it, nor
+ * one nobody came to: it was probably not held. Sent as streak_days. */
+function practiceStats_(ctx, user) {
+  const sessions = ctx.db.t('class_sessions').rows;
+  const checkins = ctx.db.t('checkins').rows;
+  const held = {};
+  const mine = {};
+  checkins.forEach((c) => {
+    if (c.phase !== 'before') return;
+    held[c.session_id] = true;
+    if (c.user_id === user.id) mine[c.session_id] = true;
   });
-  // a check-in for a later class does not count yet
-  const days = Object.keys(seen).map(Number).filter((d) => d <= today).sort((a, b) => b - a);
+  const batchAt = batchAt_(ctx, user);
+  const ended = (s) => s.starts_at + s.duration_min * 60000 <= ctx.now;
+  const run = sessions
+    .filter((s) => mine[s.id] || (held[s.id] && ended(s) && batchAt(s.starts_at) === s.batch))
+    .sort((a, b) => b.starts_at - a.starts_at);
   let streak = 0;
-  let expected = today;
-  if (days.length && days[0] < expected) expected -= 1; // today's class may not have happened yet
-  for (let i = 0; i < days.length; i++) {
-    if (days[i] !== expected) break;
-    streak++;
-    expected--;
-  }
-  const [change, pairs] = moodChange_(mine);
-  return { classes_joined: days.length, streak_days: streak, mood_change: change, mood_pairs: pairs };
+  while (streak < run.length && mine[run[streak].id]) streak++;
+  const [change, pairs] = moodChange_(checkins.filter((c) => c.user_id === user.id));
+  return { classes_joined: sessions.filter((s) => mine[s.id]).length, streak_days: streak, mood_change: change, mood_pairs: pairs };
 }
 
 /** Rounds to one decimal, a tie to the even digit as Python's round() does: 2.25 is 2.2 and 2.75 is 2.8. Among averages
@@ -266,7 +319,8 @@ function average1_(values) {
 }
 
 /** The student's classes over the last `days` days (1 to 90), with the sums done: classes joined, average mood
- * before and after, and the same per class, class names in `lang`. */
+ * before and after (a class attended with no mood before counts in neither), and the same per class, class names in
+ * `lang`. */
 function practiceSummary_(ctx, userId, days, lang) {
   days = Math.max(1, Math.min(days, 90));
   const sessions = sessionsById_(ctx);
@@ -292,7 +346,7 @@ function practiceSummary_(ctx, userId, days, lang) {
       mood_before: r.before, mood_after: r.after });
     const entry = byClass[name] || (byClass[name] = { times: 0, before: [], after: [] });
     entry.times += 1;
-    entry.before.push(r.before);
+    if (r.before !== null) entry.before.push(r.before);
     if (r.after !== null) entry.after.push(r.after);
   });
   const summary = {};
@@ -336,7 +390,7 @@ function practiceSummary_(ctx, userId, days, lang) {
   return {
     period_days: days,
     classes_joined: classes.length,
-    average_mood_before: average1_(rows.map((r) => r.before)),
+    average_mood_before: average1_(rows.filter((r) => r.before !== null).map((r) => r.before)),
     average_mood_after: average1_(rows.filter((r) => r.after !== null).map((r) => r.after)),
     by_class: summary,
     classes: classes,
@@ -352,7 +406,7 @@ function itemTitle_(entry, key, lang) {
   return lang === 'en' ? entry.name : entry.sanskrit;
 }
 
-/** The WhatsApp message for one session. */
+/** The message for one session, for the teacher to share with the class. */
 function shareFor_(ctx, row, lang) {
   const batch = batches_(ctx)[row.batch];
   const link = row.meet_link || (batch && batch.meet_link);
@@ -361,8 +415,14 @@ function shareFor_(ctx, row, lang) {
   return { text: classMessage_(name, row.starts_at, row.duration_min, link, lang) };
 }
 
-// ---------- WhatsApp messages ----------
-// The app never reads the WhatsApp group; the teacher posts from the app through Android's share sheet.
+/** What a check-in row copies from its class for the owner's queries: the batch's name and the India date. */
+function checkinCopy_(ctx, session) {
+  return { class: batchJson_(batches_(ctx)[session.batch], session.batch, 'en').name, class_date: istMidnight_(istDay_(session.starts_at)) };
+}
+
+// ---------- messages for the class ----------
+// The app reads no chat. The teacher shares from the app through Android's share sheet, to the class's group on
+// WhatsApp or anywhere else; the messages are plain text, for any app or an SMS.
 
 const TEXT_ = {
   class: {
@@ -371,10 +431,17 @@ const TEXT_ = {
     mr: '🧘 {studio} · {name}\n📅 {day}, {time} IST ({minutes} मिनिटे)\n🔗 सामील व्हा: {link}\n\nवर्गापूर्वी ॲपमध्ये चेक-इन करा.',
   },
   invite: {
-    en: '🙏 Join {studio} in the app.\nSign up with your WhatsApp number and this group code: *{code}*',
-    hi: '🙏 ऐप में {studio} से जुड़ें।\nअपने व्हाट्सऐप नंबर और इस ग्रुप कोड से साइन अप करें: *{code}*',
-    mr: '🙏 ॲपमध्ये {studio} मध्ये सामील व्हा.\nतुमचा व्हॉट्सॲप नंबर आणि हा ग्रुप कोड वापरून साइन अप करा: *{code}*',
+    en: '🙏 Join {studio} in the app.\n{app}Sign up with your phone number and this group code: {code}',
+    hi: '🙏 ऐप में {studio} से जुड़ें।\n{app}अपने फ़ोन नंबर और इस ग्रुप कोड से साइन अप करें: {code}',
+    mr: '🙏 ॲपमध्ये {studio} मध्ये सामील व्हा.\n{app}तुमचा फोन नंबर आणि हा ग्रुप कोड वापरून साइन अप करा: {code}',
   },
+  get_app: {
+    en: '📲 Get the app: {link}\n',
+    hi: '📲 ऐप यहाँ से लें: {link}\n',
+    mr: '📲 ॲप इथून घ्या: {link}\n',
+  },
+  // In a class review, for one whose row the owner deleted from the users tab.
+  former_student: { en: 'A former student', hi: 'एक पूर्व विद्यार्थी', mr: 'एक माजी विद्यार्थी' },
 };
 const DAY_NAMES_ = {
   en: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
@@ -393,6 +460,8 @@ function classMessage_(className, startsAt, minutes, link, lang) {
     minutes: minutes, link: link });
 }
 
-function inviteMessage_(code, lang) {
-  return fill_(pick_(TEXT_.invite, lang), { studio: pick_(STUDIO.name, lang), code: code });
+/** The invite: the group code, and where to get the app when the settings tab has an app_link. */
+function inviteMessage_(code, appLink, lang) {
+  const app = appLink ? fill_(pick_(TEXT_.get_app, lang), { link: appLink }) : '';
+  return fill_(pick_(TEXT_.invite, lang), { studio: pick_(STUDIO.name, lang), app: app, code: code });
 }

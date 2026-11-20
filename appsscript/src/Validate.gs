@@ -1,8 +1,9 @@
 // ---------- Validate: request checks ----------
 //
-// A failed check is a 422 whose detail is a list of problems, [{"type", "loc", "msg", "input"}]. The app shows any
-// list as a generic error; the other errors carry a code it translates. Text is not coerced: a number where text is
-// expected is an error. Integers may come as "3".
+// A failed check is a 422 whose detail is a list of problems, [{"type", "loc", "msg", "input"}]; the app names the
+// field from `loc`. The other errors carry a code it translates. Text is not coerced: a number where text is expected
+// is an error. Integers may come as "3". Lengths are counted in code points, as the app counts them: a Devanagari
+// vowel sign is one.
 
 const LANGS_ = ['en', 'hi', 'mr'];
 
@@ -25,23 +26,26 @@ const BODY_ = {
     lang: F_.oneOf(LANGS_, { def: 'en' }),
   },
   login: { phone: F_.str(REQUIRED_), password: F_.str(REQUIRED_) },
+  password: { current_password: F_.str(REQUIRED_), new_password: F_.str({ required: true, min: 6, max: 200 }) },
   me: {
     name: F_.str({ min: 1, max: 80, nullable: true, def: null }),
     lang: F_.oneOf(LANGS_, { nullable: true, def: null }),
   },
   checkin: { phase: F_.oneOf(['before', 'after'], REQUIRED_), mood: F_.int({ required: true, ge: 1, le: 5 }) },
   feedback: { screen: F_.str({ required: true, max: 40 }), text: F_.str({ required: true, min: 1, max: 2000 }) },
-  link: { meet_link: F_.str(REQUIRED_) },
-  settings: { group_link: F_.str({ nullable: true, def: null }) },
-  place: { batch: F_.str({ required: true, min: 1, max: 40 }), note: F_.str({ nullable: true, def: null, max: 300 }) },
+  // A batch's everyday link: empty or null removes it.
+  link: { meet_link: F_.str({ required: true, nullable: true, max: 500 }) },
+  // Left out, the group link stays as it is; empty or null removes it.
+  settings: { group_link: F_.str({ nullable: true, max: 500 }) },
+  place: { batch: F_.str({ required: true, min: 1, max: 40 }), note: F_.str({ nullable: true, def: null, max: 600 }) },
   intake: {
     age: F_.int({ required: true, ge: 5, le: 100 }),
     height_cm: F_.int({ required: true, ge: 80, le: 230 }),
     weight_kg: F_.int({ required: true, ge: 15, le: 250 }),
     food: F_.oneOf(['vegetarian', 'eggetarian', 'non_vegetarian', 'vegan'], REQUIRED_),
-    meals: F_.str({ nullable: true, def: null, max: 300 }),
+    meals: F_.str({ nullable: true, def: null, max: 600 }),
     pain: F_.str({ nullable: true, def: null, max: 100 }),
-    pain_note: F_.str({ nullable: true, def: null, max: 300 }),
+    pain_note: F_.str({ nullable: true, def: null, max: 600 }),
     ratings: F_.list({
       item: F_.str({ required: true, min: 1, max: 40 }),
       reaction: F_.int({ nullable: true, def: null, ge: 1, le: 4 }),
@@ -49,7 +53,7 @@ const BODY_ = {
     }, { required: true, max: 20 }),
   },
   status: { status: F_.oneOf(['approved', 'rejected'], REQUIRED_) },
-  shared: { text: F_.str({ required: true, min: 1, max: 500 }) },
+  shared: { text: F_.str({ required: true, min: 1, max: 1000 }) },
   curriculum: { curriculum: F_.str({ required: true, min: 1, max: 40 }) },
   itemFeedback: { item: F_.str({ required: true, min: 1, max: 40 }), text: F_.str({ required: true, min: 1, max: 1000 }) },
   practice: {
@@ -57,17 +61,17 @@ const BODY_ = {
       item: F_.str({ required: true, min: 1, max: 40 }),
       reaction: F_.int({ nullable: true, def: null, ge: 1, le: 4 }),
       pain: F_.int({ def: 0, ge: 0, le: 1 }),
-      note: F_.str({ nullable: true, def: null, max: 500 }),
+      note: F_.str({ nullable: true, def: null, max: 1000 }),
     }, { required: true, max: 60 }),
   },
   solo: {
     minutes: F_.int({ required: true, ge: 0, le: 240 }),
     entries: F_.list({
       item: F_.str({ required: true, min: 1, max: 40 }),
-      hold_s: F_.int({ nullable: true, def: null, ge: 0, le: 3600 }),
+      hold_s: F_.int({ nullable: true, def: null, ge: 0 }), // the stopwatch's seconds; over an hour is kept as an hour
       reaction: F_.int({ nullable: true, def: null, ge: 1, le: 4 }),
       pain: F_.int({ def: 0, ge: 0, le: 1 }),
-      note: F_.str({ nullable: true, def: null, max: 500 }),
+      note: F_.str({ nullable: true, def: null, max: 1000 }),
     }, { required: true, max: 60 }),
   },
 };

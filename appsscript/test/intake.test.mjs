@@ -59,6 +59,19 @@ test('the answers are checked', () => {
   assert.equal(b.ss.getSheetByName('intake').rows().length, 1, 'nothing written');
 });
 
+test('a pain note and meals in Hindi fit: 600 code points each, a vowel sign counted as one', () => {
+  const b = freshBackend();
+  teacherAndCode(b);
+  const s = signup(b, '9000000002');
+  const send = (over) => b.call('PUT', '/me/intake', { token: s.token, body: answers(over) });
+  const note = 'सुबह उठने पर घुटने में दर्द होता है और सीढ़ियाँ चढ़ते समय भी। '.repeat(9); // 387 letters as read, 558 code points
+  assert.equal(Array.from(note).length, 558);
+  assert.equal(send({ pain: 'knee', pain_note: note, meals: note }).status, 200);
+  assert.equal(b.call('GET', '/me/intake', { token: s.token }).body.intake.pain_note, note.trim());
+  const long = send({ pain_note: 'क'.repeat(601) }).body.detail;
+  assert.deepEqual([long[0].type, long[0].loc, long[0].ctx], ['string_too_long', ['body', 'pain_note'], { max_length: 600 }], 'the field named');
+});
+
 test('only the student and the teacher read it', () => {
   const b = freshBackend();
   const { t, code } = teacherAndCode(b);

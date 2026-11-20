@@ -121,7 +121,7 @@ test('sharing is for approved students and checks the note', () => {
   assert.equal(share(t.token, 'x').body.detail, 'pending');
   assert.equal(share(one.token, '').status, 422);
   assert.deepEqual(share(one.token, '   '), { status: 422, body: { detail: 'empty_note' } });
-  assert.equal(share(one.token, 'x'.repeat(501)).status, 422);
-  assert.equal(share(one.token, 'x'.repeat(500)).status, 200);
+  assert.equal(share(one.token, 'x'.repeat(1001)).status, 422);
+  assert.equal(share(one.token, 'घ'.repeat(1000)).status, 200);
   assert.equal(share(t.token, '').status, 422); // the note is checked before the role
 });

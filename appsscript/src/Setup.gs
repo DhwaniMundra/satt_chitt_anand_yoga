@@ -9,8 +9,9 @@ const OWNER_TABS_ = ['batches'].concat(CURRICULUM_TABS_); // the owner's to edit
 const HIDDEN_TABS_ = ['intake', 'intake_ratings', 'tokens', 'settings']; // health answers, login-token hashes, the codes
 const SETTING_NOTES_ = [
   ['teacher_code', 'The one-time code the teacher signs up with. It stops working once the teacher has an account.'],
-  ['group_code', 'Students sign up with this code, from the class\'s WhatsApp invite; the teacher then places them in a batch. The teacher can change it in the app.'],
-  ['group_link', 'The WhatsApp group invite link, set by the teacher in the app.'],
+  ['group_code', 'Students sign up with this code, which the teacher gives them with the invite; the teacher then places them in a batch. The teacher can change it in the app.'],
+  ['group_link', 'Optional: the link to the class\'s group (WhatsApp, Telegram, Signal or any other), set by the teacher in the app. Students see it on the Today tab.'],
+  ['app_link', 'Optional: where students get the app, typed here by hand (a download link). When set, the invite the teacher shares says where to get it.'],
 ];
 const TIME_FORMAT_ = 'yyyy-mm-dd hh:mm:ss';
 const DATE_FORMAT_ = 'yyyy-mm-dd';
@@ -24,6 +25,7 @@ function setup() {
     ss.setSpreadsheetTimeZone('Asia/Kolkata');
     DATA_TABS_.concat(OWNER_TABS_).forEach((name) => ensureTab_(ss, name));
     seedBatches_(ss);
+    plainTextTimes_(ss);
     seedCurriculum_(ss);
     codes = ensureSettings_(ss);
     if (!ss.getSheetByName('Dashboard')) writeDashboard_(ss);
@@ -72,6 +74,21 @@ function seedBatches_(ss) {
   table.insert(STUDIO.batches.map((b) => ({ key: b.key, name: b.name.en, name_hi: b.name.hi, name_mr: b.name.mr, curriculum: b.curriculum,
     days: b.days.join(', '), time: b.time, duration_min: b.duration_min, meet_link: null, about: b.about.en, about_hi: b.about.hi,
     about_mr: b.about.mr })));
+}
+
+/** The batches tab's time column as plain text, so a time the owner types stays as typed ("07:00", not a time of day
+ * on 30 December 1899). A cell Sheets already took as a time is written back as the time it shows, so what the owner
+ * sees is unchanged. */
+function plainTextTimes_(ss) {
+  const sheet = ss.getSheetByName('batches');
+  const header = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map((h) => String(h).trim());
+  const column = header.indexOf('time') + 1;
+  const range = sheet.getRange(2, column, sheet.getMaxRows() - 1, 1);
+  const values = range.getValues();
+  range.setNumberFormat('@');
+  values.forEach(([value], i) => {
+    if (isDate_(value)) sheet.getRange(i + 2, column).setValue(clockText_(value));
+  });
 }
 
 /** The curriculum tabs, filled from content/curriculum.json while they are empty, with "{teacher}" in its text
