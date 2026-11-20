@@ -323,9 +323,10 @@ data class ItemHistory(val item: String, val inClass: Int, val solo: Int, val fi
 /** Practice on one's own, kept on the phone until Finish: what was said about each item, the one in front of the
  *  student ([at]), each item's stopwatch time ([heldMs], an hour at most), and since when the stopwatch has been
  *  running. Times are SystemClock.elapsedRealtime() milliseconds. [curriculum] is the sequence repeated, for its doses
- *  and cues. [unsure] after a Finish whose outcome is unknown: the run can then only be sent again as it is, or left. */
+ *  and cues. [unsure] after a Finish whose outcome is unknown: the run can then only be sent again as it is, its
+ *  length too ([sentMinutes]), or left. */
 data class SoloRun(val startedAt: Long, val curriculum: String?, val said: List<ItemFeedback>, val heldMs: List<Long>, val at: Int = 0,
-    val runningSince: Long? = null, val unsure: Boolean = false) {
+    val runningSince: Long? = null, val unsure: Boolean = false, val sentMinutes: Int? = null) {
     val current get() = said[at]
 
     /** The stopwatch stops at 60:00, as long as the server keeps. */
@@ -348,6 +349,7 @@ data class SoloRun(val startedAt: Long, val curriculum: String?, val said: List<
     /** The run as the phone keeps it, every note as typed so far. */
     fun saved(): String = JSONObject().put("started_at", startedAt).put("curriculum", curriculum ?: JSONObject.NULL).put("at", at)
         .put("running_since", runningSince ?: JSONObject.NULL).put("held_ms", JSONArray(heldMs)).put("unsure", unsure)
+        .put("sent_minutes", sentMinutes ?: JSONObject.NULL)
         .put("said", JSONArray(said.map { JSONObject().put("item", it.item).put("reaction", it.reaction ?: JSONObject.NULL).put("pain", it.pain).put("note", it.note) }))
         .toString()
 
@@ -363,7 +365,7 @@ data class SoloRun(val startedAt: Long, val curriculum: String?, val said: List<
             val said = o.getJSONArray("said").map { ItemFeedback(it.getString("item"), it.intOrNull("reaction"), it.optBoolean("pain"), it.text("note")) }
             val held = o.getJSONArray("held_ms").let { a -> List(a.length()) { a.getLong(it) } }
             SoloRun(o.getLong("started_at"), o.str("curriculum"), said, held, o.getInt("at"), if (o.isNull("running_since")) null else o.getLong("running_since"),
-                o.optBoolean("unsure")).takeIf { said.isNotEmpty() && held.size == said.size && it.at in said.indices }
+                o.optBoolean("unsure"), o.intOrNull("sent_minutes")).takeIf { said.isNotEmpty() && held.size == said.size && it.at in said.indices }
         } catch (e: JSONException) {
             null
         }
