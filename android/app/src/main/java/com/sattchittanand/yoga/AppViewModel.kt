@@ -3,6 +3,7 @@ package com.sattchittanand.yoga
 import android.app.Application
 import android.os.SystemClock
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -11,7 +12,9 @@ import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONException
@@ -22,7 +25,8 @@ import java.util.UUID
 /** All screen state, and every call to the server. Errors land in [error] as the server's code. */
 class AppViewModel(app: Application) : AndroidViewModel(app) {
     val prefs = Prefs(app)
-    private val api = Api(prefs)
+    private val api = Api({ prefs.token }, HttpExchange { prefs.server })
+    private val accounts = Accounts(api, prefs)
     private val studioFile = JSONObject(app.assets.open("studio/studio.json").bufferedReader().use { it.readText() })
     private val companion = PhoneCompanion(app, api, studioFile)
     /** Where Gemma on this phone stands (too little memory, downloading, loading, ready…). */
@@ -30,7 +34,6 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** The signed-in student's chat and health notes, kept on this phone. */
     private var store: LocalStore? = null
 
-    var starting by mutableStateOf(true); private set
     /** For the first screen, before signing in. */
     var studio by mutableStateOf<Studio?>(null); private set
     var user by mutableStateOf<User?>(null); private set
@@ -64,7 +67,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var notes by mutableStateOf<List<Note>>(emptyList()); private set
     /** For the teacher: the notes students chose to share. */
     var sharedNotes by mutableStateOf<List<SharedNote>>(emptyList()); private set
-    var busy by mutableStateOf(false); private set
+    private var calls by mutableIntStateOf(0)
+    /** A call to the server under way, for the screens' spinners. */
+    val busy get() = calls > 0
+    /** Logging in or signing up, until the first screen's data has come or the call has failed. */
+    var signingIn by mutableStateOf(false); private set
     var error by mutableStateOf<String?>(null)
     /** A one-off message for a snackbar; the screen clears it once shown. */
     var notice by mutableStateOf<String?>(null)
@@ -100,10 +107,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (prefs.token == null) loadStudio() else launchCall { refreshAll() }
     }
 
-    private fun launchCall(block: suspend () -> Unit) {
+    /** Runs a call to the server: [busy] meanwhile ([signingIn] too, for a login or a sign-up), its error in [error]. */
+    private fun launchCall(signIn: Boolean = false, block: suspend () -> Unit) {
         signedInScope.launch {
-            busy = true
+            calls++
             error = null
+            if (signIn) signingIn = true
             try {
                 block()
             } catch (e: ApiError) {
@@ -111,8 +120,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             } catch (e: JSONException) { // a reply missing a field the app expects
                 error = "generic"
             } finally {
-                busy = false
-                starting = false
+                calls--
+                if (signIn) signingIn = false
             }
         }
     }
@@ -125,9 +134,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    // A write that creates something carries one request id per action on its target (a student's batch, an item's
-    // feedback), kept until the action goes through, so a retry of it (after a timeout, say) is written once. When any
-    // action on the target goes through, every id kept for it goes, so a later action, even the same one, is new.
+    // A write carries one request id per action on its target (a student's batch, an item's feedback), kept until the
+    // action goes through, so a retry of it (after a timeout, say, or a second tap) is written once. When any action on
+    // the target goes through, every id kept for it goes, so a later action, even the same one, is new.
     private val requestIds = mutableMapOf<String, String>()
 
     private suspend fun <T> once(target: String, action: String, send: suspend (String) -> T): T {
@@ -136,7 +145,18 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         return reply
     }
 
-    private fun loadStudio() = launchCall { studio = Studio.from(api.get("/studio?lang=${prefs.lang}")) }
+    /** The studio's words for the first screen, read without holding it up: the form works without them. If they cannot
+     *  be read, the first screen says why, as the first sign that the studio is out of reach. */
+    private fun loadStudio() {
+        viewModelScope.launch {
+            try {
+                studio = Studio.from(api.get("/studio?lang=${prefs.lang}"))
+            } catch (e: ApiError) {
+                if (!busy && !signedIn) error = e.code
+            } catch (_: JSONException) {
+            }
+        }
+    }
 
     /** The studio's own words (its blessing, the meaning of its name, its headings), in the chosen language. */
     fun words() = StudioWords.from(studioFile, prefs.lang)
@@ -145,18 +165,30 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun assessment(): List<Pair<String, String>> = studioFile.getJSONObject("intake").getJSONArray("assessment")
         .map { a -> a.getString("item") to a.getJSONObject("how").let { it.optString(prefs.lang).ifEmpty { it.getString("en") } } }
 
-    /** Who is signed in, then their day, then the curricula: the day comes before the curricula, so it shows even if
-     *  the curricula cannot be read. */
-    private suspend fun refreshAll() {
+    /** Who is signed in, their day and the curricula, read together. The day is read alongside /me for the role kept on
+     *  the phone from the last sign-in; with none kept (or another), after /me. The account shows once its day has
+     *  come, and the day even if the curricula cannot be read. */
+    private suspend fun refreshAll() = coroutineScope {
+        val kept = prefs.role
+        val lists = if (curricula == null) async { runCatching { api.get("/curricula?lang=${prefs.lang}") } } else null
+        val day = kept?.let { role -> async { readDay(teacher = role == "teacher") } }
         val me = api.get("/me")
         val account = User.from(me.getJSONObject("user"))
+        prefs.role = account.role
+        if (day == null || (kept == "teacher") != account.isTeacher) {
+            day?.cancel()
+            readDay(account.isTeacher)
+        } else {
+            day.await()
+        }
         if (user?.id != account.id) openStore(account)
-        user = account
         stats = Stats.from(me.getJSONObject("stats"))
-        if (account.isTeacher) readTeacherHome() else readHome()
-        if (curricula == null) curricula = Curricula.from(api.get("/curricula?lang=${prefs.lang}"))
+        user = account
+        lists?.let { curricula = Curricula.from(it.await().getOrThrow()) }
         refreshedAt = SystemClock.elapsedRealtime()
     }
+
+    private suspend fun readDay(teacher: Boolean) = if (teacher) readTeacherHome() else readHome()
 
     fun refresh() = launchCall { refreshAll() }
 
@@ -184,26 +216,28 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     // ---------- account ----------
 
-    fun login(phone: String, password: String) = launchCall {
-        val reply = api.post("/auth/login", JSONObject().put("phone", phone).put("password", password))
-        prefs.token = reply.getString("token")
-        signedIn = true
-        refreshAll()
-    }
+    fun login(phone: String, password: String) = launchCall(signIn = true) { signIn(accounts.login(phone, password)) }
 
     fun signup(name: String, phone: String, password: String, teacher: Boolean, code: String) {
         if (password.length < Limits.PASSWORD_MIN) {
             error = "short_password"
             return
         }
-        launchCall {
+        launchCall(signIn = true) {
             val body = JSONObject().put("name", name).put("phone", phone).put("password", password)
                 .put("role", if (teacher) "teacher" else "student").put("code", code).put("lang", prefs.lang)
-            prefs.token = api.post("/auth/signup", body).getString("token")
-            signedIn = true
-            askIntake = !teacher
-            refreshAll()
+            // The same form sent again (after no answer came) keeps its request id.
+            signIn(once("signup", body.toString().hashCode().toString()) { accounts.signup(body, it) })
         }
+    }
+
+    /** Keeps the login, then reads what the first screen needs; a new student is asked about themselves first. */
+    private suspend fun signIn(account: Accounts.SignedIn) {
+        prefs.token = account.token
+        prefs.role = account.user.role
+        signedIn = true
+        askIntake = account.newStudent
+        refreshAll()
     }
 
     /** A student's own new password, after the current one; this phone stays signed in. [done] runs once it is through. */
@@ -231,6 +265,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         signedInScope = newSignedInScope()
         confirmed.clear()
         prefs.token = null
+        prefs.role = null
         signedIn = false
         askIntake = false
         user = null; home = null; stats = null; teacherHome = null; insights = null; review = null
@@ -257,7 +292,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (user == null) {
             loadStudio()
         } else {
-            viewModelScope.launch { try { api.post("/me", JSONObject().put("lang", lang)) } catch (_: ApiError) { } }
+            viewModelScope.launch { try { api.post("/me", JSONObject().put("lang", lang), newRequestId()) } catch (_: ApiError) { } }
             refresh()
         }
     }
@@ -383,11 +418,15 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun sendAfterClass(sessionId: Int, mood: Int?, items: List<ItemFeedback>, changing: Boolean, done: () -> Unit) = launchCall {
         try {
             if (mood != null) {
-                stats = Stats.from(api.post("/sessions/$sessionId/checkin", JSONObject().put("phase", "after").put("mood", mood)).getJSONObject("stats"))
+                val body = JSONObject().put("phase", "after").put("mood", mood)
+                stats = Stats.from(once("after-mood:$sessionId", "$mood") { api.post("/sessions/$sessionId/checkin", body, it) }.getJSONObject("stats"))
             }
             val said = items.filter { it.said }
             // Changing what was said replaces all of it, even with nothing, so an item cleared is cleared on the server too.
-            if (said.isNotEmpty() || changing) api.post("/sessions/$sessionId/practice", JSONObject().put("entries", JSONArray(said.map { it.json() })))
+            if (said.isNotEmpty() || changing) {
+                val body = JSONObject().put("entries", JSONArray(said.map { it.json() }))
+                once("after-items:$sessionId", body.toString().hashCode().toString()) { api.post("/sessions/$sessionId/practice", body, it) }
+            }
         } catch (e: ApiError) {
             throw if (e.code == "checkin_closed") ApiError("after_closed") else e
         }
@@ -436,7 +475,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Sends this one note to the teacher: the only thing from the chat and the notes that leaves the phone. */
     fun shareNote(note: Note, done: String) = launchCall {
-        val reply = api.post("/me/shared", JSONObject().put("text", note.text))
+        val reply = once("share:${note.id}", "") { api.post("/me/shared", JSONObject().put("text", note.text), it) }
         store?.let {
             it.markShared(note.id, reply.getInt("id"))
             notes = it.notes()
@@ -489,7 +528,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun newGroupCode() = launchCall {
-        api.post("/teacher/group_code")
+        once("group-code", "") { api.post("/teacher/group_code", JSONObject(), it) }
         readTeacherHome()
     }
 
@@ -519,7 +558,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun saveIntake(answers: Intake, thanks: String, done: () -> Unit) = launchCall {
-        intake = Intake.from(api.put("/me/intake", answers.json()).getJSONObject("intake"))
+        val body = answers.json()
+        intake = Intake.from(once("intake", body.toString().hashCode().toString()) { api.put("/me/intake", body, it) }.getJSONObject("intake"))
         notice = thanks
         done()
     }
@@ -535,7 +575,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun setStudentStatus(userId: Int, status: String) = launchCall {
-        api.post("/teacher/students/$userId/status", JSONObject().put("status", status))
+        once("status:$userId", status) { api.post("/teacher/students/$userId/status", JSONObject().put("status", status), it) }
         students = api.get("/teacher/students").getJSONArray("students").map(Student::from)
         readTeacherHome()
     }

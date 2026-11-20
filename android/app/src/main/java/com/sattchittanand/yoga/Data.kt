@@ -1,23 +1,16 @@
 package com.sattchittanand.yoga
 
 import android.content.Context
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONException
 import org.json.JSONObject
-import java.io.IOException
-import java.net.HttpURLConnection
-import java.net.URL
 import java.text.Normalizer
 import java.time.Instant
 import java.time.LocalDate
-import kotlin.random.Random
 
 /** What the app keeps on the phone: the login token, the chosen language, the practice on one's own in progress and,
  *  in a debug build, the server address. */
-class Prefs(context: Context) {
+class Prefs(context: Context) : SignupMemory {
     private val store = context.getSharedPreferences("sca", Context.MODE_PRIVATE)
 
     var token: String?
@@ -43,129 +36,19 @@ class Prefs(context: Context) {
         get() = store.getString("checkins", null)
         set(value) = store.edit().putString("checkins", value).apply()
 
+    /** The signed-in account's role, so that the next start reads its first screen alongside /me. */
+    var role: String?
+        get() = store.getString("role", null)
+        set(value) = store.edit().putString("role", value).apply()
+
+    override var lostSignup: String?
+        get() = store.getString("lost_signup", null)
+        set(value) = store.edit().putString("lost_signup", value).apply()
+
     companion object {
         /** Read before the activity exists, to pick the language its resources load in. */
         fun lang(context: Context): String =
             context.getSharedPreferences("sca", Context.MODE_PRIVATE).getString("lang", null) ?: "en"
-    }
-}
-
-/** An error the server named ("bad_login", "pending", …), "network" when it could not be reached, or for a check the
- *  server's validation refused, a [problemCode] naming the field; [status] is the answer's status, 0 with no answer. */
-class ApiError(val code: String, val status: Int = 0) : Exception(code)
-
-/** A 422's first problem as a code the app words: "too_long:pain_note:600", "range:height_cm" or "invalid:name", the
- *  field being the last name in its location (["body", "entries", 0, "note"] is "note"). */
-fun problemCode(detail: JSONArray): String {
-    val first = detail.optJSONObject(0) ?: return "generic"
-    val loc = first.optJSONArray("loc") ?: JSONArray()
-    val field = (loc.length() - 1 downTo 0).map { loc.opt(it) }.firstOrNull { it is String } as String? ?: "body"
-    return when (first.text("type")) {
-        "string_too_long" -> "too_long:$field:${first.optJSONObject("ctx")?.intOrNull("max_length") ?: 0}"
-        "greater_than_equal", "less_than_equal" -> "range:$field"
-        else -> "invalid:$field"
-    }
-}
-
-/**
- * The backend's API. The backend is a Google Apps Script web app, which cannot read request headers or set a status,
- * so every call is one POST of an envelope {"method", "path", "token", "body"} (the path carries the query string),
- * and every answer is HTTP 200 with {"status", "body"}: `status` is the call's real status. Apps Script answers the
- * POST with a redirect to script.googleusercontent.com, to be fetched with GET; the dev backend answers the same way.
- * A write that creates something carries a request id: the server answers a repeat of it as it did the first time.
- */
-class Api(private val prefs: Prefs) {
-
-    suspend fun get(path: String) = call("GET", path, null, null, retry = false)
-
-    /** [requestId] for a write that creates something: the same id for each try of the same action, which the server
-     *  writes once, so it may be tried again ([retry]). [token]: the login to send it as, when not the current one. */
-    suspend fun post(path: String, body: JSONObject = JSONObject(), requestId: String? = null, retry: Boolean = requestId != null,
-        token: String? = null) = call("POST", path, body, requestId, retry, token)
-
-    suspend fun put(path: String, body: JSONObject, requestId: String? = null) = call("PUT", path, body, requestId, requestId != null)
-
-    private suspend fun call(method: String, path: String, body: JSONObject?, requestId: String?, retry: Boolean, token: String? = null): JSONObject =
-        withContext(Dispatchers.IO) { send(method, path, body, requestId, retry, token) }
-
-    /** With [retry]: tries again, waiting a little longer each time, while the connection fails, and once while the
-     *  server is busy (it has waited 20 s for its lock already, and did nothing). Anything else is the caller's. */
-    private suspend fun send(method: String, path: String, body: JSONObject?, requestId: String?, retry: Boolean, token: String?): JSONObject {
-        var wait = FIRST_WAIT_MS
-        var busyAgain = retry
-        while (true) {
-            try {
-                return request(method, path, body, requestId, token)
-            } catch (e: ApiError) {
-                val again = when (e.code) {
-                    "busy" -> busyAgain.also { busyAgain = false }
-                    "network" -> retry && wait <= LAST_WAIT_MS
-                    else -> false
-                }
-                if (!again) throw e
-            }
-            delay(wait + Random.nextLong(wait / 2))
-            wait *= 2
-        }
-    }
-
-    /** A GET on the calling thread, for the companion's tools, which run on Gemma's own thread. */
-    fun getNow(path: String): JSONObject = request("GET", path, null, null, null)
-
-    private fun request(method: String, path: String, body: JSONObject?, requestId: String?, token: String?): JSONObject {
-        val login = token ?: prefs.token ?: ""
-        val envelope = JSONObject().put("method", method).put("path", path).put("token", login).put("body", body ?: JSONObject.NULL)
-        if (requestId != null) envelope.put("request_id", requestId)
-        val reply = try {
-            JSONObject(exchange(envelope.toString()))
-        } catch (e: IOException) {
-            throw ApiError("network")
-        } catch (e: JSONException) { // not JSON: a sign-in page, a wrong address
-            throw ApiError("generic")
-        }
-        val answer = reply.optJSONObject("body") ?: JSONObject()
-        if (reply.optInt("status") !in 200..299) {
-            val code = when (val detail = answer.opt("detail")) {
-                is JSONArray -> problemCode(detail)
-                is String -> detail.ifEmpty { "generic" }
-                else -> "generic"
-            }
-            throw ApiError(code, reply.optInt("status"))
-        }
-        return answer
-    }
-
-    /** POSTs the envelope, then follows the redirect with GET. */
-    private fun exchange(envelope: String): String {
-        var conn = open(URL(prefs.server))
-        conn.requestMethod = "POST"
-        conn.doOutput = true
-        conn.setRequestProperty("Content-Type", "application/json; charset=utf-8")
-        conn.outputStream.use { it.write(envelope.toByteArray()) }
-        repeat(MAX_REDIRECTS + 1) {
-            val code = conn.responseCode
-            if (code !in 300..399) {
-                if (code != HttpURLConnection.HTTP_OK) throw IOException("HTTP $code")
-                return conn.inputStream.bufferedReader().use { it.readText() }
-            }
-            val location = conn.getHeaderField("Location") ?: throw IOException("redirect without a Location")
-            val next = URL(conn.url, location)
-            conn.disconnect()
-            conn = open(next)
-        }
-        throw IOException("too many redirects")
-    }
-
-    private fun open(url: URL) = (url.openConnection() as HttpURLConnection).apply {
-        instanceFollowRedirects = false
-        connectTimeout = 10_000
-        readTimeout = 30_000 // Apps Script can take some seconds to start
-    }
-
-    private companion object {
-        const val MAX_REDIRECTS = 3
-        const val FIRST_WAIT_MS = 1_000L // then 2 s and 4 s: four tries in all while the connection fails
-        const val LAST_WAIT_MS = 4_000L
     }
 }
 

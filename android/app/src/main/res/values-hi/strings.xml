@@ -20,6 +20,7 @@
 
     <string name="err_bad_phone">कृपया सही फ़ोन नंबर डालें।</string>
     <string name="err_bad_login">नंबर या पासवर्ड गलत है।</string>
+    <string name="bad_login_country_code">देश के कोड के साथ साइन अप किया था? नंबर + और कोड के साथ लिखें।</string>
     <string name="err_phone_taken">इस नंबर का खाता पहले से है। कृपया लॉग इन करें।</string>
     <string name="err_bad_group_code">यह ग्रुप कोड सही नहीं है। यह कोड आपके शिक्षक %1$s देते हैं।</string>
     <string name="err_bad_teacher_code">शिक्षक कोड सही नहीं है।</string>
@@ -30,6 +31,7 @@
     <string name="err_generic">कुछ गड़बड़ हुई। कृपया फिर कोशिश करें।</string>
     <string name="err_pending">%1$s के आपको किसी बैच में रखने के बाद यह खुलेगा।</string>
     <string name="err_busy">स्टूडियो का सर्वर व्यस्त है। कृपया एक मिनट बाद फिर कोशिश करें।</string>
+    <string name="err_server">स्टूडियो के सर्वर में कोई दिक्कत आई। कृपया एक मिनट बाद फिर कोशिश करें।</string>
     <string name="err_too_many_attempts">बहुत ज़्यादा कोशिशें हुईं। कृपया 15 मिनट बाद फिर कोशिश करें।</string>
     <string name="err_teacher_exists">इस स्टूडियो के शिक्षक पहले से हैं। विद्यार्थी के रूप में साइन अप करें।</string>
     <string name="err_checkin_closed">चेक-इन कक्षा से एक घंटा पहले खुलता है।</string>
@@ -200,6 +202,8 @@
     <string name="each_item">हर आसन कैसा चल रहा है</string>
     <string name="no_items">कक्षा के बाद बताएँ कि हर आसन कैसा रहा; वह यहाँ दिखेगा।</string>
     <string name="loading">लोड हो रहा है…</string>
+    <string name="signing_in">साइन इन हो रहा है…</string>
+    <string name="connecting">स्टूडियो से जुड़ रहे हैं…</string>
     <string name="not_loaded">यह लोड नहीं हो सका।</string>
     <string name="no_items_teacher">अभी किसी आसन के बारे में कुछ नहीं बताया गया।</string>
     <string name="trend_line">शुरू में: %1$s · हाल में: %2$s</string>

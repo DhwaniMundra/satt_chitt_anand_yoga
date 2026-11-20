@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -18,6 +20,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.SelfImprovement
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -165,11 +168,24 @@ fun WelcomeScreen(vm: AppViewModel, onLanguage: (String) -> Unit) {
                 singleLine = true, modifier = Modifier.fillMaxWidth(),
             )
         }
-        vm.error?.let { Text(errorText(it), color = MaterialTheme.colorScheme.error, modifier = Modifier.fillMaxWidth()) }
-        Button(
-            onClick = { if (signup) vm.signup(name, phone, password, teacher, code) else vm.login(phone, password) },
-            enabled = !vm.busy && phone.isNotBlank() && password.isNotBlank() && (!signup || name.isNotBlank() && code.isNotBlank()),
-            modifier = Modifier.fillMaxWidth().height(56.dp),
-        ) { Text(stringResource(if (signup) R.string.signup else R.string.login)) }
+        vm.error?.let { code ->
+            // A number from abroad typed without its country code reads as an Indian one.
+            val abroad = code == "bad_login" && '+' !in phone && phone.count { it.isDigit() } == 10
+            val hint = if (abroad) "\n" + stringResource(R.string.bad_login_country_code) else ""
+            Text(errorText(code) + hint, color = MaterialTheme.colorScheme.error, modifier = Modifier.fillMaxWidth())
+        }
+        if (vm.signingIn) {
+            Row(Modifier.fillMaxWidth().height(56.dp), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+                CircularProgressIndicator(Modifier.size(24.dp), color = Palette.moss, strokeWidth = 3.dp)
+                Spacer(Modifier.width(12.dp))
+                Text(stringResource(R.string.signing_in), style = MaterialTheme.typography.titleMedium, color = Palette.moss)
+            }
+        } else {
+            Button(
+                onClick = { if (signup) vm.signup(name, phone, password, teacher, code) else vm.login(phone, password) },
+                enabled = !vm.busy && phone.isNotBlank() && password.isNotBlank() && (!signup || name.isNotBlank() && code.isNotBlank()),
+                modifier = Modifier.fillMaxWidth().height(56.dp),
+            ) { Text(stringResource(if (signup) R.string.signup else R.string.login)) }
+        }
     }
 }

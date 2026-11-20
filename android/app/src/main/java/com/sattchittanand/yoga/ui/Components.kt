@@ -346,6 +346,7 @@ fun errorText(code: String): String {
             "bad_group_link" -> R.string.err_bad_group_link
             "bad_password" -> R.string.err_bad_password
             "network" -> R.string.err_network
+            "server", "unknown", "Internal Server Error" -> R.string.err_server
             "short_password" -> R.string.err_short_password
             "pending" -> R.string.err_pending
             "busy" -> R.string.err_busy

@@ -18,6 +18,7 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.SelfImprovement
 import androidx.compose.material.icons.filled.WbSunny
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -43,6 +44,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.sattchittanand.yoga.AppViewModel
 import com.sattchittanand.yoga.R
@@ -66,8 +68,9 @@ fun App(vm: AppViewModel, onLanguage: (String) -> Unit) {
     val user = vm.user
     CompositionLocalProvider(LocalTeacher provides vm.words().teacher) {
         when {
-            vm.starting -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { BrandHeader(large = true) }
-            user == null && vm.signedIn -> Unreachable(vm) // never the sign-up form for someone signed in
+            // Never the sign-up form for someone signed in: until their first screen has come, a spinner, and only once a
+            // call has failed, why.
+            user == null && vm.signedIn -> if (vm.busy || vm.error == null) Connecting(vm.signingIn) else Unreachable(vm)
             user == null -> WelcomeScreen(vm, onLanguage)
             user.status == "rejected" -> Closed(vm)
             else -> Main(vm, user.isTeacher, onLanguage)
@@ -121,14 +124,29 @@ private fun Main(vm: AppViewModel, teacher: Boolean, onLanguage: (String) -> Uni
     }
 }
 
-/** Signed in, but the studio could not be reached at start: try again, here or on coming back to the app. */
+/** Signed in, and the first screen on its way: at start ("Connecting to the studio…"), or after logging in or signing
+ *  up ([signingIn]: "Signing in…"). */
+@Composable
+private fun Connecting(signingIn: Boolean) {
+    Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
+        BrandHeader(large = true)
+        Spacer(Modifier.height(32.dp))
+        CircularProgressIndicator(color = Palette.moss)
+        Spacer(Modifier.height(16.dp))
+        Text(stringResource(if (signingIn) R.string.signing_in else R.string.connecting), style = MaterialTheme.typography.bodyLarge, color = Palette.muted)
+    }
+}
+
+/** Signed in, but the first screen could not be read: why, and try again, here or on coming back to the app. */
 @Composable
 private fun Unreachable(vm: AppViewModel) {
     Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
         BrandHeader(large = true)
         Spacer(Modifier.height(24.dp))
         Text(stringResource(R.string.unreachable), style = MaterialTheme.typography.titleLarge)
-        Text(stringResource(R.string.unreachable_help), style = MaterialTheme.typography.bodyMedium, color = Palette.muted)
+        val why = vm.error?.takeIf { it != "network" }?.let { errorText(it) } // the server answered, but not with the screen
+        Text(why ?: stringResource(R.string.unreachable_help), style = MaterialTheme.typography.bodyMedium, color = Palette.muted,
+            textAlign = TextAlign.Center)
         Spacer(Modifier.height(16.dp))
         Button(onClick = vm::refresh, enabled = !vm.busy) { Text(stringResource(R.string.try_again)) }
     }
