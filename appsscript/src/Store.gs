@@ -5,7 +5,7 @@
 // reading a number, a date or a formula. Times are real date cells (shown in India time); the API sends them as
 // UTC ISO-8601 strings. Writes happen under the script lock; ids are the largest id + 1, worked out under that lock.
 // Two types are for cells the owner types by hand: `clock`, a time of day kept as text ("07:00"), and `count`, a
-// whole number that may come with words after it ("5 breaths" is 5).
+// whole number that may come with words after it ("5 breaths" is 5), 0 when there is none.
 
 const TABLES_ = {
   // A student's batch (a key of the batches tab) and since when; empty until the teacher places them.
@@ -229,24 +229,30 @@ function decode_(value, type, own) {
   return isNaN(parsed) ? null : parsed;
 }
 
-/** A time of day as the Sheet shows it: the text as typed, or, for a cell Sheets took as a time, "07:00" in the
- * spreadsheet's time zone. A time-only cell is dated 30 December 1899, when India's offset was +5:21:10, so its hours
- * and minutes are read as the Sheet shows them, never worked out from a fixed offset. */
+/** A time of day as the Sheet shows it, "07:00": the text as typed; for a cell Sheets took as a time, the time it
+ * shows in the spreadsheet's time zone (a time-only cell is dated 30 December 1899, when India's offset was +5:21:10,
+ * so its hours and minutes are never worked out from a fixed offset); for a number, what was typed: 7.15 is 07:15,
+ * 17.3 is 17:30 and 7 is 07:00, and a number below 1 is a time kept as a fraction of a day (0.75 is 18:00). */
 function clockText_(value) {
-  const two = (n) => (n < 10 ? '0' : '') + n;
   if (isDate_(value)) return Utilities.formatDate(value, SpreadsheetApp.getActiveSpreadsheet().getSpreadsheetTimeZone(), 'HH:mm');
-  if (typeof value === 'number') { // a time stored as a fraction of a day
-    const minutes = Math.round((value - Math.floor(value)) * 1440) % 1440;
-    return two(Math.floor(minutes / 60)) + ':' + two(minutes % 60);
+  if (typeof value === 'number') {
+    const hours = Math.floor(value);
+    const hundredths = Math.round((value - hours) * 100);
+    // hours.minutes; past .59, hundredths of an hour (7.75 is 07:45)
+    const typed = hours * 60 + (hundredths < 60 ? hundredths : Math.round(hundredths * 0.6));
+    const minutes = (value < 1 ? Math.round(value * 1440) : typed) % 1440;
+    return pad2_(Math.floor(minutes / 60)) + ':' + pad2_(minutes % 60);
   }
   return value === null ? '' : String(value);
 }
 
-/** A whole number from a cell typed by hand: 5, or "5 breaths"; null for anything else (empty, "slowly", 2.5). */
+/** A count from a cell typed by hand, as a whole number: 5, "5 breaths", "१० श्वास" and 4.6 are 5, 5, 10 and 5; 0 for
+ * an empty or worded cell ("slowly"), so a reader that expects a number always gets one. */
 function wholeNumber_(value) {
-  if (typeof value === 'number') return Number.isInteger(value) ? value : null;
-  const m = /^\s*(\d+)(?![\d.,])/.exec(value === null ? '' : String(value));
-  return m ? Number(m[1]) : null;
+  if (typeof value === 'number') return Math.max(0, Math.round(value));
+  const text = String(value === null ? '' : value).replace(/[०-९]/g, (d) => String(d.charCodeAt(0) - 0x966));
+  const m = /^\s*(\d+(?:\.\d+)?)/.exec(text);
+  return m ? Math.round(Number(m[1])) : 0;
 }
 
 // ---------- the cache ----------

@@ -77,8 +77,8 @@ function seedBatches_(ss) {
 }
 
 /** The batches tab's time column as plain text, so a time the owner types stays as typed ("07:00", not a time of day
- * on 30 December 1899). A cell Sheets already took as a time is written back as the time it shows, so what the owner
- * sees is unchanged. */
+ * on 30 December 1899, nor the number 7.15). A cell Sheets already took as a time or a number is written back as the
+ * time it stands for ("07:15"), so what the owner meant is kept. */
 function plainTextTimes_(ss) {
   const sheet = ss.getSheetByName('batches');
   const header = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map((h) => String(h).trim());
@@ -87,7 +87,7 @@ function plainTextTimes_(ss) {
   const values = range.getValues();
   range.setNumberFormat('@');
   values.forEach(([value], i) => {
-    if (isDate_(value)) sheet.getRange(i + 2, column).setValue(clockText_(value));
+    if (isDate_(value) || typeof value === 'number') sheet.getRange(i + 2, column).setValue(clockText_(value));
   });
 }
 
@@ -214,13 +214,15 @@ function dashboardBlocks_(ss) {
     ['D5', 'Mood per class', 'Average mood after and before class, all classes so far. 1 very low to 5 great.',
       '=IFERROR(QUERY(' + checkins + ', "select ' + c.class + ', avg(' + c.mood + ') where ' + c.user_id + ' is not null group by ' +
         c.class + ' pivot ' + c.phase + '", 1), "No check-ins yet")', { 'E6:F13': '0.0' }],
-    ['A16', 'Students', 'Every student, newest first, with their batch and the number of classes they checked in to.',
+    ['A16', 'Students', 'Every student, newest first, with their batch and the number of classes they came to: checked in ' +
+      'before, or said after class how it went.',
       '=IFERROR(QUERY({' + [col('users', u.name), col('users', u.phone), col('users', u.status), col('users', u.batch), col('users', u.lang),
         'ARRAYFORMULA(IF(' + col('users', u.id) + ' = "", , COUNTIFS(' + col('checkins', c.user_id) + ', ' + col('users', u.id) + ', ' +
           col('checkins', c.phase) + ', "before")))', col('users', u.created_at), col('users', u.role)].join(', ') +
         "}, \"select Col1, Col2, Col3, Col4, Col5, Col6, Col7 where Col8 = 'student' order by Col7 desc label Col1 'name', Col2 'phone', " +
         "Col3 'status', Col4 'batch', Col5 'language', Col6 'classes joined', Col7 'signed up'\", 0), \"No students yet\")", { 'G17:G': DATE_FORMAT_ }],
-    ['H16', 'Attendance per class', 'Students who checked in before each class, newest first.',
+    ['H16', 'Attendance per class', 'Everyone who came to each class, newest first: who checked in before it, and who said ' +
+      'after it how it went without checking in.',
       '=IFERROR(QUERY(' + checkins + ', "select ' + c.class_date + ', ' + c.class + ', count(' + c.user_id + ') where ' + c.phase +
         " = 'before' group by " + c.class_date + ', ' + c.class + ' order by ' + c.class_date + ' desc label count(' + c.user_id +
         ") 'joined'\", 1), \"No check-ins yet\")", { 'H17:H': 'ddd d mmm yyyy' }],

@@ -59,7 +59,7 @@ test('the answers are checked', () => {
   assert.equal(b.ss.getSheetByName('intake').rows().length, 1, 'nothing written');
 });
 
-test('a pain note and meals in Hindi fit: 600 code points each, a vowel sign counted as one', () => {
+test('a pain note and meals in Hindi fit: 600 code points each, the field named when one is longer', () => {
   const b = freshBackend();
   teacherAndCode(b);
   const s = signup(b, '9000000002');

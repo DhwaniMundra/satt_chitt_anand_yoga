@@ -39,7 +39,7 @@ function sessionCurricula_(ctx) {
 }
 
 /** The library and the curricula in the student's language (the Devanagari names serve Hindi and Marathi). An item's
- * dose is a whole number, or null when its cell holds none (the app then shows the unit or the cue alone). */
+ * dose is always a whole number, 0 when its cell holds none (the app then shows the unit or the cue alone). */
 function curricula_(ctx) {
   currentUser_(ctx);
   const { query } = ctx.check({ query: QUERY_LANG_ });
@@ -68,8 +68,8 @@ function setCurriculum_(ctx) {
 }
 
 /** After class, how each item went for this student. Open while the "after" check-in is, to one who checked in or
- * any of the class's batch; a second send replaces the first. Entries with no reaction, no pain and no note are not
- * kept. */
+ * was in the class's batch at its time; a second send replaces the first. Entries with no reaction, no pain and no
+ * note are not kept. */
 function sessionPractice_(ctx) {
   const user = currentUser_(ctx);
   const { path, body } = ctx.check({ path: PATH_SESSION_, body: BODY_.practice });
@@ -77,8 +77,7 @@ function sessionPractice_(ctx) {
   const row = sessionRow_(ctx, path.session_id);
   const checkins = ctx.db.t('checkins');
   const joined = checkins.rows.some((c) => c.user_id === user.id && c.session_id === row.id && c.phase === 'before');
-  const own = row.batch === user.batch; // never for the teacher, who has no batch
-  if (!(joined || own) || !afterOpen_(row, ctx.now)) throw new HttpError_(400, 'checkin_closed');
+  if (!(joined || ownClass_(ctx, user, row)) || !afterOpen_(row, ctx.now)) throw new HttpError_(400, 'checkin_closed');
   const library = curriculum_(ctx).library;
   const kept = saidEntries_(body.entries, library);
   // Saying how it went records coming to the class, with no mood before, for one who did not check in.

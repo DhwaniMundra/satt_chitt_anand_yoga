@@ -75,7 +75,11 @@ function login_(ctx) {
     if (attemptsBlocked_(key)) throw new HttpError_(429, 'too_many_attempts');
     attemptsFail_(key);
   }, true);
-  const user = ctx.db.t('users').rows.filter((u) => phoneOf_(u) === phone)[0];
+  // The account stored with the number exactly as typed first (two may be stored, with and without a 0 after +91),
+  // then the one whose number reads the same.
+  const users = ctx.db.t('users').rows;
+  const typed = normalizePhone_(body.phone, true);
+  const user = users.filter((u) => u.phone === typed)[0] || users.filter((u) => phoneOf_(u) === phone)[0];
   const ok = checkPassword_(body.password, user ? user.pw_hash : DUMMY_HASH_); // the same work for an unknown number
   if (!user || !ok) throw new HttpError_(401, 'bad_login');
   return ctx.lock(() => {
@@ -192,8 +196,8 @@ function home_(ctx) {
   });
   // The class to say how it went: the latest whose after-class window is open, with what was said about it so far
   // (null before an answer), so it can be said or changed. `after_checkin` is one the student checked in to;
-  // `after_class` may also be one of their batch's they did not (having joined from the class's message), with
-  // `checked_in` saying which.
+  // `after_class` may also be one of the batch they were in at its time that they did not check in to (having joined
+  // from the class's message), with `checked_in` saying which.
   const all = ctx.db.t('class_sessions').rows;
   const latest = (list) => list.filter((s) => afterOpen_(s, ctx.now)).sort((a, b) => b.starts_at - a.starts_at)[0];
   const said = (open) => {
@@ -209,8 +213,9 @@ function home_(ctx) {
     };
     return out;
   };
+  const batchAt = batchAt_(ctx, user);
   const afterJoined = latest(all.filter((s) => joined[s.id]));
-  const afterOwn = latest(all.filter((s) => joined[s.id] || (user.batch && s.batch === user.batch)));
+  const afterOwn = latest(all.filter((s) => joined[s.id] || batchAt(s.starts_at) === s.batch));
   // Classes are for approved students only: one waiting or removed gets none, nor a class to say how it went.
   return {
     user: userJson_(user),
@@ -231,9 +236,9 @@ function checkin_(ctx) {
   const { path, body } = ctx.check({ path: PATH_SESSION_, body: BODY_.checkin });
   if (user.status !== 'approved') throw new HttpError_(403, 'pending');
   const row = sessionRow_(ctx, path.session_id);
-  const own = row.batch === user.batch; // never for the teacher, who has no batch
   // Joining is for one's own batch's classes; a class joined before a move can still be answered after it.
-  if (body.phase === 'before' && user.role === 'student' && !own) throw new HttpError_(403, 'other_batch');
+  if (body.phase === 'before' && user.role === 'student' && row.batch !== user.batch) throw new HttpError_(403, 'other_batch');
+  const own = body.phase === 'after' && ownClass_(ctx, user, row);
   const start = row.starts_at;
   const end = start + row.duration_min * 60000;
   const entry = (phase, mood) => Object.assign({ user_id: user.id, session_id: row.id, phase: phase, mood: mood, created_at: ctx.now },
