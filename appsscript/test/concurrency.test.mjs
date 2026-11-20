@@ -8,7 +8,7 @@
 // request id (two copies arriving together too), and an intake's short hold on the lock.
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { addRow, DAY, freshBackend, MIN, setting, signup, teacherAndCode } from './helpers.mjs';
+import { addRow, classStarted, DAY, freshBackend, MIN, setting, signup, teacherAndCode } from './helpers.mjs';
 
 const MODELS = { believed: { flushRefreshes: true }, worst: { flushRefreshes: false } };
 
@@ -405,4 +405,95 @@ test('an intake save holds the lock for two reads and a few writes, and deletes 
   assert.deepEqual(read(s2), rated(ASKED, 3).map((r) => ({ ...r, pain: 0 })));
   const teacher = b.call('POST', '/auth/login', { body: { phone: '9000000001', password: 'secret1' } }).body.token;
   assert.deepEqual(b.call('GET', '/teacher/students', { token: teacher }).body.students.find((x) => x.id === s1.user.id).intake.ratings, read(s1));
+});
+
+// ---------- what a class sends at once: the lock holds only the tabs each write writes ----------
+
+/** Asha, who checked in, and Bela, who did not, both of the class that ended a few minutes ago. */
+function classOfTwo(model) {
+  const { b, other, code } = studio(model);
+  const asha = signup(b, '9000000002', { code, name: 'Asha' });
+  const bela = signup(b, '9000000003', { code, name: 'Bela' });
+  const id = classStarted(b, 60);
+  b.state.offsetMs -= 50 * MIN;
+  assert.equal(b.call('POST', '/sessions/' + id + '/checkin', { token: asha.token, body: { phase: 'before', mood: 3 } }).status, 200);
+  b.state.offsetMs += 50 * MIN;
+  return { b, other, asha, bela, id };
+}
+
+/** Each student write a class sends at once: how a student sends it, and the rows it writes, [tab, column of whose]. */
+const BURSTS = {
+  'how class went': {
+    send: (backend, s, id, requestId) => backend.call('POST', '/sessions/' + id + '/practice', { token: s.token, requestId,
+      body: { entries: [{ item: 'vajrasana', reaction: 3, note: 'Knee ' + s.user.name }, { item: 'tadasana', reaction: 4 }] } }),
+    rows: [['practice', 'user_id', 2]],
+  },
+  'a practice on one\'s own': {
+    send: (backend, s, id, requestId) => backend.call('POST', '/me/solo', { token: s.token, requestId,
+      body: { minutes: 15, entries: [{ item: 'vajrasana', hold_s: 60 }, { item: 'tadasana', reaction: 3 }] } }),
+    rows: [['solo_sessions', 'user_id', 1], ['practice', 'user_id', 2]],
+  },
+  'a shared note': {
+    send: (backend, s, id, requestId) => backend.call('POST', '/me/shared', { token: s.token, requestId, body: { text: 'Right knee clicks' } }),
+    rows: [['shared_notes', 'user_id', 1]],
+  },
+  'feedback': {
+    send: (backend, s, id, requestId) => backend.call('POST', '/feedback', { token: s.token, requestId, body: { screen: 'me', text: 'Lovely class' } }),
+    rows: [['feedback', 'user_id', 1]],
+  },
+};
+
+/** The rows of `tab` whose `col` is this student's. */
+const theirs = (b, tab, col, s) => column(b, tab, col).filter((v) => v === s.user.id).length;
+
+for (const model of Object.keys(MODELS)) {
+  for (const moment of [{ read: 'users' }, { lock: 1 }]) {
+    const when = JSON.stringify(moment);
+    for (const [name, route] of Object.entries(BURSTS)) {
+      test(`${name}: two students at once, each written once with ids of its own (${model}, the other at ${when})`, () => {
+        const { b, other, asha, bela, id } = classOfTwo(model);
+        let second;
+        b.meanwhile(moment, () => { second = route.send(other, bela, id); });
+        const first = route.send(b, asha, id);
+        assert.equal(first.status, 200, JSON.stringify(first));
+        assert.equal(second.status, 200, JSON.stringify(second));
+        for (const [sheet, col, n] of route.rows) {
+          assert.deepEqual([theirs(b, sheet, col, asha), theirs(b, sheet, col, bela)], [n, n], sheet);
+          const ids = column(b, sheet, 'id');
+          assert.equal(new Set(ids).size, ids.length, sheet + ': no id given twice');
+        }
+        if (name === 'how class went') {
+          const before = (s) => tab(b, 'checkins').slice(1).filter((r) => r[0] === s.user.id && r[2] === 'before').length;
+          assert.deepEqual([before(asha), before(bela)], [1, 1], 'Bela, who did not check in, is recorded as come, once');
+        }
+      });
+
+      test(`${name}: two copies of one request id at once write once and get one answer (${model}, the other at ${when})`, () => {
+        const { b, other, bela, id } = classOfTwo(model);
+        let second;
+        b.meanwhile(moment, () => { second = route.send(other, bela, id, 'r-1'); });
+        const first = route.send(b, bela, id, 'r-1');
+        assert.equal(first.status, 200, JSON.stringify(first));
+        assert.deepEqual(second, first);
+        for (const [sheet, col, n] of route.rows) assert.equal(theirs(b, sheet, col, bela), n, sheet);
+        if (name === 'how class went') {
+          assert.equal(tab(b, 'checkins').slice(1).filter((r) => r[0] === bela.user.id && r[2] === 'before').length, 1, 'recorded as come once');
+        }
+      });
+    }
+  }
+}
+
+test('what a class sends together reads, under the lock, only the tabs it writes', () => {
+  const { b, asha, bela, id } = classOfTwo('believed');
+  const under = (send) => {
+    const before = { ...b.state.lockedCalls };
+    assert.equal(send().status, 200);
+    return Object.fromEntries(Object.keys(before).map((k) => [k, b.state.lockedCalls[k] - before[k]]));
+  };
+  // Read under the lock: the check-ins and the practice entries; the solo sessions and the practice entries; the tab.
+  for (const [route, s, reads] of [['how class went', asha, 2], ['how class went', bela, 2], ['how class went', bela, 2],
+    ['a practice on one\'s own', asha, 2], ['a shared note', asha, 1], ['feedback', asha, 1]]) {
+    assert.equal(under(() => BURSTS[route].send(b, s, id)).read, reads, route);
+  }
 });

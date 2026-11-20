@@ -133,7 +133,11 @@ phone app ◀──── HTTP 200 {"status": 401, "body": {...}} ────�
   writes and reads the tabs it writes for the first time under it: sign-up and logout read the users and tokens tabs
   only there. Sign-up, login and a password change or reset do their slow password hash *before* taking the lock. A
   check-in, which many students send as class starts, reads everything else before the lock and, under it, only the
-  check-ins tab and its one write. An intake save holds it for two reads and two or three writes, no row deleted.
+  check-ins tab and its one write. What a class sends together after it, or a student alone, reads who is asking, the
+  class, whose class it is and the library before the lock, and under it only the tabs it writes: saying how each
+  item went reads the check-ins and the practice entries there, a practice on one's own the solo sessions and the
+  practice entries, a shared note and feedback their own tab. An intake save holds it for two reads and two or three
+  writes, no row deleted.
   `/home` and `/teacher/home` take it only to make the week (below). Writes are flushed before the lock is let go.
 - **A write sent twice is written once.** The app sends a `request_id`, the same for each try of the same action,
   with every write it makes: sign-up and login; the check-in before class and saying how it went (the mood, and each
@@ -146,8 +150,9 @@ phone app ◀──── HTTP 200 {"status": 401, "body": {...}} ────�
   answers that succeeded are kept, but for sign-up and login, whose refusals are kept too (not `too_many_attempts`,
   which passes with time, nor `busy` or a 5xx), so a retry after a lost answer is not counted as another wrong try.
   Two copies that arrive together write once: a route that holds the lock throughout looks for the other's answer
-  inside it, and sign-up, login, a password change and a new password for a student look again under their own
-  lock and keep their answer before letting it go.
+  inside it, and those that take it only around their writes (sign-up, login, a password change, a new password for a
+  student, saying how class went, a practice on one's own, a shared note, feedback) look again under it and keep
+  their answer before letting it go.
 - **Ids** are the largest id + 1, worked out under the lock. A person's and a class's, which other rows point at, come
   from a counter in the script properties that never goes back (the larger of it and the largest id, + 1), so an id
   is never given twice: not after the Sheet's menu removes someone, nor when a read misses a row just written. Two
@@ -465,10 +470,11 @@ done
 - [`concurrency.test.mjs`](test/concurrency.test.mjs): two requests at once, each run in the middle of another
   (`meanwhile()` in the fakes), with the Sheet read as we believe Apps Script reads it when requests overlap (below):
   sign-ups (two numbers, or one number twice), logouts, the first visits of a day, intakes, a login and the menu
-  overlapping a removal or a logout, two copies of a password change or of a new password for a student; then the
-  guards that hold whatever a read misses (ids that never repeat, one account per number, a shared id refused,
-  sign-up, login and a new password answered again for their request id, refusals of sign-up and login too) and the
-  intake's calls under the lock.
+  overlapping a removal or a logout, two copies of a password change or of a new password for a student, and what a
+  class sends together (how each item went, a practice on one's own, a shared note, feedback: two students, and two
+  copies of one request id, with the Sheet calls each makes under the lock); then the guards that hold whatever a
+  read misses (ids that never repeat, one account per number, a shared id refused, sign-up, login and a new password
+  answered again for their request id, refusals of sign-up and login too) and the intake's calls under the lock.
 - [`snapshot.test.mjs`](test/snapshot.test.mjs): a regression snapshot, 105 requests and their recorded answers
   ([`test/snapshot/`](test/snapshot/)); every status and every body must match. After a deliberate change to the
   answers, `node appsscript/test/snapshot/record.mjs` records them again; read its diff before committing.

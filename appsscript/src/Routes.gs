@@ -160,17 +160,22 @@ function myPractice_(ctx) {
   return practiceSummary_(ctx, user.id, query.days, query.lang);
 }
 
-/** One note the student chose to share with the teacher. Sharing the same words again returns the same note. */
+/** One note the student chose to share with the teacher. Sharing the same words again returns the same note. The lock
+ * holds the shared notes alone. */
 function shareNote_(ctx) {
   const user = member_(ctx);
   const { body } = ctx.check({ body: BODY_.shared });
   if (user.role !== 'student') throw new HttpError_(403, 'pending');
   const text = body.text.trim();
   if (!text) throw new HttpError_(422, 'empty_note');
-  const notes = ctx.db.t('shared_notes');
-  let row = notes.rows.filter((n) => n.user_id === user.id && n.text === text)[0];
-  if (!row) row = notes.insert([{ id: notes.nextId(), user_id: user.id, text: text, created_at: ctx.now }])[0];
-  return { ok: true, id: row.id };
+  return ctx.lock(() => {
+    const kept = replayed_(ctx.request); // a copy of this share, with its request id, that had the lock first
+    if (kept) return kept;
+    const notes = ctx.db.t('shared_notes');
+    let row = notes.rows.filter((n) => n.user_id === user.id && n.text === text)[0];
+    if (!row) row = notes.insert([{ id: notes.nextId(), user_id: user.id, text: text, created_at: ctx.now }])[0];
+    return keepAnswer_(ctx.request, { ok: true, id: row.id });
+  }, true);
 }
 
 /** Everything the student's Today tab needs in one call. */
@@ -271,12 +276,17 @@ function checkin_(ctx) {
   return { ok: true, stats: practiceStats_(ctx, user) };
 }
 
+/** Feedback on the app. The lock holds the feedback tab alone. */
 function feedback_(ctx) {
   const user = currentUser_(ctx);
   const { body } = ctx.check({ body: BODY_.feedback });
-  const table = ctx.db.t('feedback');
-  table.insert([{ id: table.nextId(), user_id: user.id, screen: body.screen, text: body.text.trim(), created_at: ctx.now }]);
-  return { ok: true };
+  return ctx.lock(() => {
+    const kept = replayed_(ctx.request); // a copy of this message, with its request id, that had the lock first
+    if (kept) return kept;
+    const table = ctx.db.t('feedback');
+    table.insert([{ id: table.nextId(), user_id: user.id, screen: body.screen, text: body.text.trim(), created_at: ctx.now }]);
+    return keepAnswer_(ctx.request, { ok: true });
+  }, true);
 }
 
 // ---------- teacher ----------

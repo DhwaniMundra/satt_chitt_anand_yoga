@@ -6,12 +6,18 @@
 
 const MAX_HOLD_S_ = 3600; // the app's stopwatch stops at an hour
 
-/** The curriculum as the Sheet holds it: the library by key, the curricula in tab order, each one's items in order. */
-function curriculum_(ctx) {
+/** The library tab by key. */
+function library_(ctx) {
   const library = {};
   ctx.db.t('library').rows.forEach((r) => {
     if (r.key) library[r.key] = r;
   });
+  return library;
+}
+
+/** The curriculum as the Sheet holds it: the library by key, the curricula in tab order, each one's items in order. */
+function curriculum_(ctx) {
+  const library = library_(ctx);
   const items = {};
   ctx.db.t('curriculum_items').rows
     .filter((r) => r.curriculum && library[r.item])
@@ -74,46 +80,60 @@ function setCurriculum_(ctx) {
 
 /** After class, how each item went for this student. Open while the "after" check-in is, to one who checked in or
  * whose class it is ([ownClasses_]); a second send replaces the first. Entries with no reaction, no pain and no note
- * are not kept. */
+ * are not kept. Who is asking, the class, whose class it is and the library are read before the lock, as a class sends
+ * this all at once; under it, only the tabs it writes, read there for the first time: the check-ins (whether the
+ * student checked in) and the practice entries. */
 function sessionPractice_(ctx) {
   const user = currentUser_(ctx);
   const { path, body } = ctx.check({ path: PATH_SESSION_, body: BODY_.practice });
   if (user.status !== 'approved') throw new HttpError_(403, 'pending');
   const row = sessionRow_(ctx, path.session_id);
-  const checkins = ctx.db.t('checkins');
-  const joined = checkins.rows.some((c) => c.user_id === user.id && c.session_id === row.id && c.phase === 'before');
-  if (!(joined || ownClasses_(ctx, user)(row)) || !afterOpen_(row, ctx.now)) throw new HttpError_(400, 'checkin_closed');
-  const library = curriculum_(ctx).library;
-  const kept = saidEntries_(body.entries, library);
-  // Saying how it went records coming to the class, with no mood before, for one who did not check in.
-  if (!joined && kept.length) {
-    checkins.insert([Object.assign({ user_id: user.id, session_id: row.id, phase: 'before', mood: null, created_at: ctx.now }, checkinCopy_(ctx, row))]);
-  }
-  const table = ctx.db.t('practice');
-  table.remove(table.rows.filter((r) => r.user_id === user.id && r.session_id === row.id));
-  let id = table.nextId();
-  table.insert(kept.map((e) => ({ id: id++, user_id: user.id, session_id: row.id, item: e.item, reaction: e.reaction, pain: e.pain,
-    note: e.note, created_at: ctx.now, item_name: library[e.item].name, week: mondayOf_(row.starts_at) })));
-  return { ok: true, saved: kept.length };
+  if (!afterOpen_(row, ctx.now)) throw new HttpError_(400, 'checkin_closed');
+  const own = ownClasses_(ctx, user)(row);
+  const library = library_(ctx);
+  const copy = checkinCopy_(ctx, row);
+  return ctx.lock(() => {
+    const kept = replayed_(ctx.request); // a copy of this send, with its request id, that had the lock first
+    if (kept) return kept;
+    const checkins = ctx.db.t('checkins');
+    const joined = checkins.rows.some((c) => c.user_id === user.id && c.session_id === row.id && c.phase === 'before');
+    if (!(joined || own)) throw new HttpError_(400, 'checkin_closed');
+    const said = saidEntries_(body.entries, library);
+    // Saying how it went records coming to the class, with no mood before, for one who did not check in.
+    if (!joined && said.length) {
+      checkins.insert([Object.assign({ user_id: user.id, session_id: row.id, phase: 'before', mood: null, created_at: ctx.now }, copy)]);
+    }
+    const table = ctx.db.t('practice');
+    table.remove(table.rows.filter((r) => r.user_id === user.id && r.session_id === row.id));
+    let id = table.nextId();
+    table.insert(said.map((e) => ({ id: id++, user_id: user.id, session_id: row.id, item: e.item, reaction: e.reaction, pain: e.pain,
+      note: e.note, created_at: ctx.now, item_name: library[e.item].name, week: mondayOf_(row.starts_at) })));
+    return keepAnswer_(ctx.request, { ok: true, saved: said.length });
+  }, true);
 }
 
 /** Practice on the student's own: each item with the stopwatch's seconds (an hour at most: a longer hold is kept as
  * an hour), how it went, strain or pain and a note. The server dates it: the session ends now and began `minutes`
- * ago. Items with nothing timed or said are not kept. */
+ * ago. Items with nothing timed or said are not kept. Who is asking and the library are read before the lock; under
+ * it, only the two tabs it writes. */
 function soloPractice_(ctx) {
   const user = member_(ctx);
   const { body } = ctx.check({ body: BODY_.solo });
-  const library = curriculum_(ctx).library;
-  const kept = saidEntries_(body.entries, library);
-  if (!kept.length) throw new HttpError_(400, 'nothing_said');
+  const library = library_(ctx);
+  const said = saidEntries_(body.entries, library);
+  if (!said.length) throw new HttpError_(400, 'nothing_said');
   const started = ctx.now - body.minutes * 60000;
-  const solo = ctx.db.t('solo_sessions');
-  const row = solo.insert([{ id: solo.nextId(), user_id: user.id, started_at: started, ended_at: ctx.now }])[0];
-  const table = ctx.db.t('practice');
-  let id = table.nextId();
-  table.insert(kept.map((e) => ({ id: id++, user_id: user.id, solo_id: row.id, item: e.item, hold_s: Math.min(e.hold_s || 0, MAX_HOLD_S_) || null,
-    reaction: e.reaction, pain: e.pain, note: e.note, created_at: ctx.now, item_name: library[e.item].name, week: mondayOf_(started) })));
-  return { ok: true, id: row.id, saved: kept.length };
+  return ctx.lock(() => {
+    const kept = replayed_(ctx.request); // a copy of this send, with its request id, that had the lock first
+    if (kept) return kept;
+    const solo = ctx.db.t('solo_sessions');
+    const row = solo.insert([{ id: solo.nextId(), user_id: user.id, started_at: started, ended_at: ctx.now }])[0];
+    const table = ctx.db.t('practice');
+    let id = table.nextId();
+    table.insert(said.map((e) => ({ id: id++, user_id: user.id, solo_id: row.id, item: e.item, hold_s: Math.min(e.hold_s || 0, MAX_HOLD_S_) || null,
+      reaction: e.reaction, pain: e.pain, note: e.note, created_at: ctx.now, item_name: library[e.item].name, week: mondayOf_(started) })));
+    return keepAnswer_(ctx.request, { ok: true, id: row.id, saved: said.length });
+  }, true);
 }
 
 /** The entries worth keeping, one per item (the last wins), notes trimmed: those with a reaction, strain or pain, a

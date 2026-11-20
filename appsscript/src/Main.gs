@@ -11,9 +11,10 @@
 
 const METHODS_ = ['GET', 'POST', 'PUT', 'DELETE'];
 const LOCK_ = true; // the route writes: it runs under the script lock from start to finish
-// The route takes the lock itself, around its writes, and under it looks for the answer a copy of the request (the same
-// request id) kept, and keeps its own before letting the lock go (replayed_, keepAnswer_): a write that is not the same
-// twice, so two copies arriving together must write once (a sign-up, a login, a new password).
+// The route takes the lock itself, around its writes only, and under it looks for the answer a copy of the request (the
+// same request id) kept, and keeps its own before letting the lock go (replayed_, keepAnswer_), so two copies arriving
+// together write once, as under LOCK_. Its slow steps (a password hash) and its reads of tabs it does not write (who is
+// asking, the class, the library) come before the lock, which then holds only the tabs it writes.
 const OWN_REPLAY_ = 'own replay';
 const REPLAY_S_ = 600; // how long the answer to a write with a request id is kept for a repeat of it
 const AUTH_PATHS_ = ['/auth/signup', '/auth/login']; // answered again by the phone number and the request id
@@ -119,16 +120,16 @@ function routes_() {
     ['GET', '/me/intake', myIntake_],
     ['PUT', '/me/intake', saveIntake_],
     ['GET', '/me/practice', myPractice_],
-    ['POST', '/me/solo', soloPractice_, LOCK_],
+    ['POST', '/me/solo', soloPractice_, OWN_REPLAY_],
     ['GET', '/me/asanas', myItems_],
     ['GET', '/me/asanas/{item}', myItem_],
-    ['POST', '/me/shared', shareNote_, LOCK_],
+    ['POST', '/me/shared', shareNote_, OWN_REPLAY_],
     ['POST', '/me/password', changePassword_, OWN_REPLAY_],
     ['GET', '/home', home_],
     ['GET', '/curricula', curricula_],
     ['POST', '/sessions/{session_id}/checkin', checkin_],
-    ['POST', '/sessions/{session_id}/practice', sessionPractice_, LOCK_],
-    ['POST', '/feedback', feedback_, LOCK_],
+    ['POST', '/sessions/{session_id}/practice', sessionPractice_, OWN_REPLAY_],
+    ['POST', '/feedback', feedback_, OWN_REPLAY_],
     ['GET', '/teacher/home', teacherHome_],
     ['PUT', '/teacher/sessions/{session_id}', setLink_, LOCK_],
     ['GET', '/teacher/sessions/{session_id}/share', share_],

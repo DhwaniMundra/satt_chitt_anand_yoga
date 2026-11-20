@@ -1620,9 +1620,10 @@ const CURRICULUM = {
 
 const METHODS_ = ['GET', 'POST', 'PUT', 'DELETE'];
 const LOCK_ = true; // the route writes: it runs under the script lock from start to finish
-// The route takes the lock itself, around its writes, and under it looks for the answer a copy of the request (the same
-// request id) kept, and keeps its own before letting the lock go (replayed_, keepAnswer_): a write that is not the same
-// twice, so two copies arriving together must write once (a sign-up, a login, a new password).
+// The route takes the lock itself, around its writes only, and under it looks for the answer a copy of the request (the
+// same request id) kept, and keeps its own before letting the lock go (replayed_, keepAnswer_), so two copies arriving
+// together write once, as under LOCK_. Its slow steps (a password hash) and its reads of tabs it does not write (who is
+// asking, the class, the library) come before the lock, which then holds only the tabs it writes.
 const OWN_REPLAY_ = 'own replay';
 const REPLAY_S_ = 600; // how long the answer to a write with a request id is kept for a repeat of it
 const AUTH_PATHS_ = ['/auth/signup', '/auth/login']; // answered again by the phone number and the request id
@@ -1728,16 +1729,16 @@ function routes_() {
     ['GET', '/me/intake', myIntake_],
     ['PUT', '/me/intake', saveIntake_],
     ['GET', '/me/practice', myPractice_],
-    ['POST', '/me/solo', soloPractice_, LOCK_],
+    ['POST', '/me/solo', soloPractice_, OWN_REPLAY_],
     ['GET', '/me/asanas', myItems_],
     ['GET', '/me/asanas/{item}', myItem_],
-    ['POST', '/me/shared', shareNote_, LOCK_],
+    ['POST', '/me/shared', shareNote_, OWN_REPLAY_],
     ['POST', '/me/password', changePassword_, OWN_REPLAY_],
     ['GET', '/home', home_],
     ['GET', '/curricula', curricula_],
     ['POST', '/sessions/{session_id}/checkin', checkin_],
-    ['POST', '/sessions/{session_id}/practice', sessionPractice_, LOCK_],
-    ['POST', '/feedback', feedback_, LOCK_],
+    ['POST', '/sessions/{session_id}/practice', sessionPractice_, OWN_REPLAY_],
+    ['POST', '/feedback', feedback_, OWN_REPLAY_],
     ['GET', '/teacher/home', teacherHome_],
     ['PUT', '/teacher/sessions/{session_id}', setLink_, LOCK_],
     ['GET', '/teacher/sessions/{session_id}/share', share_],
@@ -3250,12 +3251,18 @@ function inviteMessage_(code, appLink, lang) {
 
 const MAX_HOLD_S_ = 3600; // the app's stopwatch stops at an hour
 
-/** The curriculum as the Sheet holds it: the library by key, the curricula in tab order, each one's items in order. */
-function curriculum_(ctx) {
+/** The library tab by key. */
+function library_(ctx) {
   const library = {};
   ctx.db.t('library').rows.forEach((r) => {
     if (r.key) library[r.key] = r;
   });
+  return library;
+}
+
+/** The curriculum as the Sheet holds it: the library by key, the curricula in tab order, each one's items in order. */
+function curriculum_(ctx) {
+  const library = library_(ctx);
   const items = {};
   ctx.db.t('curriculum_items').rows
     .filter((r) => r.curriculum && library[r.item])
@@ -3318,46 +3325,60 @@ function setCurriculum_(ctx) {
 
 /** After class, how each item went for this student. Open while the "after" check-in is, to one who checked in or
  * whose class it is ([ownClasses_]); a second send replaces the first. Entries with no reaction, no pain and no note
- * are not kept. */
+ * are not kept. Who is asking, the class, whose class it is and the library are read before the lock, as a class sends
+ * this all at once; under it, only the tabs it writes, read there for the first time: the check-ins (whether the
+ * student checked in) and the practice entries. */
 function sessionPractice_(ctx) {
   const user = currentUser_(ctx);
   const { path, body } = ctx.check({ path: PATH_SESSION_, body: BODY_.practice });
   if (user.status !== 'approved') throw new HttpError_(403, 'pending');
   const row = sessionRow_(ctx, path.session_id);
-  const checkins = ctx.db.t('checkins');
-  const joined = checkins.rows.some((c) => c.user_id === user.id && c.session_id === row.id && c.phase === 'before');
-  if (!(joined || ownClasses_(ctx, user)(row)) || !afterOpen_(row, ctx.now)) throw new HttpError_(400, 'checkin_closed');
-  const library = curriculum_(ctx).library;
-  const kept = saidEntries_(body.entries, library);
-  // Saying how it went records coming to the class, with no mood before, for one who did not check in.
-  if (!joined && kept.length) {
-    checkins.insert([Object.assign({ user_id: user.id, session_id: row.id, phase: 'before', mood: null, created_at: ctx.now }, checkinCopy_(ctx, row))]);
-  }
-  const table = ctx.db.t('practice');
-  table.remove(table.rows.filter((r) => r.user_id === user.id && r.session_id === row.id));
-  let id = table.nextId();
-  table.insert(kept.map((e) => ({ id: id++, user_id: user.id, session_id: row.id, item: e.item, reaction: e.reaction, pain: e.pain,
-    note: e.note, created_at: ctx.now, item_name: library[e.item].name, week: mondayOf_(row.starts_at) })));
-  return { ok: true, saved: kept.length };
+  if (!afterOpen_(row, ctx.now)) throw new HttpError_(400, 'checkin_closed');
+  const own = ownClasses_(ctx, user)(row);
+  const library = library_(ctx);
+  const copy = checkinCopy_(ctx, row);
+  return ctx.lock(() => {
+    const kept = replayed_(ctx.request); // a copy of this send, with its request id, that had the lock first
+    if (kept) return kept;
+    const checkins = ctx.db.t('checkins');
+    const joined = checkins.rows.some((c) => c.user_id === user.id && c.session_id === row.id && c.phase === 'before');
+    if (!(joined || own)) throw new HttpError_(400, 'checkin_closed');
+    const said = saidEntries_(body.entries, library);
+    // Saying how it went records coming to the class, with no mood before, for one who did not check in.
+    if (!joined && said.length) {
+      checkins.insert([Object.assign({ user_id: user.id, session_id: row.id, phase: 'before', mood: null, created_at: ctx.now }, copy)]);
+    }
+    const table = ctx.db.t('practice');
+    table.remove(table.rows.filter((r) => r.user_id === user.id && r.session_id === row.id));
+    let id = table.nextId();
+    table.insert(said.map((e) => ({ id: id++, user_id: user.id, session_id: row.id, item: e.item, reaction: e.reaction, pain: e.pain,
+      note: e.note, created_at: ctx.now, item_name: library[e.item].name, week: mondayOf_(row.starts_at) })));
+    return keepAnswer_(ctx.request, { ok: true, saved: said.length });
+  }, true);
 }
 
 /** Practice on the student's own: each item with the stopwatch's seconds (an hour at most: a longer hold is kept as
  * an hour), how it went, strain or pain and a note. The server dates it: the session ends now and began `minutes`
- * ago. Items with nothing timed or said are not kept. */
+ * ago. Items with nothing timed or said are not kept. Who is asking and the library are read before the lock; under
+ * it, only the two tabs it writes. */
 function soloPractice_(ctx) {
   const user = member_(ctx);
   const { body } = ctx.check({ body: BODY_.solo });
-  const library = curriculum_(ctx).library;
-  const kept = saidEntries_(body.entries, library);
-  if (!kept.length) throw new HttpError_(400, 'nothing_said');
+  const library = library_(ctx);
+  const said = saidEntries_(body.entries, library);
+  if (!said.length) throw new HttpError_(400, 'nothing_said');
   const started = ctx.now - body.minutes * 60000;
-  const solo = ctx.db.t('solo_sessions');
-  const row = solo.insert([{ id: solo.nextId(), user_id: user.id, started_at: started, ended_at: ctx.now }])[0];
-  const table = ctx.db.t('practice');
-  let id = table.nextId();
-  table.insert(kept.map((e) => ({ id: id++, user_id: user.id, solo_id: row.id, item: e.item, hold_s: Math.min(e.hold_s || 0, MAX_HOLD_S_) || null,
-    reaction: e.reaction, pain: e.pain, note: e.note, created_at: ctx.now, item_name: library[e.item].name, week: mondayOf_(started) })));
-  return { ok: true, id: row.id, saved: kept.length };
+  return ctx.lock(() => {
+    const kept = replayed_(ctx.request); // a copy of this send, with its request id, that had the lock first
+    if (kept) return kept;
+    const solo = ctx.db.t('solo_sessions');
+    const row = solo.insert([{ id: solo.nextId(), user_id: user.id, started_at: started, ended_at: ctx.now }])[0];
+    const table = ctx.db.t('practice');
+    let id = table.nextId();
+    table.insert(said.map((e) => ({ id: id++, user_id: user.id, solo_id: row.id, item: e.item, hold_s: Math.min(e.hold_s || 0, MAX_HOLD_S_) || null,
+      reaction: e.reaction, pain: e.pain, note: e.note, created_at: ctx.now, item_name: library[e.item].name, week: mondayOf_(started) })));
+    return keepAnswer_(ctx.request, { ok: true, id: row.id, saved: said.length });
+  }, true);
 }
 
 /** The entries worth keeping, one per item (the last wins), notes trimmed: those with a reaction, strain or pain, a
@@ -3772,17 +3793,22 @@ function myPractice_(ctx) {
   return practiceSummary_(ctx, user.id, query.days, query.lang);
 }
 
-/** One note the student chose to share with the teacher. Sharing the same words again returns the same note. */
+/** One note the student chose to share with the teacher. Sharing the same words again returns the same note. The lock
+ * holds the shared notes alone. */
 function shareNote_(ctx) {
   const user = member_(ctx);
   const { body } = ctx.check({ body: BODY_.shared });
   if (user.role !== 'student') throw new HttpError_(403, 'pending');
   const text = body.text.trim();
   if (!text) throw new HttpError_(422, 'empty_note');
-  const notes = ctx.db.t('shared_notes');
-  let row = notes.rows.filter((n) => n.user_id === user.id && n.text === text)[0];
-  if (!row) row = notes.insert([{ id: notes.nextId(), user_id: user.id, text: text, created_at: ctx.now }])[0];
-  return { ok: true, id: row.id };
+  return ctx.lock(() => {
+    const kept = replayed_(ctx.request); // a copy of this share, with its request id, that had the lock first
+    if (kept) return kept;
+    const notes = ctx.db.t('shared_notes');
+    let row = notes.rows.filter((n) => n.user_id === user.id && n.text === text)[0];
+    if (!row) row = notes.insert([{ id: notes.nextId(), user_id: user.id, text: text, created_at: ctx.now }])[0];
+    return keepAnswer_(ctx.request, { ok: true, id: row.id });
+  }, true);
 }
 
 /** Everything the student's Today tab needs in one call. */
@@ -3883,12 +3909,17 @@ function checkin_(ctx) {
   return { ok: true, stats: practiceStats_(ctx, user) };
 }
 
+/** Feedback on the app. The lock holds the feedback tab alone. */
 function feedback_(ctx) {
   const user = currentUser_(ctx);
   const { body } = ctx.check({ body: BODY_.feedback });
-  const table = ctx.db.t('feedback');
-  table.insert([{ id: table.nextId(), user_id: user.id, screen: body.screen, text: body.text.trim(), created_at: ctx.now }]);
-  return { ok: true };
+  return ctx.lock(() => {
+    const kept = replayed_(ctx.request); // a copy of this message, with its request id, that had the lock first
+    if (kept) return kept;
+    const table = ctx.db.t('feedback');
+    table.insert([{ id: table.nextId(), user_id: user.id, screen: body.screen, text: body.text.trim(), created_at: ctx.now }]);
+    return keepAnswer_(ctx.request, { ok: true });
+  }, true);
 }
 
 // ---------- teacher ----------
