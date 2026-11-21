@@ -20,7 +20,6 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.SelfImprovement
 import androidx.compose.material.icons.filled.WbSunny
 import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -79,12 +78,15 @@ fun App(vm: AppViewModel, onLanguage: (String) -> Unit) {
     val user = vm.user
     CompositionLocalProvider(LocalTeacher provides vm.words().teacher) {
         when {
-            // Never the sign-up form for someone signed in: until their first screen has come, a spinner, and only once a
-            // call has failed, why.
-            user == null && vm.signedIn -> if (vm.busy || vm.error == null) Connecting(vm.signingIn) else Unreachable(vm)
-            user == null -> WelcomeScreen(vm, onLanguage)
-            user.status == "rejected" -> Closed(vm)
-            else -> Main(vm, user.isTeacher, onLanguage)
+            user != null -> if (user.status == "rejected") Closed(vm) else Main(vm, user.isTeacher, onLanguage)
+            // Never the sign-up form for someone signed in: once a call has failed, why.
+            vm.signedIn && !vm.busy && vm.error != null -> Unreachable(vm)
+            // Signing in, and the wait for the first screen, breathe over the form, which keeps what was typed for a
+            // refusal; one breath from the tap to the first screen.
+            else -> Box(Modifier.fillMaxSize()) {
+                if (!vm.signedIn) WelcomeScreen(vm, onLanguage)
+                if (vm.signedIn || vm.signingIn) BreathingWait(vm.signingIn, vm.waitSince)
+            }
         }
     }
 }
@@ -164,19 +166,6 @@ private fun ShownFrom(at: Long, retry: () -> Unit) {
         Text(stringResource(R.string.shown_from, if (sameDay) time else "${dayLabel(moment)} $time"), Modifier.weight(1f).padding(vertical = 8.dp),
             style = MaterialTheme.typography.bodyMedium, color = Palette.ink)
         TextButton(onClick = retry) { Text(stringResource(R.string.try_again)) }
-    }
-}
-
-/** Signed in, and the first screen on its way: at start ("Connecting to the studio…"), or after logging in or signing
- *  up ([signingIn]: "Signing in…"). */
-@Composable
-private fun Connecting(signingIn: Boolean) {
-    Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
-        BrandHeader(large = true)
-        Spacer(Modifier.height(32.dp))
-        CircularProgressIndicator(color = Palette.moss)
-        Spacer(Modifier.height(16.dp))
-        Text(stringResource(if (signingIn) R.string.signing_in else R.string.connecting), style = MaterialTheme.typography.bodyLarge, color = Palette.muted)
     }
 }
 

@@ -204,6 +204,9 @@
     <string name="loading">लोड हो रहा है…</string>
     <string name="signing_in">साइन इन हो रहा है…</string>
     <string name="connecting">स्टूडियो से जुड़ रहे हैं…</string>
+    <string name="breathe_in">साँस अंदर लें…</string>
+    <string name="breathe_out">साँस बाहर छोड़ें…</string>
+    <string name="server_slow">स्टूडियो का सर्वर अभी धीमा है। काम जारी है…</string>
     <string name="not_loaded">यह लोड नहीं हो सका।</string>
     <string name="no_items_teacher">अभी किसी आसन के बारे में कुछ नहीं बताया गया।</string>
     <string name="trend_line">शुरू में: %1$s · हाल में: %2$s</string>

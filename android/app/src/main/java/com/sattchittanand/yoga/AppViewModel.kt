@@ -4,6 +4,7 @@ import android.app.Application
 import android.os.SystemClock
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -78,6 +79,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     val busy get() = calls > 0
     /** Logging in or signing up, until the first screen's data has come or the call has failed. */
     var signingIn by mutableStateOf(false); private set
+    /** When the wait for signing in or for the first screen began (elapsedRealtime): the breath on screen counts from
+     *  it. */
+    var waitSince by mutableLongStateOf(SystemClock.elapsedRealtime()); private set
     var error by mutableStateOf<String?>(null)
     /** A one-off message for a snackbar; the screen clears it once shown. */
     var notice by mutableStateOf<String?>(null)
@@ -162,6 +166,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Runs a call to the server: [busy] meanwhile ([signingIn] too, for a login or a sign-up), its error in [error]. */
     private fun launchCall(signIn: Boolean = false, block: suspend () -> Unit) {
         signedInScope.launch {
+            if (signIn || user == null && signedIn && !busy) waitSince = SystemClock.elapsedRealtime()
             calls++
             error = null
             if (signIn) signingIn = true

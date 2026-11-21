@@ -213,6 +213,9 @@
     <string name="loading">Loading…</string>
     <string name="signing_in">Signing in…</string>
     <string name="connecting">Connecting to the studio…</string>
+    <string name="breathe_in">Breathe in…</string>
+    <string name="breathe_out">Breathe out…</string>
+    <string name="server_slow">The studio\'s server is slow right now. Still working…</string>
     <string name="not_loaded">This could not be loaded.</string>
     <string name="no_items_teacher">Nothing said about any item yet.</string>
     <string name="trend_line">At first: %1$s · lately: %2$s</string>

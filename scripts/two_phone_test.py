@@ -802,10 +802,12 @@ def loop(run: Run, backend: p.DevBackend, teacher_code: str, debug: bool) -> Non
         run.shot("40b_student_signing_in")
         seen = watch_until("Your batch")
         p.trouble()
-        run.verdict("logging in shows 'Signing in…' until the Today tab, and never 'Couldn't reach the studio'",
-                    "Signing in…" in seen and not any("Couldn't reach" in text for text in seen), str(seen))
+        run.verdict("logging in breathes ('Breathe in…', 'Signing in…') until the Today tab, and never says 'Couldn't reach the studio'",
+                    "Breathe in…" in seen and "Signing in…" in seen and not any("Couldn't reach" in text for text in seen), str(seen))
         run.check("Asha signed in again, in her batch", "Your batch: Pain management")
         reopen_saved(run, backend)
+        if debug:  # a release build lets no one at its files
+            breathe_without_saved(run)
         tab("Practice")
         time.sleep(2)
         run.check("her practice on her own is still there", "Solo practice · 1 min", scroll=True)
@@ -934,6 +936,22 @@ def reopen_saved(run: Run, backend: p.DevBackend) -> None:
     run.verdict("back in reach, Try again reads it afresh and the line goes",
                 wait_for(lambda: [] if any("Couldn't reach the studio" in text for text in labels()) else ["gone"], 30) == ["gone"],
                 "the line stays")
+
+
+def breathe_without_saved(run: Run) -> None:
+    """Opened with nothing kept on the phone and the studio answering very slowly: the wait breathes, says it is
+    connecting, and after fifteen seconds that the server is slow, then the Today tab."""
+    p.adb("shell", "run-as", p.PACKAGE, "rm", "-f", "files/saved_screens.json")
+    p.adb("shell", "am", "force-stop", p.PACKAGE)
+    p.trouble("*", times=3, delay_ms=20000)
+    p.adb("shell", "am", "start", "-n", f"{p.PACKAGE}/.MainActivity")
+    run.check("opened with nothing kept, the wait breathes", "Breathe", timeout=5)
+    run.check("and says it is connecting", "Connecting to the studio…", timeout=3)
+    run.shot("40g_student_connecting_breath")
+    run.check("after fifteen seconds, that the server is slow and the app still at it", "The studio's server is slow right now", timeout=20)
+    run.shot("40h_student_connecting_slow")
+    run.check("then the Today tab", "Your batch: Pain management", timeout=30)
+    p.trouble()
 
 
 def watch_until(done: str, seconds: float = 60) -> list[str]:
