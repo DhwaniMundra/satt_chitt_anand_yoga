@@ -16,7 +16,8 @@
 // And for the two-phone test, the troubles of a real network: POST /dev/trouble {"path": "/auth/signup", "times": 1,
 // "drop": true} has the next call to that path (or to any, with "*") run but its answer lost (the connection closed);
 // {"status": 503, "html": true} answers it with that status and a page instead, without running it; {"refuse":
-// "unknown_item"} answers it as the server refuses a call, a 400 with that detail in the envelope, without running it;
+// "unknown_item"} answers it as the server refuses a call, a 400 with that detail in the envelope (or the envelope's
+// `status`, 500 for a server error), without running it;
 // {"delay_ms": 3000} holds its answer back that long. Each trouble lasts `times` calls; POST /dev/trouble {} clears them.
 import { randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
@@ -114,14 +115,14 @@ function serve(b, host, port) {
         reply = JSON.stringify({ troubles: troubles.length });
       } else {
         const trouble = troubleFor(troubles, text);
-        if (trouble && trouble.status) {
+        if (trouble && trouble.status && !trouble.refuse) {
           console.log('trouble: HTTP ' + trouble.status + ' for ' + trouble.path);
           return res.writeHead(trouble.status, { 'Content-Type': trouble.html ? 'text/html' : 'application/json' })
             .end(trouble.html ? '<html><body>Service Unavailable</body></html>' : '');
         }
         if (trouble && trouble.refuse) {
           console.log('trouble: ' + trouble.path + ' refused, ' + trouble.refuse);
-          reply = JSON.stringify({ status: 400, body: { detail: trouble.refuse } });
+          reply = JSON.stringify({ status: trouble.status || 400, body: { detail: trouble.refuse } });
         } else {
           reply = b.context.doPost({ postData: { contents: text, type: 'application/json' } }).getContent();
         }
