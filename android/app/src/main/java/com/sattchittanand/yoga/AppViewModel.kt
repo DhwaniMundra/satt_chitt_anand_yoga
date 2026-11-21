@@ -730,7 +730,14 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var intake by mutableStateOf<Intake?>(null); private set
     var intakeRead by mutableStateOf(false); private set
 
-    fun loadIntake() = launchCall {
+    fun loadIntake() = launchCall { readIntake() }
+
+    /** Whether the student has answered already, read quietly once, for the waiting card's words. */
+    fun readIntakeQuietly() {
+        if (!intakeRead) quietly { readIntake() }
+    }
+
+    private suspend fun readIntake() {
         val o = api.get("/me/intake")
         intake = if (o.isNull("intake")) null else Intake.from(o.getJSONObject("intake"))
         intakeRead = true

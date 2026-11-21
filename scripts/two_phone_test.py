@@ -255,6 +255,7 @@ def loop(run: Run, backend: p.DevBackend, teacher_code: str, debug: bool) -> Non
         run.shot("05b_student_intake_saving")
         run.check("the answers are sent", f"{T} will place you soon")
         run.check("then she waits to be placed", "Waiting for")
+        run.check("and the card offers to change or add to what she told", f"Change or add to what you told {T}", scroll=True)
         log_out("Me")
 
     # 4. Meera: a wrong code is refused; with the code she answers later, from the waiting card: no pain, two easy poses.

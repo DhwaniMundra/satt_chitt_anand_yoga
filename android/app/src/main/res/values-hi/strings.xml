@@ -65,6 +65,7 @@
     <string name="take_back">वापस लें</string>
     <string name="intake_title">आपके बारे में</string>
     <string name="tell_about_you">%1$s को अपने बारे में बताएँ</string>
+    <string name="change_about_you">%1$s को जो बताया, उसे बदलें या उसमें जोड़ें</string>
     <string name="about_me">मेरे बारे में, %1$s के लिए</string>
     <string name="age">उम्र</string>
     <string name="height_cm">लंबाई (से.मी.)</string>

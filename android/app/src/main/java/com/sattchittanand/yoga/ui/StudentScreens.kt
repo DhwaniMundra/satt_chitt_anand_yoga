@@ -117,7 +117,7 @@ fun TodayScreen(vm: AppViewModel) {
                     TextButton(onClick = { afterClass = true }) { Text(stringResource(R.string.change)) }
                 }
             }
-            if (!home.user.isApproved) PendingCard { aboutMe = true }
+            if (!home.user.isApproved) PendingCard(vm) { aboutMe = true }
 
             SendError(vm)
             next?.let { NextClassCard(vm, it, now) }
@@ -231,13 +231,17 @@ fun SendError(vm: AppViewModel) {
     }
 }
 
-/** For a student still waiting to be placed: Today and Practice say so, and offer the intake. */
+/** For a student still waiting to be placed: Today and Practice say so, and offer the intake, or once it is sent, to
+ *  change or add to it. */
 @Composable
-fun PendingCard(tellAbout: () -> Unit) {
+fun PendingCard(vm: AppViewModel, tellAbout: () -> Unit) {
+    LaunchedEffect(Unit) { vm.readIntakeQuietly() }
     SectionCard(tint = Palette.saffronLight) {
         Text(stringResource(R.string.pending_title, LocalTeacher.current), style = MaterialTheme.typography.titleMedium)
         Text(stringResource(R.string.pending_body, LocalTeacher.current), style = MaterialTheme.typography.bodyMedium)
-        Button(onClick = tellAbout, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.tell_about_you, LocalTeacher.current)) }
+        // Once answered, the answers can be changed or added to.
+        val words = if (vm.intake != null) R.string.change_about_you else R.string.tell_about_you
+        Button(onClick = tellAbout, modifier = Modifier.fillMaxWidth()) { Text(stringResource(words, LocalTeacher.current)) }
     }
 }
 

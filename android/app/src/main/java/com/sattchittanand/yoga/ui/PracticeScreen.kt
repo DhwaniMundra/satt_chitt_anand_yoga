@@ -42,7 +42,7 @@ fun PracticeScreen(vm: AppViewModel) {
     var aboutMe by rememberSaveable { mutableStateOf(false) }
     if (aboutMe) return IntakeScreen(vm) { aboutMe = false }
     if (vm.user?.isApproved != true) { // nothing to show, nor to send, until the teacher places them
-        Column(Modifier.fillMaxSize().padding(20.dp)) { PendingCard { aboutMe = true } }
+        Column(Modifier.fillMaxSize().padding(20.dp)) { PendingCard(vm) { aboutMe = true } }
         return
     }
     vm.solo?.let {
