@@ -95,11 +95,12 @@ row is gone (File → Version history can only bring back the whole Sheet as it 
   rows stay, as do the batches, the curriculum, the classes and the settings. A phone signed in as one of them is
   signed out at its next request. A teacher whose name starts with TEST goes too, and the teacher code then works
   again.
-- **Reset the studio…** removes everyone, the teacher too, and every row of those tabs, so the studio is as it was
-  right after `setup`. What stays: the batches, the curriculum (`library`, `curricula`, `curriculum_items`), the
-  classes (`class_sessions`), the settings (teacher code, group code, group link, app link) and the Dashboard. It asks
-  twice: yes or no, then a box where you type RESET. Afterwards the teacher signs up again with the same teacher code,
-  and students with the same group code.
+- **Reset the studio…** removes everyone, the teacher too, and every row of those tabs, and empties what the teacher
+  set on the batches and classes (each batch's everyday Meet link, each class's own link and curriculum), so the
+  studio is as it was right after `setup`. What stays: the batches (names, days, times), the curriculum (`library`,
+  `curricula`, `curriculum_items`), the classes (`class_sessions`), the settings (teacher code, group code, group link,
+  app link) and the Dashboard. It asks twice: yes or no, then a box where you type RESET. Afterwards the teacher signs
+  up again with the same teacher code, and students with the same group code.
 - **New group code…** makes a new group code, as the teacher can from the app. The old code stops working for
   sign-ups; no one is signed out.
 
@@ -465,7 +466,7 @@ done
 - [`reset.test.mjs`](test/reset.test.mjs): the Sheet's menu: which tabs hold a person's rows; removing the test
   people (theirs go, everyone else's rows stay as they were); a removed person's token refused at once, a write
   replayed with its request id bringing nothing back, a login that overlaps the removal; resetting the studio (what
-  stays, the codes working again); a tab whose rows fill its grid; the lock; the dialogs and the RESET box; a new
+  stays, the links and class curricula the teacher set emptied, the codes working again); a tab whose rows fill its grid; the lock; the dialogs and the RESET box; a new
   group code.
 - [`concurrency.test.mjs`](test/concurrency.test.mjs): two requests at once, each run in the middle of another
   (`meanwhile()` in the fakes), with the Sheet read as we believe Apps Script reads it when requests overlap (below):

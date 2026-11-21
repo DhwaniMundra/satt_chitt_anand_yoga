@@ -4480,13 +4480,33 @@ function menuLock_(db, fn) {
  * `everything`); the counts. Their numbers are forgotten first, then their sign-ins and their other rows go, and their
  * users rows last, so a removal cut short leaves no one signed in and can simply be run again. */
 function removePeople_(db, pick, everything) {
-  return menuLock_(db, () => {
-    const removal = removal_(db, pick, everything);
-    forgetPhones_(removal.people, everything);
-    personTabs_().forEach(([name]) => db.t(name).remove(removal.rows[name]));
-    db.t('users').remove(removal.people);
-    return removalCounts_(removal);
+  return menuLock_(db, () => removeLocked_(db, pick, everything));
+}
+
+function removeLocked_(db, pick, everything) {
+  const removal = removal_(db, pick, everything);
+  forgetPhones_(removal.people, everything);
+  personTabs_().forEach(([name]) => db.t(name).remove(removal.rows[name]));
+  db.t('users').remove(removal.people);
+  return removalCounts_(removal);
+}
+
+/** Under the lock: what the teacher set on the batches and the classes put back as setup() leaves it, empty: each
+ * batch's everyday Meet link, and each class's own link and curriculum, so a class follows its batch again. The
+ * batches' names, days and times, the curriculum tabs and the settings stay. The rows changed. */
+function clearTeacherSettings_(db) {
+  let changed = 0;
+  const batches = db.t('batches');
+  batches.rows.filter((r) => r.meet_link).forEach((r) => {
+    batches.update(r, { meet_link: null });
+    changed++;
   });
+  const classes = db.t('class_sessions');
+  classes.rows.filter((r) => r.meet_link || r.curriculum).forEach((r) => {
+    classes.update(r, { meet_link: null, curriculum: null });
+    changed++;
+  });
+  return changed;
 }
 
 /** Everyone whose name starts with TEST, and every row of theirs; the counts. */
@@ -4494,10 +4514,11 @@ function removeTestPeople_(db) {
   return removePeople_(db, (u) => isTestName_(u.name));
 }
 
-/** Everyone, the teacher too, and every row of the person tabs; the counts. The batches, the curriculum, the classes,
- * the settings and the Dashboard stay, as setup() left them, so the teacher code works again. */
+/** Everyone, the teacher too, and every row of the person tabs, and what the teacher set on the batches and classes
+ * (clearTeacherSettings_); the counts, with `cleared`, the batch and class rows put back. The batches, the curriculum,
+ * the classes, the settings and the Dashboard stay, as setup() left them, so the teacher code works again. */
 function resetStudio_(db) {
-  return removePeople_(db, () => true, true);
+  return menuLock_(db, () => Object.assign(removeLocked_(db, () => true, true), { cleared: clearTeacherSettings_(db) }));
 }
 
 /** A new group code, as the teacher can make from the app; the code. */
@@ -4559,9 +4580,12 @@ function resetStudio() {
   const text = 'This removes everyone signed up (' + count_(plan.people, 'person', 'people') +
     (plan.teacher ? ', the teacher among them' : '') + ') and every row they made (' + count_(plan.total, 'row', 'rows') + ')' +
     (plan.total ? ': ' + rowsText_(plan) : '') + '. Every phone is signed out.\n\n' +
-    'What stays: the batches, the curriculum (library, curricula, curriculum_items), the classes (class_sessions), the ' +
-    'settings (the teacher code, the group code, the group link and the app link) and the Dashboard. Afterwards the ' +
-    'teacher signs up again with the same teacher code, and students with the same group code.\n\nThis cannot be undone. Go on?';
+    'The Meet links the teacher set go too, each batch\'s and each class\'s own, and the curriculum chosen for a class, ' +
+    'so each class follows its batch again, as setup left them.\n\n' +
+    'What stays: the batches (their names, days and times), the curriculum (library, curricula, curriculum_items), the ' +
+    'classes (class_sessions), the settings (the teacher code, the group code, the group link and the app link) and the ' +
+    'Dashboard. Afterwards the teacher signs up again with the same teacher code, and students with the same group ' +
+    'code.\n\nThis cannot be undone. Go on?';
   if (ui.alert(title, text, ui.ButtonSet.YES_NO) !== ui.Button.YES) return;
   const typed = ui.prompt(title, 'To remove ' + count_(plan.people, 'person', 'people') + ' and ' + count_(plan.total, 'row', 'rows') +
     ', type RESET and click OK.', ui.ButtonSet.OK_CANCEL);
@@ -4572,8 +4596,8 @@ function resetStudio() {
   }
   const done = resetStudio_(new Db_());
   ui.alert(title, 'The studio is reset: ' + count_(done.people, 'person', 'people') + ' and ' + count_(done.total, 'row', 'rows') +
-    ' were removed. The teacher can sign up again with the teacher code (in the hidden settings tab), and students with ' +
-    'the group code.', ui.ButtonSet.OK);
+    ' were removed, and the Meet links and curricula the teacher set cleared. The teacher can sign up again with the ' +
+    'teacher code (in the hidden settings tab), and students with the group code.', ui.ButtonSet.OK);
 }
 
 /** The menu's "New group code…". */
