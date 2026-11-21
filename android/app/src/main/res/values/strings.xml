@@ -274,6 +274,8 @@
     <string name="closed_account">%1$s has closed this account.</string>
     <string name="unreachable">Couldn\'t reach the studio</string>
     <string name="unreachable_help">Check the internet, then try again. You stay signed in.</string>
+    <string name="shown_from">Couldn\'t reach the studio. Showing what you saw at %1$s.</string>
+    <string name="updating">Updating…</string>
     <string name="gemma_download_title">Gemma for Satt Chitt Anand</string>
     <string name="gemma_download_note">The practice companion, for your phone (one time)</string>
     <string name="share_note">Share with %1$s</string>

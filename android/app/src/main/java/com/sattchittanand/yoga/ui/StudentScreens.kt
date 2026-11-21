@@ -42,6 +42,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
+import com.sattchittanand.yoga.AFTER_CLASS_S
 import com.sattchittanand.yoga.AppViewModel
 import com.sattchittanand.yoga.ClassSession
 import com.sattchittanand.yoga.R
@@ -93,7 +94,7 @@ fun TodayScreen(vm: AppViewModel) {
         AfterClassScreen(vm, after, home.afterSaid) { afterClass = false }
         return
     }
-    PullToRefreshBox(isRefreshing = vm.busy, onRefresh = vm::refresh, modifier = Modifier.fillMaxSize()) {
+    PullToRefreshBox(isRefreshing = vm.pulling, onRefresh = { vm.refresh(pulled = true) }, modifier = Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Label(stringResource(R.string.brand_latin), Palette.saffron)
             Text(stringResource(R.string.greeting, home.user.name.substringBefore(' ')), style = MaterialTheme.typography.headlineSmall)
@@ -108,7 +109,7 @@ fun TodayScreen(vm: AppViewModel) {
                     Button(onClick = { afterClass = true }) { Text(stringResource(R.string.tell_teacher, LocalTeacher.current)) }
                 }
             } else if (after != null) { // said already: it can be changed until 12 hours after class
-                val closes = after.startsAt.plusSeconds(after.minutes * 60L + 12 * 3600L)
+                val closes = after.endsAt.plusSeconds(AFTER_CLASS_S)
                 SectionCard(tint = Palette.mossLight) {
                     Text(stringResource(R.string.told_teacher, LocalTeacher.current), style = MaterialTheme.typography.titleMedium)
                     Text(after.batch.name + " · " + stringResource(R.string.change_until, momentLabel(closes)), style = MaterialTheme.typography.bodyMedium,

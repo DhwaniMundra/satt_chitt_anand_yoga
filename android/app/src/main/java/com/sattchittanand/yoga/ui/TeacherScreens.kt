@@ -64,7 +64,7 @@ fun TeacherTodayScreen(vm: AppViewModel, onLanguage: (String) -> Unit, openStude
     val home = vm.teacherHome ?: return Waiting(vm, vm::refresh)
     // The soonest class is open by default, and again whenever a sooner one appears.
     var expanded by rememberSaveable(home.sessions.firstOrNull()?.id) { mutableStateOf(home.sessions.firstOrNull()?.id ?: -1) }
-    PullToRefreshBox(isRefreshing = vm.busy, onRefresh = vm::refresh, modifier = Modifier.fillMaxSize()) {
+    PullToRefreshBox(isRefreshing = vm.pulling, onRefresh = { vm.refresh(pulled = true) }, modifier = Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Label(stringResource(R.string.brand_latin), Palette.saffron)
             Text(stringResource(R.string.classes_title), style = MaterialTheme.typography.headlineSmall)

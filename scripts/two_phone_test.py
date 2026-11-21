@@ -781,15 +781,7 @@ def loop(run: Run, backend: p.DevBackend, teacher_code: str, debug: bool) -> Non
         run.verdict("logging in shows 'Signing in…' until the Today tab, and never 'Couldn't reach the studio'",
                     "Signing in…" in seen and not any("Couldn't reach" in text for text in seen), str(seen))
         run.check("Asha signed in again, in her batch", "Your batch: Pain management")
-        p.adb("shell", "am", "force-stop", p.PACKAGE)
-        p.trouble("*", times=3, delay_ms=4000)
-        p.adb("shell", "am", "start", "-n", f"{p.PACKAGE}/.MainActivity")
-        run.check("started again with slow answers, the app says it is connecting", "Connecting to the studio…", timeout=4)
-        run.shot("40c_student_connecting")
-        seen = watch_until("Your batch")
-        p.trouble()  # any slow answer still waiting
-        run.verdict("and goes on to the Today tab, never saying the studio is out of reach", not any("Couldn't reach" in text for text in seen),
-                    str(seen))
+        reopen_saved(run, backend)
         tab("Practice")
         time.sleep(2)
         run.check("her practice on her own is still there", "Solo practice · 1 min", scroll=True)
@@ -888,6 +880,36 @@ def log_in(number: str, password: str = PASSWORD, teacher: bool = False) -> None
     p.hide_keyboard()
     p.tap("Log in", exact=True, last=True)  # the button under the form, not the switch above it
     time.sleep(3)
+
+
+def reopen_saved(run: Run, backend: p.DevBackend) -> None:
+    """The app opened again on what it showed last: at once, while slow answers read it again behind a thin line; and
+    with the server out of reach, with a calm line saying since when, which Try again clears once it is back."""
+    p.adb("shell", "am", "force-stop", p.PACKAGE)
+    p.trouble("*", times=3, delay_ms=6000)
+    first_frame = re.search(r"TotalTime: (\d+)", p.adb("shell", "am", "start", "-W", "-n", f"{p.PACKAGE}/.MainActivity"))
+    texts = labels()
+    run.verdict(f"reopened while the studio answers slowly, the saved Today tab shows at once (first frame "
+                f"{int(first_frame[1]) / 1000 if first_frame else '?'} s, in the first look at the screen)",
+                any("Your batch" in text for text in texts), str(texts))
+    run.check("with a thin line while it is read again", "Updating…", timeout=3)
+    run.shot("40c_student_reopen_saved")
+    run.verdict("and the line goes once the new one is in", wait_for(lambda: [] if "Updating…" in labels() else ["gone"], 40) == ["gone"],
+                "the line stays")
+    p.trouble()  # any slow answer still waiting
+    backend.stop()
+    p.adb("shell", "am", "force-stop", p.PACKAGE)
+    p.adb("shell", "am", "start", "-n", f"{p.PACKAGE}/.MainActivity")
+    run.check("reopened with the studio out of reach, the saved Today tab shows", "Your batch: Pain management")
+    run.check("with a calm line saying since when", "Couldn't reach the studio. Showing what you saw at")
+    run.verdict("and not the screen that only says it could not reach the studio", "Check the internet, then try again." not in labels(),
+                "the Unreachable screen")
+    run.shot("40e_student_offline_saved")
+    backend.start()
+    p.tap("Try again", exact=True)
+    run.verdict("back in reach, Try again reads it afresh and the line goes",
+                wait_for(lambda: [] if any("Couldn't reach the studio" in text for text in labels()) else ["gone"], 30) == ["gone"],
+                "the line stays")
 
 
 def watch_until(done: str, seconds: float = 60) -> list[str]:

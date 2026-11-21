@@ -1,5 +1,6 @@
 package com.sattchittanand.yoga.ui
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -10,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Row
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChatBubble
 import androidx.compose.material.icons.filled.Groups
@@ -30,6 +32,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -44,10 +47,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.sattchittanand.yoga.AppViewModel
 import com.sattchittanand.yoga.R
+import java.time.Instant
+import java.time.ZoneId
 
 private data class Tab(val key: String, val label: Int, val icon: ImageVector)
 
@@ -108,19 +115,42 @@ private fun Main(vm: AppViewModel, teacher: Boolean, onLanguage: (String) -> Uni
         // The screen ends above the keyboard while it is open (edge to edge, adjustResize alone does not do it), so
         // the Ask box and the other text fields stay in sight as the student types.
         Box(Modifier.padding(padding).consumeWindowInsets(padding).imePadding()) {
-            key(tab, again) {
-                when (tab) {
-                    "today" -> if (teacher) TeacherTodayScreen(vm, onLanguage) { tab = "students" } else TodayScreen(vm)
-                    "practice" -> PracticeScreen(vm)
-                    "ask" -> AskScreen(vm)
-                    "me" -> MeScreen(vm, onLanguage)
-                    "students" -> StudentsScreen(vm)
-                    "insights" -> InsightsScreen(vm)
+            Column {
+                vm.shownFrom?.let { ShownFrom(it, vm::refresh) }
+                Box(Modifier.weight(1f)) {
+                    key(tab, again) {
+                        when (tab) {
+                            "today" -> if (teacher) TeacherTodayScreen(vm, onLanguage) { tab = "students" } else TodayScreen(vm)
+                            "practice" -> PracticeScreen(vm)
+                            "ask" -> AskScreen(vm)
+                            "me" -> MeScreen(vm, onLanguage)
+                            "students" -> StudentsScreen(vm)
+                            "insights" -> InsightsScreen(vm)
+                        }
+                    }
                 }
             }
-            // A call to the server takes a second or more; Today shows it in its pull-to-refresh spinner.
-            if (vm.busy && tab != "today") LinearProgressIndicator(Modifier.fillMaxWidth().align(Alignment.TopCenter), color = Palette.moss)
+            // A call to the server takes a second or more, and the screens are read again behind what they show: a thin
+            // line over the top says so and moves nothing. A pull of the Today tab shows its own spinner instead.
+            if (vm.busy || vm.refreshing && !vm.pulling) {
+                val updating = stringResource(R.string.updating)
+                LinearProgressIndicator(Modifier.fillMaxWidth().align(Alignment.TopCenter).semantics { contentDescription = updating }, color = Palette.moss)
+            }
         }
+    }
+}
+
+/** The screens show what was read at [at] (epoch ms), as the studio could not be reached since: one calm line, on the
+ *  phone's own clock ("at 7:42 AM", or with its day when not today), and Try again. */
+@Composable
+private fun ShownFrom(at: Long, retry: () -> Unit) {
+    val moment = Instant.ofEpochMilli(at)
+    val time = dateFormat("h:mm a").format(moment.atZone(ZoneId.systemDefault()))
+    val sameDay = daysFromToday(moment, Instant.now(), ZoneId.systemDefault()) == 0L
+    Row(Modifier.fillMaxWidth().background(Palette.saffronLight).padding(start = 16.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(stringResource(R.string.shown_from, if (sameDay) time else "${dayLabel(moment)} $time"), Modifier.weight(1f).padding(vertical = 8.dp),
+            style = MaterialTheme.typography.bodyMedium, color = Palette.ink)
+        TextButton(onClick = retry) { Text(stringResource(R.string.try_again)) }
     }
 }
 

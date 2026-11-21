@@ -19,6 +19,7 @@ import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONException
 import org.json.JSONObject
+import java.io.File
 import java.time.Instant
 
 /** All screen state, and every call to the server. Errors land in [error] as the server's code. */
@@ -32,6 +33,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     val gemma = companion.gemma
     /** The signed-in student's chat and health notes, kept on this phone. */
     private var store: LocalStore? = null
+    /** What the first screens showed, kept on this phone for this sign-in, to open on at once. */
+    private val saved = SavedScreens(File(app.filesDir, "saved_screens.json"))
 
     /** For the first screen, before signing in. */
     var studio by mutableStateOf<Studio?>(null); private set
@@ -53,8 +56,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var teacherHome by mutableStateOf<TeacherHome?>(null); private set
     var students by mutableStateOf<List<Student>>(emptyList()); private set
     var insights by mutableStateOf<Insights?>(null); private set
-    /** The studio's library and curricula, in the chosen language. */
+    /** The studio's library and curricula, in the chosen language: read once a start (shown till then as kept). */
     var curricula by mutableStateOf<Curricula?>(null); private set
+    private var curriculaRead = false
     /** For the teacher: how one class went, item by item. */
     var review by mutableStateOf<ClassReview?>(null); private set
     /** A student's practice per item (the student's own, or the one the teacher opened), and one item's history. */
@@ -83,6 +87,15 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** When everything was last read from the server (elapsedRealtime), so coming back to the app soon after reads
      *  nothing again. */
     private var refreshedAt = 0L
+    /** When the day the screens show was read from the server (epoch ms): this start's read, or the one kept. */
+    private var readAt = 0L
+    /** Reading the screens again behind what they show: a thin line at the top says so, and nothing moves. */
+    var refreshing by mutableStateOf(false); private set
+    /** The same, asked for by pulling the Today tab down, whose own spinner then shows it. */
+    var pulling by mutableStateOf(false); private set
+    /** The screens show what was read at this moment (epoch ms), as the studio could not be reached since: a calm line
+     *  says so, with a way to try again. */
+    var shownFrom by mutableStateOf<Long?>(null); private set
     /** Check-ins sent in the background that the server has not confirmed: kept on the phone, shown as done on the
      *  Today tab, and sent again at each start and return to the app until they land. */
     private var pending = PendingCheckin.restore(prefs.checkins).filter { it.token == prefs.token }
@@ -103,7 +116,38 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private fun newSignedInScope() = CoroutineScope(viewModelScope.coroutineContext + SupervisorJob(viewModelScope.coroutineContext[Job]))
 
     init {
-        if (prefs.token == null) loadStudio() else launchCall { refreshAll() }
+        when {
+            prefs.token == null -> loadStudio()
+            restoreSaved() -> refreshBehind()
+            else -> launchCall { refreshAll() }
+        }
+    }
+
+    /** Opens on what this sign-in's first screens showed last, kept on the phone, as it stands now (classes that have
+     *  ended dropped): true if there was some. */
+    private fun restoreSaved(): Boolean {
+        val kept = prefs.token?.let { saved.read(it, prefs.lang) } ?: return false
+        val me = kept.me ?: return false
+        val day = kept.day ?: return false
+        return try {
+            val account = User.from(me.getJSONObject("user"))
+            val now = Instant.now()
+            if (account.isTeacher) teacherHome = TeacherHome.from(day).at(now) else home = shown(Home.from(day).at(now))
+            stats = Stats.from(me.getJSONObject("stats"))
+            kept.curricula?.let { curricula = Curricula.from(it) }
+            openStore(account)
+            user = account
+            readAt = kept.at
+            true
+        } catch (e: JSONException) {
+            saved.clear()
+            false
+        }
+    }
+
+    /** Keeps a part of the first screens on the phone, under this sign-in and language. */
+    private fun keep(part: String, json: JSONObject) {
+        prefs.token?.let { saved.keep(it, prefs.lang, part, json, System.currentTimeMillis()) }
     }
 
     /** Runs a call to the server: [busy] meanwhile ([signingIn] too, for a login or a sign-up), its error in [error]. */
@@ -169,10 +213,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      *  come, and the day even if the curricula cannot be read. */
     private suspend fun refreshAll() = coroutineScope {
         val kept = prefs.role
-        val lists = if (curricula == null) async { runCatching { api.get("/curricula?lang=${prefs.lang}") } } else null
+        val lists = if (!curriculaRead) async { runCatching { api.get("/curricula?lang=${prefs.lang}") } } else null
         val day = kept?.let { role -> async { readDay(teacher = role == "teacher") } }
         val me = api.get("/me")
         val account = User.from(me.getJSONObject("user"))
+        keep(SavedScreens.ME, me)
         prefs.role = account.role
         if (day == null || (kept == "teacher") != account.isTeacher) {
             day?.cancel()
@@ -183,21 +228,56 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (user?.id != account.id) openStore(account)
         stats = Stats.from(me.getJSONObject("stats"))
         user = account
-        lists?.let { curricula = Curricula.from(it.await().getOrThrow()) }
+        lists?.let {
+            val read = it.await().getOrThrow()
+            curricula = Curricula.from(read)
+            curriculaRead = true
+            keep(SavedScreens.CURRICULA, read)
+        }
         refreshedAt = SystemClock.elapsedRealtime()
     }
 
     private suspend fun readDay(teacher: Boolean) = if (teacher) readTeacherHome() else readHome()
 
-    fun refresh() = launchCall { refreshAll() }
+    /** Reads the first screens again: behind them when they show (the Today tab [pulled] down, or anything else), else
+     *  with the wait for them. */
+    fun refresh(pulled: Boolean = false) = if (user == null) launchCall { refreshAll() } else refreshBehind(pulled)
 
-    /** The student's Today tab from the server, with the check-ins made on this phone shown as done: those it has not
-     *  confirmed yet, and those it has, until their class ends, in case the reply was read before the check-in. */
-    private suspend fun readHome() {
+    /** Reads the first screens again behind those showing, which stay as they are until the new ones come: a thin line
+     *  meanwhile. If the studio cannot be reached, [shownFrom] says since when the screens are what they are. */
+    private fun refreshBehind(pulled: Boolean = false) {
+        if (refreshing) return
+        signedInScope.launch {
+            refreshing = true
+            pulling = pulled
+            try {
+                refreshAll()
+            } catch (e: ApiError) {
+                if (e.code == "signed_out") signOutLocally() else shownFrom = readAt
+            } catch (e: JSONException) {
+                shownFrom = readAt
+            } finally {
+                refreshing = false
+                pulling = false
+            }
+        }
+    }
+
+    /** A day from the server as the Today tab shows it, with the check-ins made on this phone shown as done: those it
+     *  has not confirmed yet, and those it has, until their class ends, in case the day was read before the check-in. */
+    private fun shown(day: Home): Home {
         val now = Instant.now()
         confirmed.values.removeAll { it < now }
-        val done = pending.map { it.sessionId } + confirmed.keys
-        home = done.fold(Home.from(api.get("/home?lang=${prefs.lang}"))) { h, id -> h.checkedIn(id, true) }
+        return (pending.map { it.sessionId } + confirmed.keys).fold(day) { h, id -> h.checkedIn(id, true) }
+    }
+
+    /** The student's Today tab from the server, kept on the phone too. */
+    private suspend fun readHome() {
+        val read = api.get("/home?lang=${prefs.lang}")
+        home = shown(Home.from(read))
+        keep(SavedScreens.DAY, read)
+        readAt = System.currentTimeMillis()
+        shownFrom = null
     }
 
     /** The student's Today tab read again in one call, quietly (no spinner, no error shown): while a class is near, or
@@ -232,6 +312,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Keeps the login, then reads what the first screen needs; a new student is asked about themselves first. */
     private suspend fun signIn(account: Accounts.SignedIn) {
+        saved.clear() // another sign-in's screens
         prefs.token = account.token
         prefs.role = account.user.role
         signedIn = true
@@ -260,6 +341,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         signedInScope.cancel()
         signedInScope = newSignedInScope()
         confirmed.clear()
+        saved.clear()
+        shownFrom = null
         prefs.token = null
         prefs.role = null
         signedIn = false
@@ -285,6 +368,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun setLanguage(lang: String) {
         prefs.lang = lang
         curricula = null // its names and cues are in the language
+        curriculaRead = false
         if (user == null) {
             loadStudio()
         } else {
@@ -481,8 +565,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     // ---------- teacher ----------
 
+    /** The teacher's day from the server, kept on the phone too. */
     private suspend fun readTeacherHome() {
-        teacherHome = TeacherHome.from(api.get("/teacher/home?lang=${prefs.lang}"))
+        val read = api.get("/teacher/home?lang=${prefs.lang}")
+        teacherHome = TeacherHome.from(read)
+        keep(SavedScreens.DAY, read)
+        readAt = System.currentTimeMillis()
+        shownFrom = null
     }
 
     /** Saves one class's own link; [done] runs once it is saved and the classes read again. Then [share], if given,
@@ -630,7 +719,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun onResume() {
         val stale = SystemClock.elapsedRealtime() - refreshedAt > RESUME_REFRESH_MS
         if (signedIn) sendCheckins()
-        if (signedIn && !busy && stale) refresh() // signed in, or signed in but the studio was out of reach: try again
+        if (signedIn && !busy && !refreshing && stale) refresh() // signed in, or signed in but the studio was out of reach: try again
         gemma.refresh(loadModel = false) // a download that went on, or finished, while the app was away
     }
 

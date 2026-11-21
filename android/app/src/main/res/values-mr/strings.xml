@@ -265,6 +265,8 @@
     <string name="closed_account">%1$s यांनी हे खाते बंद केले आहे.</string>
     <string name="unreachable">स्टुडिओशी जोडता आले नाही</string>
     <string name="unreachable_help">इंटरनेट तपासा, मग पुन्हा प्रयत्न करा. तुम्ही साइन इन राहाल.</string>
+    <string name="shown_from">स्टुडिओशी जोडता आले नाही. %1$s ला जे दिसले होते, तेच दाखवत आहोत.</string>
+    <string name="updating">अपडेट होत आहे…</string>
     <string name="gemma_download_title">सत्·चित्·आनन्दसाठी Gemma</string>
     <string name="gemma_download_note">तुमच्या फोनसाठी सराव सोबती (एकदाच)</string>
     <string name="share_note">%1$s यांना शेअर करा</string>

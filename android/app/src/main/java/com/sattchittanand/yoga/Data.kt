@@ -334,6 +334,9 @@ data class StudioWords(
 /** [batch]: the student's batch, once placed; [sessions]: its coming classes. [afterClass]: the class whose after-class
  *  window is open, whether or not the student checked in to it (its `checkedIn`); [afterSaid]: what the student said
  *  about it, if anything. */
+/** How long after a class what was said about it can still be said or changed, as the server allows. */
+const val AFTER_CLASS_S = 12 * 3600L
+
 data class Home(val user: User, val batch: BatchInfo?, val studio: Studio, val sessions: List<ClassSession>, val afterClass: ClassSession?,
     val afterSaid: Said?, val groupLink: String?) {
     /** This home as it is once the student has checked in to [sessionId], or not: the class coming, or the one to say
@@ -341,6 +344,13 @@ data class Home(val user: User, val batch: BatchInfo?, val studio: Studio, val s
     fun checkedIn(sessionId: Int, yes: Boolean): Home {
         fun mark(s: ClassSession) = if (s.id == sessionId) s.copy(checkedIn = yes) else s
         return copy(sessions = sessions.map(::mark), afterClass = afterClass?.let(::mark))
+    }
+
+    /** This home as it stands at [now], for one kept on the phone and shown before it is read again: without the
+     *  classes that have ended, nor a class to say how it went once that has closed (12 hours after it). */
+    fun at(now: Instant): Home {
+        val open = afterClass?.takeIf { now < it.endsAt.plusSeconds(AFTER_CLASS_S) }
+        return copy(sessions = sessions.filter { it.endsAt > now }, afterClass = open, afterSaid = afterSaid.takeIf { open != null })
     }
 
     companion object {
@@ -398,6 +408,9 @@ data class BatchLink(val info: BatchInfo, val meetLink: String?)
 
 data class TeacherHome(val sessions: List<ClassSession>, val batches: List<BatchLink>, val settings: TeacherSettings, val pendingStudents: Int) {
     fun batch(key: String?) = batches.firstOrNull { it.info.key == key }
+
+    /** This day as it stands at [now], for one kept on the phone: without the classes that have ended. */
+    fun at(now: Instant) = copy(sessions = sessions.filter { it.endsAt > now })
 
     companion object {
         fun from(o: JSONObject): TeacherHome {
