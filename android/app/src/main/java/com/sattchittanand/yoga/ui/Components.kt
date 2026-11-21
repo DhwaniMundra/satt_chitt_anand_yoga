@@ -119,7 +119,8 @@ val FORM_ERRORS = setOf("bad_meet_link", "bad_group_link", "bad_group_code")
 fun Waiting(vm: AppViewModel, retry: () -> Unit, modifier: Modifier = Modifier.fillMaxSize()) {
     Column(modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically),
         horizontalAlignment = Alignment.CenterHorizontally) {
-        if (vm.busy || vm.error == null) {
+        // Out of reach, the call failed (error) or the screens show what was kept (shownFrom): no spinner for ever.
+        if (vm.busy || vm.refreshing || vm.error == null && vm.shownFrom == null) {
             CircularProgressIndicator(color = Palette.moss)
             Text(stringResource(R.string.loading), color = Palette.muted)
         } else {
@@ -276,17 +277,17 @@ fun daysFromToday(at: Instant, now: Instant, zone: ZoneId): Long =
     ChronoUnit.DAYS.between(now.atZone(zone).toLocalDate(), at.atZone(zone).toLocalDate())
 
 /** "Today", "Tomorrow" or "Mon 24 Nov" for a moment, on the student's own calendar (the phone's time zone): a class at
- *  7:00 in India on a Monday is "Today" on a Sunday evening in New York. */
+ *  7:00 in India on a Monday is "Today" on a Sunday evening in New York. [midSentence]: "today", "tomorrow". */
 @Composable
-fun dayLabel(at: Instant): String {
+fun dayLabel(at: Instant, midSentence: Boolean = false): String {
     val zone = ZoneId.systemDefault()
-    return dayName(daysFromToday(at, Instant.now(), zone), at.atZone(zone).toLocalDate())
+    return dayName(daysFromToday(at, Instant.now(), zone), at.atZone(zone).toLocalDate(), midSentence)
 }
 
 @Composable
-private fun dayName(fromToday: Long, day: LocalDate): String = when (fromToday) {
-    0L -> stringResource(R.string.today)
-    1L -> stringResource(R.string.tomorrow)
+private fun dayName(fromToday: Long, day: LocalDate, midSentence: Boolean): String = when (fromToday) {
+    0L -> stringResource(if (midSentence) R.string.today_mid else R.string.today)
+    1L -> stringResource(if (midSentence) R.string.tomorrow_mid else R.string.tomorrow)
     else -> dateFormat("EEE d MMM").format(day)
 }
 
@@ -305,11 +306,11 @@ fun timeLabel(at: Instant): String = timeParts(at, ZoneId.systemDefault(), dateF
 @Composable
 fun timeLines(at: Instant): List<String> = timeParts(at, ZoneId.systemDefault(), dateFormat("h:mm a")).toList().filterNotNull()
 
-/** "6:25 AM" for a moment today on the student's own calendar, else with its day: "Tomorrow 6:25 AM", in India time too
- *  when the phone is elsewhere. */
+/** "6:25 AM" for a moment today on the student's own calendar, else with its day: "tomorrow 6:25 AM" in a sentence
+ *  ([midSentence]), in India time too when the phone is elsewhere. */
 @Composable
-fun momentLabel(at: Instant): String =
-    if (daysFromToday(at, Instant.now(), ZoneId.systemDefault()) == 0L) timeLabel(at) else "${dayLabel(at)} ${timeLabel(at)}"
+fun momentLabel(at: Instant, midSentence: Boolean = false): String =
+    if (daysFromToday(at, Instant.now(), ZoneId.systemDefault()) == 0L) timeLabel(at) else "${dayLabel(at, midSentence)} ${timeLabel(at)}"
 
 /** "2 d 5 h", "3 h 20 min", "18 min"; in Hindi "3 घंटे 20 मिनट", in Marathi "3 तास 20 मिनिटे" (the units come from
  *  the strings, singular or plural). A zero second part is left out: "2 d", not "2 d 0 h". */

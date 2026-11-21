@@ -105,7 +105,7 @@ private fun SoloDay(s: SoloSession) {
 @Composable
 private fun Refused(vm: AppViewModel, r: RefusedPractice) {
     SectionCard(tint = Palette.saffronLight) {
-        Text(stringResource(R.string.solo_refused, momentLabel(r.at), stringResource(R.string.minutes, r.minutes)),
+        Text(stringResource(R.string.solo_refused, momentLabel(r.at, midSentence = true), stringResource(R.string.minutes, r.minutes)),
             style = MaterialTheme.typography.titleSmall)
         Text(errorText(r.reason), style = MaterialTheme.typography.bodyMedium)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {

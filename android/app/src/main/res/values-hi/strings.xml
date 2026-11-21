@@ -47,6 +47,8 @@
     <string name="next_class">अगली कक्षा</string>
     <string name="today">आज</string>
     <string name="tomorrow">कल</string>
+    <string name="today_mid">आज</string>
+    <string name="tomorrow_mid">कल</string>
     <string name="minutes">%1$d मिनट</string>
     <string name="live_now">अभी लाइव</string>
     <string name="starts_in">%1$s में शुरू</string>

@@ -52,6 +52,8 @@
     <string name="next_class">Next class</string>
     <string name="today">Today</string>
     <string name="tomorrow">Tomorrow</string>
+    <string name="today_mid">today</string>
+    <string name="tomorrow_mid">tomorrow</string>
     <string name="minutes">%1$d min</string>
     <string name="live_now">Live now</string>
     <string name="starts_in">Starts in %1$s</string>

@@ -3,6 +3,7 @@ package com.sattchittanand.yoga
 import org.json.JSONException
 import org.json.JSONObject
 import java.io.File
+import java.io.IOException
 import java.security.MessageDigest
 
 /**
@@ -27,7 +28,13 @@ class SavedScreens(private val file: File) {
     /** Keeps one part ([ME], [DAY] or [CURRICULA]) for this login and language, read at [at]; what was kept for another
      *  login or language goes. */
     @Synchronized
-    fun keep(token: String, lang: String, part: String, json: JSONObject, at: Long) {
+    fun keep(token: String, lang: String, part: String, json: JSONObject, at: Long) = try {
+        write(token, lang, part, json, at)
+    } catch (e: IOException) {
+        // Not kept: the next start reads the screens from the server instead.
+    }
+
+    private fun write(token: String, lang: String, part: String, json: JSONObject, at: Long) {
         val login = hash(token)
         val o = load()?.takeIf { it.optString("login") == login && it.optString("lang") == lang } ?: JSONObject().put("login", login).put("lang", lang)
         o.put(part, json)
@@ -46,6 +53,8 @@ class SavedScreens(private val file: File) {
     private fun load(): JSONObject? = try {
         if (file.isFile) JSONObject(file.readText()) else null
     } catch (e: JSONException) {
+        null
+    } catch (e: IOException) {
         null
     }
 

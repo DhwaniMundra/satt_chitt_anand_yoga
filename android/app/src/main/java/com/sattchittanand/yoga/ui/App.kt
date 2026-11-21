@@ -85,7 +85,7 @@ fun App(vm: AppViewModel, onLanguage: (String) -> Unit) {
             // refusal; one breath from the tap to the first screen.
             else -> Box(Modifier.fillMaxSize()) {
                 if (!vm.signedIn) WelcomeScreen(vm, onLanguage)
-                if (vm.signedIn || vm.signingIn) BreathingWait(vm.signingIn, vm.waitSince)
+                if ((vm.signedIn || vm.signingIn) && !vm.restoring) BreathingWait(vm.signingIn, vm.waitSince)
             }
         }
     }
@@ -163,7 +163,7 @@ private fun ShownFrom(at: Long, retry: () -> Unit) {
     val time = dateFormat("h:mm a").format(moment.atZone(ZoneId.systemDefault()))
     val sameDay = daysFromToday(moment, Instant.now(), ZoneId.systemDefault()) == 0L
     Row(Modifier.fillMaxWidth().background(Palette.saffronLight).padding(start = 16.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(stringResource(R.string.shown_from, if (sameDay) time else "${dayLabel(moment)} $time"), Modifier.weight(1f).padding(vertical = 8.dp),
+        Text(stringResource(R.string.shown_from, if (sameDay) time else "${dayLabel(moment, midSentence = true)} $time"), Modifier.weight(1f).padding(vertical = 8.dp),
             style = MaterialTheme.typography.bodyMedium, color = Palette.ink)
         TextButton(onClick = retry) { Text(stringResource(R.string.try_again)) }
     }

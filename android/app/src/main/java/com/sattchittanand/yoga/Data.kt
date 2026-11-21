@@ -8,7 +8,8 @@ import java.text.Normalizer
 import java.time.Instant
 import java.time.LocalDate
 
-/** What the app keeps on the phone: the login token, the chosen language, the practice on one's own in progress and,
+/** What the app keeps on the phone: the login token, the chosen language, the practice on one's own in progress, what
+ *  waits for the server (the check-ins, and the outbox of what was said after class and the practice on one's own) and,
  *  in a debug build, the server address. */
 class Prefs(context: Context) : SignupMemory, OutboxMemory {
     private val store = context.getSharedPreferences("sca", Context.MODE_PRIVATE)
@@ -339,12 +340,12 @@ data class StudioWords(
     }
 }
 
-/** [batch]: the student's batch, once placed; [sessions]: its coming classes. [afterClass]: the class whose after-class
- *  window is open, whether or not the student checked in to it (its `checkedIn`); [afterSaid]: what the student said
- *  about it, if anything. */
 /** How long after a class what was said about it can still be said or changed, as the server allows. */
 const val AFTER_CLASS_S = 12 * 3600L
 
+/** [batch]: the student's batch, once placed; [sessions]: its coming classes. [afterClass]: the class whose after-class
+ *  window is open, whether or not the student checked in to it (its `checkedIn`); [afterSaid]: what the student said
+ *  about it, if anything. */
 data class Home(val user: User, val batch: BatchInfo?, val studio: Studio, val sessions: List<ClassSession>, val afterClass: ClassSession?,
     val afterSaid: Said?, val groupLink: String?) {
     /** This home as it is once the student has checked in to [sessionId], or not: the class coming, or the one to say

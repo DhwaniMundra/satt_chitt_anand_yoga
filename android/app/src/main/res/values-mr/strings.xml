@@ -47,6 +47,8 @@
     <string name="next_class">पुढचा वर्ग</string>
     <string name="today">आज</string>
     <string name="tomorrow">उद्या</string>
+    <string name="today_mid">आज</string>
+    <string name="tomorrow_mid">उद्या</string>
     <string name="minutes">%1$d मिनिटे</string>
     <string name="live_now">आता लाइव्ह</string>
     <string name="starts_in">सुरू होण्यास %1$s</string>

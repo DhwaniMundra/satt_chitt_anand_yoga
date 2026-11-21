@@ -13,15 +13,18 @@ import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONException
 import org.json.JSONObject
 import java.io.File
 import java.time.Instant
+import java.util.concurrent.Executors
 
 /** All screen state, and every call to the server. Errors land in [error] as the server's code. */
 class AppViewModel(app: Application) : AndroidViewModel(app) {
@@ -36,6 +39,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private var store: LocalStore? = null
     /** What the first screens showed, kept on this phone for this sign-in, to open on at once. */
     private val saved = SavedScreens(File(app.filesDir, "saved_screens.json"))
+    /** Where [saved] is read and written: off the main thread, one at a time, in the order asked. */
+    private val disk = Executors.newSingleThreadExecutor().asCoroutineDispatcher()
+    /** Reading [saved] at the start: the screen stays plain meanwhile, a moment, rather than breathe once and go. */
+    var restoring by mutableStateOf(false); private set
 
     /** For the first screen, before signing in. */
     var studio by mutableStateOf<Studio?>(null); private set
@@ -147,18 +154,25 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private fun newSignedInScope() = CoroutineScope(viewModelScope.coroutineContext + SupervisorJob(viewModelScope.coroutineContext[Job]))
 
     init {
-        when {
-            prefs.token == null -> loadStudio()
-            restoreSaved() -> refreshBehind()
-            else -> launchCall { refreshAll() }
+        val token = prefs.token
+        if (token == null) {
+            loadStudio()
+        } else {
+            restoring = true
+            val lang = prefs.lang
+            viewModelScope.launch {
+                val kept = withContext(disk) { saved.read(token, lang) }
+                restoring = false
+                if (restoreSaved(kept)) refreshBehind() else launchCall { refreshAll() }
+            }
         }
+        showSolo()
     }
 
     /** Opens on what this sign-in's first screens showed last, kept on the phone, as it stands now (classes that have
-     *  ended dropped): true if there was some. */
-    private fun restoreSaved(): Boolean {
-        val kept = prefs.token?.let { saved.read(it, prefs.lang) } ?: return false
-        val me = kept.me ?: return false
+     *  ended dropped): true if there was some. A file that cannot be shown is deleted, so it never stops a start. */
+    private fun restoreSaved(kept: SavedScreens.Saved?): Boolean {
+        val me = kept?.me ?: return false
         val day = kept.day ?: return false
         return try {
             val account = User.from(me.getJSONObject("user"))
@@ -170,15 +184,23 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             user = account
             readAt = kept.at
             true
-        } catch (e: JSONException) {
-            saved.clear()
+        } catch (e: Exception) {
+            teacherHome = null; home = null; dayRead = null; stats = null; curricula = null
+            clearSaved()
             false
         }
     }
 
     /** Keeps a part of the first screens on the phone, under this sign-in and language. */
     private fun keep(part: String, json: JSONObject) {
-        prefs.token?.let { saved.keep(it, prefs.lang, part, json, System.currentTimeMillis()) }
+        val token = prefs.token ?: return
+        val lang = prefs.lang
+        val at = System.currentTimeMillis()
+        viewModelScope.launch(disk) { saved.keep(token, lang, part, json, at) }
+    }
+
+    private fun clearSaved() {
+        viewModelScope.launch(disk) { saved.clear() }
     }
 
     /** Runs a call to the server: [busy] meanwhile ([signingIn] too, for a login or a sign-up, and [saving] the write's
@@ -276,7 +298,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Reads the first screens again: behind them when they show (the Today tab [pulled] down, or anything else), else
      *  with the wait for them. */
-    fun refresh(pulled: Boolean = false) = if (user == null) launchCall { refreshAll() } else refreshBehind(pulled)
+    fun refresh(pulled: Boolean = false) {
+        if (restoring) return // it reads them once it has opened on what was kept
+        if (user == null) launchCall { refreshAll() } else refreshBehind(pulled)
+    }
 
     /** Reads the first screens again behind those showing, which stay as they are until the new ones come: a thin line
      *  meanwhile. If the studio cannot be reached, [shownFrom] says since when the screens are what they are. */
@@ -358,7 +383,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Keeps the login, then reads what the first screen needs; a new student is asked about themselves first. */
     private suspend fun signIn(account: Accounts.SignedIn) {
-        saved.clear() // another sign-in's screens
+        clearSaved() // another sign-in's screens
         prefs.token = account.token
         prefs.role = account.user.role
         signedIn = true
@@ -390,7 +415,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         outbox.keepOnly(null)
         unsent.clear()
         dayRead = null
-        saved.clear()
+        clearSaved()
         shownFrom = null
         prefs.token = null
         prefs.role = null
@@ -892,6 +917,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      *  app). */
     fun onResume() {
         val stale = SystemClock.elapsedRealtime() - refreshedAt > RESUME_REFRESH_MS
+        if (restoring) return // the start's own read follows
         if (signedIn) sendWaiting()
         if (signedIn && !busy && !refreshing && stale) refresh() // signed in, or signed in but the studio was out of reach: try again
         gemma.refresh(loadModel = false) // a download that went on, or finished, while the app was away

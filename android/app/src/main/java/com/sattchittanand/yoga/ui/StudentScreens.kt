@@ -112,7 +112,7 @@ fun TodayScreen(vm: AppViewModel) {
                 val closes = after.endsAt.plusSeconds(AFTER_CLASS_S)
                 SectionCard(tint = Palette.mossLight) {
                     Text(stringResource(R.string.told_teacher, LocalTeacher.current), style = MaterialTheme.typography.titleMedium)
-                    Text(after.batch.name + " · " + stringResource(R.string.change_until, momentLabel(closes)),
+                    Text(after.batch.name + " · " + stringResource(R.string.change_until, momentLabel(closes, midSentence = true)),
                         style = MaterialTheme.typography.bodyMedium, color = Palette.muted)
                     if (vm.afterNotSent(after.id)) NotSent()
                     TextButton(onClick = { afterClass = true }) { Text(stringResource(R.string.change)) }
