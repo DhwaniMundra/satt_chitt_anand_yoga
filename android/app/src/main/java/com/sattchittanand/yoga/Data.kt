@@ -109,6 +109,8 @@ data class ClassSession(
     val joined: Int,
     /** The key of the curriculum the class follows. */
     val curriculum: String?,
+    /** For the teacher: the class has a time of its own, which the batch's no longer moves. */
+    val timeSet: Boolean = false,
 ) {
     val endsAt: Instant get() = startsAt.plusSeconds(minutes * 60L)
 
@@ -116,7 +118,7 @@ data class ClassSession(
         fun from(o: JSONObject) = ClassSession(
             o.getInt("id"), Instant.parse(o.getString("starts_at")), o.intOrNull("duration_min") ?: 55, BatchInfo.from(o.getJSONObject("batch")),
             o.str("meet_link"), o.optBoolean("has_link"), o.optBoolean("checked_in"), o.optBoolean("own_link"), o.optInt("joined"),
-            o.str("curriculum")?.ifEmpty { null },
+            o.str("curriculum")?.ifEmpty { null }, o.optBoolean("time_set"),
         )
     }
 }
@@ -418,7 +420,10 @@ data class TeacherSettings(val groupLink: String?, val groupCode: String?)
 /** A batch with its everyday Meet link, for its classes without their own. */
 data class BatchLink(val info: BatchInfo, val meetLink: String?)
 
-data class TeacherHome(val sessions: List<ClassSession>, val batches: List<BatchLink>, val settings: TeacherSettings, val pendingStudents: Int) {
+/** The teacher's day: its classes, every batch's; today's classes already over ([earlier]), to give one a later time;
+ *  the batches with their everyday links; the settings. */
+data class TeacherHome(val sessions: List<ClassSession>, val batches: List<BatchLink>, val settings: TeacherSettings, val pendingStudents: Int,
+    val earlier: List<ClassSession> = emptyList()) {
     fun batch(key: String?) = batches.firstOrNull { it.info.key == key }
 
     /** This day as it stands at [now], for one kept on the phone: without the classes that have ended. */
@@ -432,6 +437,7 @@ data class TeacherHome(val sessions: List<ClassSession>, val batches: List<Batch
                 o.list("batches").map { BatchLink(BatchInfo.from(it), it.str("meet_link")) },
                 TeacherSettings(s.str("group_link"), s.str("group_code")),
                 o.optInt("pending_students"),
+                o.list("earlier").map(ClassSession::from),
             )
         }
     }

@@ -18,6 +18,8 @@ object Limits {
     val AGE = 5..100
     val HEIGHT_CM = 80..230
     val WEIGHT_KG = 15..250
+    /** A class's length, when the teacher gives it a time of its own. */
+    val CLASS_MINUTES = 10..180
 }
 
 /** The length the server counts. */

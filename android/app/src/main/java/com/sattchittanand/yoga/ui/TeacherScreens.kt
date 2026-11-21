@@ -17,6 +17,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -38,6 +39,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
@@ -77,6 +80,7 @@ fun TeacherTodayScreen(vm: AppViewModel, onLanguage: (String) -> Unit, openStude
             home.sessions.forEach { s ->
                 SessionCard(vm, s, expanded == s.id, home.batch(s.batch.key)?.meetLink) { expanded = if (expanded == s.id) -1 else s.id }
             }
+            if (home.earlier.isNotEmpty()) Earlier(vm, home.earlier)
             GroupCard(vm)
             Label(stringResource(R.string.language))
             LanguageChips(vm.prefs.lang, onLanguage)
@@ -115,6 +119,7 @@ private fun SessionCard(vm: AppViewModel, s: ClassSession, open: Boolean, batchL
             Text(status, style = MaterialTheme.typography.bodyMedium, color = Palette.muted)
         }
         if (open) {
+            ClassTime(vm, s)
             Plan(vm, s)
             OutlinedTextField(
                 link, { edit = it }, label = { Text(stringResource(R.string.meet_link)) },
@@ -146,6 +151,81 @@ private fun SessionCard(vm: AppViewModel, s: ClassSession, open: Boolean, batchL
             }
         }
     }
+}
+
+/** The class's length, a note when its time is the teacher's own, and Change time, which opens [ChangeTime]. */
+@Composable
+private fun ClassTime(vm: AppViewModel, s: ClassSession) {
+    var changing by rememberSaveable(s.id) { mutableStateOf(false) }
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(stringResource(R.string.minutes, s.minutes) + if (s.timeSet) " · " + stringResource(R.string.time_set_by_you) else "",
+            Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium, color = Palette.muted)
+        TextButton(onClick = { changing = true }) { Text(stringResource(R.string.change_time)) }
+    }
+    if (changing) ChangeTime(vm, s) { changing = false }
+}
+
+/** Today's classes already over: each may be given a later time today, to try check-in and after class now. */
+@Composable
+private fun Earlier(vm: AppViewModel, classes: List<ClassSession>) {
+    Label(stringResource(R.string.earlier_today))
+    SectionCard {
+        classes.forEachIndexed { i, s ->
+            if (i > 0) HorizontalDivider(color = Palette.line)
+            var changing by rememberSaveable(s.id) { mutableStateOf(false) }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("${s.batch.name} · ${timeLabel(s.startsAt)}", style = MaterialTheme.typography.bodyLarge)
+                    Text(stringResource(R.string.minutes, s.minutes), style = MaterialTheme.typography.bodyMedium, color = Palette.muted)
+                }
+                TextButton(onClick = { changing = true }) { Text(stringResource(R.string.change_time)) }
+            }
+            if (changing) ChangeTime(vm, s) { changing = false }
+        }
+    }
+}
+
+/** A class's own time: its start in India, on its own date, and its length, 10 minutes (after class opens as it starts)
+ *  to 3 hours. "In 5 minutes" fills in a start five minutes from now, to try check-in and after class at once. A time
+ *  refused says why under the boxes, and the sheet stays open. */
+@Composable
+private fun ChangeTime(vm: AppViewModel, s: ClassSession, close: () -> Unit) {
+    val india = s.startsAt.atZone(IST)
+    var time by rememberSaveable(s.id) { mutableStateOf("%02d:%02d".format(Locale.US, india.hour, india.minute)) }
+    var length by rememberSaveable(s.id) { mutableStateOf(s.minutes.toString()) }
+    val minutes = length.trim().toIntOrNull()
+    val clock = Regex("^([01]?\\d|2[0-3]):([0-5]\\d)$").matches(time.trim())
+    val ok = clock && minutes != null && minutes in Limits.CLASS_MINUTES
+    val saving = vm.saving("time:${s.id}")
+    val saved = stringResource(R.string.time_saved)
+    LaunchedEffect(Unit) { vm.error = null }
+    AlertDialog(
+        onDismissRequest = { if (!saving) close() },
+        title = { Text(stringResource(R.string.change_time)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("${s.batch.name} · ${dayLabel(s.startsAt)}", style = MaterialTheme.typography.bodyMedium, color = Palette.muted)
+                OutlinedTextField(time, { time = it; vm.error = null }, label = { Text(stringResource(R.string.class_starts)) },
+                    placeholder = { Text("18:30") }, singleLine = true, isError = time.isNotBlank() && !clock, modifier = Modifier.fillMaxWidth())
+                AssistChip(onClick = {
+                    val soon = java.time.Instant.now().plusSeconds(5 * 60).atZone(IST)
+                    if (soon.toLocalDate() == india.toLocalDate()) time = "%02d:%02d".format(Locale.US, soon.hour, soon.minute)
+                    vm.error = null
+                }, label = { Text(stringResource(R.string.in_five_minutes)) })
+                OutlinedTextField(length, { length = it.filter(Char::isDigit).take(3); vm.error = null }, label = { Text(stringResource(R.string.class_length)) },
+                    singleLine = true, isError = length.isNotBlank() && !ok && clock, modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
+                Text(stringResource(R.string.class_length_help), style = MaterialTheme.typography.bodySmall, color = Palette.muted)
+                vm.error?.let { Text(errorText(it), color = MaterialTheme.colorScheme.error) }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { if (ok && !saving) vm.setClassTime(s.id, time.trim(), minutes, saved, close) }, enabled = ok) {
+                SavingLabel(stringResource(R.string.save), saving)
+            }
+        },
+        dismissButton = { TextButton(onClick = { if (!saving) close() }) { Text(stringResource(R.string.cancel)) } },
+    )
 }
 
 /** The class's curriculum, one tap to change, and its sequence. */

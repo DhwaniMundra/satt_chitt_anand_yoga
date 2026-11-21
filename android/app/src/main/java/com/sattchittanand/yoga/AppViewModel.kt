@@ -876,6 +876,15 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         readTeacherHome()
     }
 
+    /** A class's own time: its start in India ("18:30", on its own date) and its length in minutes. [done] runs once it
+     *  is saved and the day read again, so one refused keeps the sheet open, with the reason in [error]. */
+    fun setClassTime(sessionId: Int, time: String, minutes: Int, saved: String, done: () -> Unit) = launchCall(saving = "time:$sessionId") {
+        api.put("/teacher/sessions/$sessionId/time?lang=${prefs.lang}", JSONObject().put("time", time).put("duration_min", minutes))
+        readTeacherHome()
+        done()
+        notice = saved
+    }
+
     /** Where a student's practice per item is read: the student's own, or [studentId]'s for the teacher. */
     private fun itemsPath(studentId: Int?) = if (studentId == null) "/me/asanas" else "/teacher/students/$studentId/asanas"
 

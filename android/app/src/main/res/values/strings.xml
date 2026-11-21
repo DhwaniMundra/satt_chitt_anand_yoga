@@ -270,6 +270,14 @@
     <string name="gemma_waiting_network">Waiting for the internet.</string>
     <string name="gemma_use_mobile">Use mobile data</string>
     <string name="cancel">Cancel</string>
+    <string name="change_time">Change time</string>
+    <string name="class_starts">Starts at (India time, 24-hour)</string>
+    <string name="class_length">Length in minutes</string>
+    <string name="class_length_help">10 to 180 minutes. A 10-minute class lets students say how it went as soon as it starts.</string>
+    <string name="in_five_minutes">In 5 minutes</string>
+    <string name="time_saved">Class time changed</string>
+    <string name="time_set_by_you">time set by you</string>
+    <string name="earlier_today">Earlier today</string>
     <string name="gemma_checking">Checking the download…</string>
     <string name="gemma_loading">Starting Gemma on your phone… The first start takes a minute or two.</string>
     <string name="chat_needs_memory">Chat needs a phone with more memory</string>
@@ -369,6 +377,10 @@
     <string name="err_empty_note">The note is empty.</string>
     <string name="err_unknown_item">Something in it is no longer in the studio\'s library.</string>
     <string name="err_gave_up">The studio\'s server kept failing, so this was not sent. Please try again later.</string>
+    <string name="err_bad_time">Type the time as hours:minutes, like 18:30.</string>
+    <string name="err_class_past">That class was on an earlier day.</string>
+    <string name="err_class_overlap">That would overlap another class of this batch.</string>
+    <string name="err_class_answered">Students have already said how this class went, so its time stays.</string>
     <string name="err_field_too_long">%1$s is too long: %2$d letters at most.</string>
     <string name="err_field_range">%1$s: please check the number.</string>
     <string name="err_field_invalid">Please check: %1$s.</string>

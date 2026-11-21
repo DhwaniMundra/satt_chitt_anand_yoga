@@ -261,6 +261,14 @@
     <string name="gemma_waiting_network">इंटरनेटची वाट पाहत आहे.</string>
     <string name="gemma_use_mobile">मोबाइल डेटा वापरा</string>
     <string name="cancel">रद्द करा</string>
+    <string name="change_time">वेळ बदला</string>
+    <string name="class_starts">सुरू होण्याची वेळ (भारतीय वेळ, 24 तास)</string>
+    <string name="class_length">कालावधी, मिनिटांत</string>
+    <string name="class_length_help">10 ते 180 मिनिटे. 10 मिनिटांच्या वर्गात विद्यार्थी सुरू होताच तो कसा झाला ते सांगू शकतात.</string>
+    <string name="in_five_minutes">5 मिनिटांत</string>
+    <string name="time_saved">वर्गाची वेळ बदलली</string>
+    <string name="time_set_by_you">वेळ तुम्ही ठरवली</string>
+    <string name="earlier_today">आज आधी</string>
     <string name="gemma_checking">डाउनलोड तपासत आहे…</string>
     <string name="gemma_loading">तुमच्या फोनवर Gemma सुरू होत आहे… पहिल्यांदा एक-दोन मिनिटे लागतात.</string>
     <string name="chat_needs_memory">चॅटसाठी जास्त मेमरी असलेला फोन हवा</string>
@@ -360,6 +368,10 @@
     <string name="err_empty_note">नोंद रिकामी आहे.</string>
     <string name="err_unknown_item">यातील काही आता स्टुडिओच्या यादीत नाही.</string>
     <string name="err_gave_up">स्टुडिओचा सर्व्हर वारंवार अयशस्वी झाला, म्हणून हे पाठवले नाही. कृपया नंतर पुन्हा प्रयत्न करा.</string>
+    <string name="err_bad_time">वेळ तास:मिनिटे अशी लिहा, जसे 18:30.</string>
+    <string name="err_class_past">तो वर्ग आधीच्या दिवशी होता.</string>
+    <string name="err_class_overlap">हे या बॅचच्या दुसऱ्या वर्गाच्या वेळेशी जुळेल.</string>
+    <string name="err_class_answered">विद्यार्थ्यांनी हा वर्ग कसा झाला ते आधीच सांगितले आहे, म्हणून त्याची वेळ तशीच राहील.</string>
     <string name="err_field_too_long">%1$s खूप मोठे आहे: जास्तीत जास्त %2$d अक्षरे.</string>
     <string name="err_field_range">%1$s: कृपया संख्या तपासा.</string>
     <string name="err_field_invalid">कृपया तपासा: %1$s.</string>

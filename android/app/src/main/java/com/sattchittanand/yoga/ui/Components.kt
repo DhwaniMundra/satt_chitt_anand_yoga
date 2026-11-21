@@ -265,7 +265,8 @@ fun Bar(fraction: Float, color: Color, modifier: Modifier = Modifier) {
 @Composable
 fun locale(): Locale = LocalConfiguration.current.locales[0]
 
-private val IST = ZoneId.of("Asia/Kolkata")
+/** India's time, the studio's. */
+val IST: ZoneId = ZoneId.of("Asia/Kolkata")
 
 /** A date or time pattern in the chosen language, its digits as that language writes them (Devanagari in Marathi, as
  *  the app's other numbers are). */
@@ -356,6 +357,7 @@ private val FIELDS = mapOf(
     "name" to R.string.name, "age" to R.string.age, "height_cm" to R.string.height_cm, "weight_kg" to R.string.weight_kg,
     "password" to R.string.field_password, "new_password" to R.string.field_password, "current_password" to R.string.field_password,
     "meals" to R.string.field_meals, "pain_note" to R.string.field_pain_note, "note" to R.string.field_note,
+    "duration_min" to R.string.class_length, "time" to R.string.class_starts,
 )
 
 @Composable
@@ -395,6 +397,10 @@ fun errorText(code: String): String {
             "empty_note" -> R.string.err_empty_note
             "unknown_item" -> R.string.err_unknown_item
             "gave_up" -> R.string.err_gave_up
+            "bad_time" -> R.string.err_bad_time
+            "class_past" -> R.string.err_class_past
+            "class_overlap" -> R.string.err_class_overlap
+            "class_answered" -> R.string.err_class_answered
             else -> R.string.err_generic
         },
         LocalTeacher.current, // for the messages that name the teacher

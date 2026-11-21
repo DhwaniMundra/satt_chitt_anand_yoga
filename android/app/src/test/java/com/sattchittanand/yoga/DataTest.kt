@@ -90,6 +90,15 @@ class DataTest {
         assertEquals("beginner", t.sessions.single().curriculum)
     }
 
+    @Test fun theTeacherHomeWithTodaysClassesOverAndAClassTimeOfItsOwn() {
+        val t = TeacherHome.from(json("""{"sessions": [${session(2, ", \"time_set\": true")}], "earlier": [${session(1, "")}],
+            "batches": [], "settings": {}, "pending_students": 0}"""))
+        assertEquals(listOf(2 to true), t.sessions.map { it.id to it.timeSet })
+        assertEquals(listOf(1 to false), t.earlier.map { it.id to it.timeSet })
+        val before = TeacherHome.from(json("""{"sessions": [], "batches": [], "settings": {}}"""))
+        assertEquals("a server without them: none", emptyList<ClassSession>(), before.earlier)
+    }
+
     @Test fun aRefusedInputIsNamedByItsField() {
         fun problem(text: String) = problemCode(JSONArray(text))
         assertEquals("too_long:pain_note:600", problem("""[{"type": "string_too_long", "loc": ["body", "pain_note"], "msg": "", "ctx": {"max_length": 600}}]"""))
