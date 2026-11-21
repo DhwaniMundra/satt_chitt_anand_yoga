@@ -352,12 +352,13 @@ def loop(run: Run, backend: p.DevBackend, teacher_code: str, debug: bool) -> Non
 
     # 8. The owner's hand in the Sheet, with the server stopped. The day's last class, which the teacher gives its own
     #    link, has its batch's time moved 45 minutes later: it moves with it, keeping its id and its link, and the day
-    #    gets no second class (a class moves only while it is more than an hour away, so one two hours away is taken).
+    #    gets no second class (a class moves only while it is more than an hour away, so one 80 minutes away or more is
+    #    taken, the steps between reading it and the move taking a few).
     #    Its curriculum's first dose becomes 2.5, which the sequence shows as written.
     with run.part("a batch's time moves in the Sheet"):
         on(TEACHER)
         sessions = p.call("GET", "/teacher/home?lang=en", token)["sessions"]
-        last = [s for s in sessions if moment(s["starts_at"]) > datetime.now(IST) + timedelta(hours=2)][-1]
+        last = [s for s in sessions if moment(s["starts_at"]) > datetime.now(IST) + timedelta(minutes=80)][-1]
         p.scroll_to_top()
         if last["id"] != sessions[0]["id"]:  # the first card is the open one
             p.tap_scrolling(f" · {clock(last['starts_at'])}")
