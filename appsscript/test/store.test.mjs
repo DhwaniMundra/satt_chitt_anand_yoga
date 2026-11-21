@@ -59,8 +59,9 @@ test('a write sent again with the same request id is answered as the first time,
   b.call('POST', '/me/solo', { token: s.token, body: solo, requestId: 'empty' });
   assert.equal(rows('solo_sessions'), 5, 'a refusal is not kept: the same id can try again');
   b.state.offsetMs += 11 * 60000;
-  b.call('POST', '/me/solo', { token: s.token, body: solo, requestId: 'solo-1' });
-  assert.equal(rows('solo_sessions'), 6, 'kept ten minutes');
+  assert.deepEqual(b.call('POST', '/me/solo', { token: s.token, body: solo, requestId: 'solo-1' }), first,
+    'a practice keeps its id in its row: written once past the ten minutes the answer is kept');
+  assert.equal(rows('solo_sessions'), 5);
 });
 
 test('an unknown path is a 404, a wrong method a 405', () => {
@@ -184,6 +185,32 @@ test('setup adds a column the code needs to an existing tab', () => {
   checkins.data[0] = checkins.data[0].slice(0, 5); // a tab without class and class_date
   b.context.setup();
   assert.deepEqual(checkins.rows()[0], ['user_id', 'session_id', 'phase', 'mood', 'created_at', 'class', 'class_date']);
+});
+
+test('a column that came later reads as empty on a Sheet set up before it, and its first write adds its header', () => {
+  const b = freshBackend();
+  const { code } = teacherAndCode(b);
+  const s = signup(b, '9000000002', { code });
+  const solo = b.ss.getSheetByName('solo_sessions');
+  solo.data[0] = ['id', 'user_id', 'started_at', 'ended_at', 'notes']; // the live Sheet before request_id, with a column of the owner's
+  addRow(b, 'solo_sessions', { id: 1, user_id: s.user.id, started_at: b.clock() - 3600000, ended_at: b.clock() - 1800000 });
+  b.context.onEdit({});
+  assert.equal(b.call('GET', '/me/practice', { token: s.token }).body.solo.length, 1, 'read as it is');
+  const send = () => b.call('POST', '/me/solo', { token: s.token, requestId: 'r-1', body: { minutes: 10, entries: [{ item: 'vajrasana', reaction: 3 }] } });
+  assert.equal(send().body.id, 2);
+  assert.deepEqual(solo.rows()[0], ['id', 'user_id', 'started_at', 'ended_at', 'notes', 'request_id'], 'added after the owner\'s column');
+  assert.deepEqual(solo.rows().slice(1).map((r) => [r[0], r[5]]), [[1, ''], [2, 'r-1']]);
+  b.cache.clear();
+  assert.equal(send().body.id, 2, 'and it is read back');
+  assert.equal(solo.rows().length, 3);
+  const classes = b.ss.getSheetByName('class_sessions');
+  const head = classes.data[0].length;
+  classes.data[0] = classes.data[0].filter((h) => h !== 'time_set_by');
+  b.context.onEdit({});
+  assert.ok(b.call('GET', '/home', { token: s.token }).body.sessions.length > 0);
+  assert.equal(classes.rows()[0].length, head - 1, 'reads and writes of no value add nothing');
+  b.context.setup();
+  assert.equal(classes.rows()[0].at(-1), 'time_set_by', 'setup adds it too');
 });
 
 test('ids are allocated one after the other, under the lock', () => {

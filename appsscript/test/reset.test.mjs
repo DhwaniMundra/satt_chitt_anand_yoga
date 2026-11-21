@@ -57,7 +57,7 @@ test('every tab with a person column is cleared with them, and no other column n
   const b = freshBackend();
   assert.deepEqual(run(b, 'personTabs_()'), PERSON_TABS);
   const ids = run(b, 'Object.keys(TABLES_).map((t) => TABLES_[t].map(([c]) => c).filter((c) => /_id$/.test(c)))').flat();
-  assert.deepEqual([...new Set(ids)].sort(), ['session_id', 'solo_id', 'student_id', 'user_id']);
+  assert.deepEqual([...new Set(ids)].sort(), ['request_id', 'session_id', 'solo_id', 'student_id', 'user_id'], 'a request id is the phone\'s, no person\'s');
 });
 
 test('remove test people: only names starting with TEST go, with every row of theirs; everyone else\'s rows stay as they were', () => {

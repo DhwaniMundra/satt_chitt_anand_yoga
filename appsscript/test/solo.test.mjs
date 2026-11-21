@@ -29,6 +29,44 @@ test('a session on one\'s own keeps each item timed or said, dated by the server
   assert.equal(Date.parse(v.entries[0].at), b.clock() - 25 * 60000, 'the moment, for the phone to name the day in its own time zone');
 });
 
+test('a practice sent again with its request id is written once, even days later when the kept answer is long gone', () => {
+  const { b, t, s } = student();
+  const send = () => b.call('POST', '/me/solo', { token: s.token, requestId: 'run-1', body: { minutes: 20, entries: [{ item: 'vajrasana', reaction: 3 }] } });
+  const first = send();
+  assert.deepEqual(first, { status: 200, body: { ok: true, id: 1, saved: 1 } });
+  b.state.offsetMs += 2 * DAY;
+  b.cache.clear(); // the answer kept for a repeat lasts ten minutes at most, and the cache may drop it sooner
+  assert.deepEqual(send(), first, 'the first answer again, from the row');
+  const tab = (name) => b.ss.getSheetByName(name).rows().slice(1);
+  assert.deepEqual([tab('solo_sessions').length, tab('practice').length], [1, 1]);
+  assert.equal(b.call('POST', '/me/solo', { token: s.token, requestId: 'run-2', body: { minutes: 5, entries: [{ item: 'tadasana', reaction: 2 }] } }).body.id, 2,
+    'another request id is another practice');
+  const other = signup(b, '9000000003', { code: b.call('GET', '/teacher/home', { token: t.token }).body.settings.group_code, name: 'Meera' });
+  assert.equal(b.call('POST', '/me/solo', { token: other.token, requestId: 'run-1', body: { minutes: 5, entries: [{ item: 'tadasana', reaction: 2 }] } }).body.id, 3,
+    'the same id from someone else is theirs');
+});
+
+test('a practice is dated by when it ended on the phone, if that is sane; else it ends now', () => {
+  const { b, s } = student();
+  const at = (endedAt) => {
+    const r = b.call('POST', '/me/solo', { token: s.token, body: { minutes: 30, ended_at: endedAt, entries: [{ item: 'vajrasana', reaction: 3 }] } });
+    assert.equal(r.status, 200, JSON.stringify(r));
+    const row = b.ss.getSheetByName('solo_sessions').rows().at(-1);
+    return [row[2].getTime(), row[3].getTime()];
+  };
+  const now = b.clock();
+  const yesterday = new Date(now - DAY).toISOString();
+  assert.deepEqual(at(yesterday), [now - DAY - 30 * 60000, now - DAY], 'sent a day late: it keeps its day');
+  assert.deepEqual(at(new Date(now + 2 * 60000).toISOString()), [now - 30 * 60000, now], 'a phone clock a little ahead: now');
+  assert.deepEqual(at(new Date(now + 60 * 60000).toISOString()), [now - 30 * 60000, now], 'far in the future: now');
+  assert.deepEqual(at(new Date(now - 4 * DAY).toISOString()), [now - 30 * 60000, now], 'older than three days: now');
+  assert.deepEqual(at('soon'), [now - 30 * 60000, now], 'no time: now');
+  assert.deepEqual(at(null), [now - 30 * 60000, now]);
+  const summary = b.call('GET', '/me/practice', { token: s.token, query: { days: 7 } }).body;
+  assert.equal(summary.solo[0].at, new Date(now - DAY - 30 * 60000).toISOString().replace('.000Z', 'Z'), 'the late one on its own day');
+  assert.deepEqual(summary.solo.map((x) => x.id), [1, 2, 3, 4, 5, 6]);
+});
+
 test('the holds: the latest and the longest', () => {
   const { b, s } = student();
   for (const hold of [45, 120, 100]) {
@@ -69,7 +107,7 @@ test('the practice summary lists the sessions on one\'s own, with the item names
   }
   solo(b, s.token, 20, [{ item: 'vajrasana', hold_s: 60 }, { item: 'bhujangasana', reaction: 3 }]);
   const en = b.call('GET', '/me/practice', { token: s.token, query: { days: 7 } }).body;
-  assert.deepEqual(en.solo, [{ date: en.solo[0].date, at: en.solo[0].at, minutes: 20, items: ['Vajrasana', 'Bhujangasana'] }]);
+  assert.deepEqual(en.solo, [{ id: 1, date: en.solo[0].date, at: en.solo[0].at, minutes: 20, items: ['Vajrasana', 'Bhujangasana'] }]);
   assert.match(en.solo[0].at, /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/);
   assert.match(en.solo[0].date, /^\d{4}-\d\d-\d\d$/);
   assert.equal(en.classes_joined, 1, 'practice on one\'s own is not a class');

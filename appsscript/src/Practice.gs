@@ -113,27 +113,45 @@ function sessionPractice_(ctx) {
 }
 
 /** Practice on the student's own: each item with the stopwatch's seconds (an hour at most: a longer hold is kept as
- * an hour), how it went, strain or pain and a note. The server dates it: the session ends now and began `minutes`
- * ago. Items with nothing timed or said are not kept. Who is asking and the library are read before the lock; under
- * it, only the two tabs it writes. */
+ * an hour), how it went, strain or pain and a note. It ended at the phone's `ended_at` (soloEnd_) and began `minutes`
+ * before. Items with nothing timed or said are not kept. Who is asking and the library are read before the lock;
+ * under it, only the two tabs it writes, read there for the first time. A send with a request id is written once
+ * however late it comes again: the row keeps the id, and a repeat gets the first answer from it. */
 function soloPractice_(ctx) {
   const user = member_(ctx);
   const { body } = ctx.check({ body: BODY_.solo });
   const library = library_(ctx);
   const said = saidEntries_(body.entries, library);
   if (!said.length) throw new HttpError_(400, 'nothing_said');
-  const started = ctx.now - body.minutes * 60000;
+  const ended = soloEnd_(body.ended_at, ctx.now);
+  const started = ended - body.minutes * 60000;
+  const requestId = ctx.request.requestId || null;
   return ctx.lock(() => {
     const kept = replayed_(ctx.request); // a copy of this send, with its request id, that had the lock first
     if (kept) return kept;
     const solo = ctx.db.t('solo_sessions');
-    const row = solo.insert([{ id: solo.nextId(), user_id: user.id, started_at: started, ended_at: ctx.now }])[0];
     const table = ctx.db.t('practice');
+    const before = requestId && solo.rows.filter((r) => r.user_id === user.id && r.request_id === requestId)[0];
+    if (before) {
+      return keepAnswer_(ctx.request, { ok: true, id: before.id, saved: table.rows.filter((r) => r.solo_id === before.id).length });
+    }
+    const row = solo.insert([{ id: solo.nextId(), user_id: user.id, started_at: started, ended_at: ended, request_id: requestId }])[0];
     let id = table.nextId();
     table.insert(said.map((e) => ({ id: id++, user_id: user.id, solo_id: row.id, item: e.item, hold_s: Math.min(e.hold_s || 0, MAX_HOLD_S_) || null,
       reaction: e.reaction, pain: e.pain, note: e.note, created_at: ctx.now, item_name: library[e.item].name, week: mondayOf_(started) })));
     return keepAnswer_(ctx.request, { ok: true, id: row.id, saved: said.length });
   }, true);
+}
+
+const SOLO_SKEW_MS_ = 5 * 60000; // how far ahead of the server's clock a phone's may run
+const SOLO_LATE_MS_ = 3 * DAY_MS_; // how late a practice may still come with the phone's time
+
+/** When a practice on one's own ended: the phone's time for it (it may have waited days for a connection), when that is
+ * a time, not later than now but for a phone's clock running a little ahead, nor older than three days; else now. */
+function soloEnd_(endedAt, now) {
+  const at = endedAt === null ? NaN : Date.parse(endedAt);
+  if (isNaN(at) || at > now + SOLO_SKEW_MS_ || at < now - SOLO_LATE_MS_) return now;
+  return Math.min(at, now);
 }
 
 /** The entries worth keeping, one per item (the last wins), notes trimmed: those with a reaction, strain or pain, a

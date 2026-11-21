@@ -7,15 +7,22 @@
 // those other rows point at (a person's, a class's) come from a counter that never goes back (newIds_).
 // Two types are for cells the owner types by hand: `clock`, a time of day kept as text ("07:00"), and `count`, the
 // number a cell starts with, words after it aside ("5 breaths" is 5), null when there is none.
+//
+// A column marked LATER_ came after the first Sheets were set up, so a tab may not have it yet: it reads as empty, and
+// the first write of a value to it adds its header at the end of the tab's header row (Table_.addColumns_), so a live
+// Sheet takes the new code without anyone editing headers by hand. setup() adds it too.
+
+const LATER_ = 'later';
 
 const TABLES_ = {
   // A student's batch (a key of the batches tab) and since when; empty until the teacher places them.
   users: [['id', 'int'], ['name', 'text'], ['phone', 'text'], ['role', 'text'], ['status', 'text'], ['pw_hash', 'text'],
     ['lang', 'text'], ['created_at', 'time'], ['batch', 'text?'], ['batch_since', 'time']],
   tokens: [['token_hash', 'text'], ['user_id', 'int'], ['created_at', 'time']],
-  // A class of one batch; its own Meet link and curriculum, when set, win over the batch's.
+  // A class of one batch; its own Meet link and curriculum, when set, win over the batch's. `time_set_by` is "teacher"
+  // once the teacher gave the class a time of its own, which the batch's time then no longer moves.
   class_sessions: [['id', 'int'], ['batch', 'text'], ['starts_at', 'time'], ['duration_min', 'int'], ['meet_link', 'text?'],
-    ['curriculum', 'text?'], ['updated_at', 'time']],
+    ['curriculum', 'text?'], ['updated_at', 'time'], ['time_set_by', 'text?', LATER_]],
   // `class` and `class_date` copy the class's batch name and India date, for the owner's queries; the app uses session_id.
   checkins: [['user_id', 'int'], ['session_id', 'int'], ['phase', 'text'], ['mood', 'int'], ['created_at', 'time'],
     ['class', 'text'], ['class_date', 'date']],
@@ -46,8 +53,9 @@ const TABLES_ = {
   // (its Monday) copy the item's name and the week, for the owner's queries.
   practice: [['id', 'int'], ['user_id', 'int'], ['session_id', 'int'], ['item', 'text'], ['reaction', 'int'], ['pain', 'int'],
     ['note', 'text?'], ['created_at', 'time'], ['item_name', 'text'], ['week', 'date'], ['solo_id', 'int'], ['hold_s', 'int']],
-  // A student's practice on their own; its items are rows of practice with this solo_id.
-  solo_sessions: [['id', 'int'], ['user_id', 'int'], ['started_at', 'time'], ['ended_at', 'time']],
+  // A student's practice on their own; its items are rows of practice with this solo_id. `request_id`, the phone's id
+  // for the send, so one sent again days later (the answer kept for a repeat long gone) is still written once.
+  solo_sessions: [['id', 'int'], ['user_id', 'int'], ['started_at', 'time'], ['ended_at', 'time'], ['request_id', 'text?', LATER_]],
   // The teacher's word to one student about one item of the library.
   asana_feedback: [['id', 'int'], ['student_id', 'int'], ['item', 'text'], ['text', 'text'], ['created_at', 'time']],
 };
@@ -129,15 +137,14 @@ class Table_ {
     this.schema = TABLES_[name];
     const values = sheet.getDataRange().getValues();
     const header = values[0].map((h) => String(h).trim());
-    this.cols = {};
-    this.schema.forEach(([col]) => {
+    this.width = header.length;
+    this.cols = {}; // each column's index, but a LATER_ one the tab does not have yet
+    this.schema.forEach(([col, , later]) => {
       const i = header.indexOf(col);
-      if (i < 0) throw new HttpError_(500, 'not_set_up');
-      this.cols[col] = i;
+      if (i >= 0) this.cols[col] = i;
+      else if (later !== LATER_) throw new HttpError_(500, 'not_set_up');
     });
-    const indexes = this.schema.map(([col]) => this.cols[col]);
-    this.first = Math.min.apply(null, indexes);
-    this.last = Math.max.apply(null, indexes);
+    this.span_();
     this.lastRow = values.length;
     this.rows = [];
     for (let r = 1; r < values.length; r++) {
@@ -145,10 +152,34 @@ class Table_ {
       if (line.every((v) => v === '' || v === null)) continue;
       const row = { _row: r + 1 };
       this.schema.forEach(([col, type]) => {
-        row[col] = decode_(line[this.cols[col]], type);
+        row[col] = decode_(col in this.cols ? line[this.cols[col]] : '', type);
       });
       this.rows.push(row);
     }
+  }
+
+  /** The first and last columns the code uses. */
+  span_() {
+    const indexes = Object.keys(this.cols).map((col) => this.cols[col]);
+    this.first = Math.min.apply(null, indexes);
+    this.last = Math.max.apply(null, indexes);
+  }
+
+  /** The columns of `cols` the tab does not have yet that a write gives a value (encoded, in `lines`): their headers
+   * are added at the end of the header row first. Writes are made under the lock, by routes that read the tab first
+   * under it, so two requests never add the same column twice. */
+  addColumns_(cols, lines) {
+    const missing = cols.filter((col) => !(col in this.cols) && lines.some((values) => values[col] !== '' && values[col] !== undefined));
+    if (!missing.length) return;
+    const at = Math.max(this.sheet.getLastColumn(), this.width) + 1;
+    const end = at + missing.length - 1;
+    if (end > this.sheet.getMaxColumns()) this.sheet.insertColumnsAfter(this.sheet.getMaxColumns(), end - this.sheet.getMaxColumns());
+    this.sheet.getRange(1, at, 1, missing.length).setValues([missing]).setFontWeight('bold');
+    missing.forEach((col, i) => {
+      this.cols[col] = at - 1 + i;
+    });
+    this.width = end;
+    this.span_();
   }
 
   nextId() {
@@ -158,11 +189,19 @@ class Table_ {
   /** Appends rows (objects keyed by column name); returns them as stored. */
   insert(objects) {
     if (!objects.length) return [];
-    const lines = objects.map((o) => {
+    const encoded = objects.map((o) => {
+      const values = {};
+      this.schema.forEach(([col, type]) => {
+        values[col] = encode_(o[col], type);
+      });
+      return values;
+    });
+    this.addColumns_(this.schema.map(([col]) => col), encoded);
+    const lines = encoded.map((values) => {
       const line = [];
       for (let i = this.first; i <= this.last; i++) line.push('');
-      this.schema.forEach(([col, type]) => {
-        line[this.cols[col] - this.first] = encode_(o[col], type);
+      Object.keys(this.cols).forEach((col) => {
+        line[this.cols[col] - this.first] = values[col];
       });
       return line;
     });
@@ -190,7 +229,8 @@ class Table_ {
     cols.forEach((col) => {
       values[col] = encode_(changes[col], this.schema.filter(([c]) => c === col)[0][1]);
     });
-    this.write_([{ n: row._row, values: values }], cols);
+    this.addColumns_(cols, [values]);
+    this.write_([{ n: row._row, values: values }], cols.filter((col) => col in this.cols));
     cols.forEach((col) => {
       row[col] = changes[col];
     });
@@ -201,14 +241,15 @@ class Table_ {
    * the tab is read, and one at the end of the tab is taken again by the next insert). One setValues for each block
    * of neighbouring rows. */
   rewrite(pairs) {
-    const cols = this.schema.map(([col]) => col);
-    this.write_(pairs.map(([row, o]) => {
+    const entries = pairs.map(([row, o]) => {
       const values = {};
       this.schema.forEach(([col, type]) => {
         values[col] = o ? encode_(o[col], type) : '';
       });
       return { n: row._row, values: values };
-    }), cols);
+    });
+    this.addColumns_(this.schema.map(([col]) => col), entries.map((e) => e.values));
+    this.write_(entries, Object.keys(this.cols));
     pairs.forEach(([row, o]) => {
       if (o) {
         this.schema.forEach(([col, type]) => {

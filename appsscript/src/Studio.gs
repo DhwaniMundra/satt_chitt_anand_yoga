@@ -436,7 +436,7 @@ function practiceSummary_(ctx, userId, days, lang) {
   const solo = mySolo
     .filter((s) => s.started_at >= from && s.started_at <= ctx.now)
     .sort((a, b) => a.started_at - b.started_at)
-    .map((s) => ({ date: istDate_(s.started_at), at: isoTime_(s.started_at), minutes: Math.round((s.ended_at - s.started_at) / 60000),
+    .map((s) => ({ id: s.id, date: istDate_(s.started_at), at: isoTime_(s.started_at), minutes: Math.round((s.ended_at - s.started_at) / 60000),
       items: (itemsBySolo[s.id] || []).sort((a, b) => a.id - b.id).map((p) => itemTitle_(library[p.item], p.item, lang)) }));
   // The items practised most in the period, in class and on one's own apart, so neither is taken for the other: how
   // often, the average reaction, strain or pain.

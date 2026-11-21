@@ -66,6 +66,8 @@ const BODY_ = {
   },
   solo: {
     minutes: F_.int({ required: true, ge: 0, le: 240 }),
+    // When the practice ended, by the phone's clock (ISO 8601): a send that waited for a connection keeps its day.
+    ended_at: F_.str({ nullable: true, def: null, max: 40 }),
     entries: F_.list({
       item: F_.str({ required: true, min: 1, max: 40 }),
       hold_s: F_.int({ nullable: true, def: null, ge: 0 }), // the stopwatch's seconds; over an hour is kept as an hour
