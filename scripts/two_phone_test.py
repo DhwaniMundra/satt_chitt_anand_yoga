@@ -15,7 +15,13 @@ the server is out of reach, and it lands once it is back. A new group code turns
 whose answers are kept when the phone turns, and whose sign-up goes through though its answer is lost on the way; both
 sign out and in again, their data still there, Asha after a login the server answers with an error page, then through
 slow answers that show "Signing in…" and never "Couldn't reach the studio"; her Today tab is read in California; and
-both Today tabs are shot in Hindi.
+both Today tabs are shot in Hindi. Last, the teacher gives a class of the day a time of its own from the app, starting
+now and ten minutes long: Asha sees it at once, checks in while the server is out of reach (her card saying it is not
+sent yet until it lands) and says how it went as it starts; and a practice of hers the server refuses waits on the
+Practice tab with the reason, to open again and send.
+
+The run needs no hour of its own: before any class is made, every batch is given a class every day from two and a half
+hours ahead (schedule()), and the classes the steps need are made relative to now.
 
 Each step saves a screenshot (.local/visualization/viz_v0.9/screens/<version>/), and a check that fails saves the
 screen and its UI dump beside them (fail_<n>.png and .xml). The debug build's run is recorded from both screens into
@@ -69,6 +75,8 @@ PASSWORD = "pilot123"  # every test person's, until the teacher gives one a new 
 OWN_PASSWORD = "pilot456"  # the one Meera then chooses
 TEACHER_PHONE, ASHA, MEERA, KAVYA = "9800000101", "9800000102", "9800000103", "9800000104"
 BATCHES = {b["key"]: b for b in json.loads((ROOT / "content" / "studio.json").read_text(encoding="utf-8"))["batches"]}
+TIMES = {key: b["time"] for key, b in BATCHES.items()}  # each batch's time in the Sheet, as schedule() sets it
+EVERY_DAY = "mon, tue, wed, thu, fri, sat, sun"
 LINKS = {"beginner": "meet.google.com/beg-ginn-ers", "intermediate": "meet.google.com/int-erme-dia",
          "pain_management": "meet.google.com/pai-nman-age"}  # everyday links; Advanced gets no link
 NOT_A_LINK = "ask me for the link"  # typed into Advanced's box, and refused
@@ -170,6 +178,7 @@ def main() -> None:
         run = Run(build, out, sheet)
         runs.append(run)
         with p.dev_backend(sheet, demo=False, teacher_code=args.teacher_code) as backend:
+            schedule(sheet, backend)
             for serial in PHONES:
                 on(serial)
                 p.install(apk)
@@ -369,7 +378,8 @@ def loop(run: Run, backend: p.DevBackend, teacher_code: str, debug: bool) -> Non
         run.check("the teacher gives a coming class its own link", "Saved")
         batch, new_start = last["batch"]["key"], moment(last["starts_at"]) + timedelta(minutes=45)
         backend.stop()
-        edit_sheet(run.sheet, "batches", {"key": batch}, {"time": f"{new_start:%H:%M}"})
+        TIMES[batch] = f"{new_start:%H:%M}"
+        edit_sheet(run.sheet, "batches", {"key": batch}, {"time": TIMES[batch]})
         edit_sheet(run.sheet, "curriculum_items", {"curriculum": last["curriculum"], "position": 1}, {"dose": 2.5})
         backend.start()
         come_back()
@@ -399,7 +409,7 @@ def loop(run: Run, backend: p.DevBackend, teacher_code: str, debug: bool) -> Non
                     == (unchecked, False), f"{asked['id']}, checked in {asked['checked_in']}")
         come_back()
         run.check("a student who did not check in is asked 'Were you in class?'", "Were you in class?")
-        run.check("about that class, once the tab has read it again", f"Beginner · Today · {clock(asked['starts_at'])}")
+        run.check("about that class, once the tab has read it again", f"Beginner · {day_word(asked['starts_at'])} · {clock(asked['starts_at'])}")
         run.shot("12_student_were_you_in_class")
         p.tap(f"Tell {T}")
         run.check("and can say how it went", "How do you feel now?")
@@ -428,7 +438,7 @@ def loop(run: Run, backend: p.DevBackend, teacher_code: str, debug: bool) -> Non
         first = p.call("GET", "/teacher/home?lang=en", token)["sessions"][0]
         if first["id"] != staged:  # a class that began earlier is still on, and its card is the open one
             starts = next(s for s in p.call("GET", "/teacher/home?lang=en", token)["sessions"] if s["id"] == staged)["starts_at"]
-            p.tap_scrolling(f"Today · {clock(starts)}", exact=True)
+            p.tap_scrolling(f"{day_word(starts)} · {clock(starts)}", exact=True)
         p.find_scrolling("Google Meet link")
         p.type_into("Google Meet link", PASTED_LINK)
         p.hide_keyboard()
@@ -837,7 +847,7 @@ def loop(run: Run, backend: p.DevBackend, teacher_code: str, debug: bool) -> Non
                 closes = moment(after["starts_at"]) + timedelta(minutes=after["duration_min"], hours=12)
                 here = closes.astimezone(CALIFORNIA)
                 days = (here.date() - datetime.now(CALIFORNIA).date()).days
-                want = "you can change it until " + {0: clock_at(here), 1: "Tomorrow "}.get(days, f"{here:%a} {here.day} {here:%b} ")
+                want = "you can change it until " + {0: clock_at(here), 1: "tomorrow "}.get(days, f"{here:%a} {here.day} {here:%b} ")
                 line = next((text for text in texts if "you can change it until" in text), "")
                 run.verdict(f"the last moment to change what she said carries its day there, when it is not today ({want!r})", want in line,
                             line)
@@ -868,8 +878,167 @@ def loop(run: Run, backend: p.DevBackend, teacher_code: str, debug: bool) -> Non
         time.sleep(4)
         run.check("and the student's", "Practice", exact=True)
 
+    # 22. The teacher gives the day's Pain management class a time of its own from the app, starting now and ten
+    #     minutes long, as she would to try check-in and after class without waiting for a class: a class still to come
+    #     today, or one over for the day. Asha sees the new time at once, checks in with the studio out of reach (her
+    #     card says it is not sent yet, until it goes), and says how it went at once, a ten-minute class opening after
+    #     class as it starts.
+    with run.part("the teacher moves a class to now, ten minutes long"):
+        class_moved_to_now(run, backend, token, debug)
+
+    # 23. A practice on her own that the server refuses (an item gone from the library, say) waits on the Practice tab
+    #     with the reason, to open again; sent again, it is saved.
+    with run.part("a practice the server refuses waits on the Practice tab"):
+        practice_refused(run, debug)
+
 
 # ---- steps ----
+
+def class_moved_to_now(run: Run, backend: p.DevBackend, token: str, debug: bool) -> None:
+    """Part 22: the teacher gives the day's Pain management class a time of its own, starting now and ten minutes long;
+    Asha sees it, checks in with the server out of reach (her card saying it is not sent yet), and says how it went."""
+    on(TEACHER)
+    tab("Today")
+    home = p.call("GET", "/teacher/home?lang=en", token)
+    today = datetime.now(IST).date()
+    target = next(s for s in home["sessions"] + home["earlier"]
+                  if s["batch"]["key"] == "pain_management" and moment(s["starts_at"]).date() == today)
+    was = f"{moment(target['starts_at']):%H:%M}"
+    if target in home["earlier"]:
+        run.check("a class over for the day is under 'Earlier today', to give a later time", "EARLIER TODAY", scroll=True)
+        p.tap_under(f"Pain management · {clock(target['starts_at'])}", "Change time")
+    else:
+        header = f"{day_word(target['starts_at'])} · {clock(target['starts_at'])}"
+        if target["id"] != home["sessions"][0]["id"]:  # only the first card opens by itself
+            p.tap_scrolling(header)
+            p.scroll_to_top()  # the card that was open closes above it, and the page moves
+        p.tap_under(header, "Change time")
+    run.check("Change time asks for the start in India and the length", "Starts at (India time, 24-hour)")
+    start = datetime.now(IST).replace(second=0, microsecond=0)
+    retype(was, f"{start:%H:%M}", exact=True)
+    retype(str(target["duration_min"]), "10", exact=True)
+    p.hide_keyboard()
+    run.shot("43_teacher_change_time")
+    p.tap("Save", exact=True, last=True)
+    run.check("it is saved", "Class time changed")
+    moved_class = next(s for s in p.call("GET", "/teacher/home?lang=en", token)["sessions"] if s["id"] == target["id"])
+    run.verdict("the class starts now, ten minutes long, its time the teacher's own", (moment(moved_class["starts_at"]),
+                moved_class["duration_min"], moved_class["time_set"]) == (start, 10, True), str(moved_class))
+    if debug:  # the sheet in Hindi and Marathi
+        for lang, change in (("हिन्दी", "समय बदलें"), ("मराठी", "वेळ बदला")):
+            p.tap_scrolling(lang, exact=True)
+            time.sleep(4)
+            p.scroll_to_top()
+            p.tap_scrolling(change, exact=True)
+            time.sleep(1)
+            run.shot(f"43_teacher_change_time_{'hi' if lang == 'हिन्दी' else 'mr'}")
+            p.back()
+        p.tap_scrolling("English", exact=True)
+        time.sleep(4)
+    on(STUDENT)
+    come_back()
+    tab("Today")
+    run.check("Asha's Today tab shows the class at its new time, under way", f"Today · {clock_at(start)} · 10 min")
+    run.shot("44_student_class_moved")
+    backend.stop()  # the studio out of reach as she checks in
+    p.clear_log()
+    p.tap("Join class")
+    p.tap("Okay", exact=True)
+    time.sleep(2)
+    come_back()
+    p.adb("shell", "am", "force-stop", "com.android.chrome")
+    run.check("she is checked in at once", "You checked in", scroll=True)
+    run.check("and, a try having failed, her card says it is not sent yet", "Not sent yet: it will go when you're online.", timeout=40,
+              scroll=True)
+    run.shot("45_student_not_sent")
+    if debug:  # the moved class and the line in Hindi and Marathi
+        for me, lang, today_tab_name, short in (("Me", "हिन्दी", "आज", "hi"), ("मैं", "मराठी", "आज", "mr")):
+            tab(me)
+            p.tap_scrolling(lang, exact=True)
+            time.sleep(4)
+            tab(today_tab_name)
+            time.sleep(2)
+            p.scroll_to_top()
+            run.shot(f"44_45_student_moved_not_sent_{short}")
+        tab("मी")
+        p.tap_scrolling("English", exact=True)
+        time.sleep(4)
+        tab("Today")
+    backend.start()
+    come_back()
+    landed = wait_for(lambda: [c for c in sheet_rows(run.sheet, "checkins") if c["session_id"] == target["id"] and c["phase"] == "before"])
+    run.verdict("back in reach, the check-in lands, once, with her mood", [c["mood"] for c in landed] == [3], str(landed))
+    run.check_gone("and the line goes", "Not sent yet")
+    asked = p.call("GET", "/home?lang=en", api_login(ASHA))["after_class"] or {}
+    run.verdict("a ten-minute class opens after class as it starts", asked.get("id") == target["id"], str(asked.get("id")))
+    p.tap(f"Tell {T}")
+    run.check("and she can say how it went", "How do you feel now?")
+    p.tap("Good", exact=True)
+    p.tap_scrolling("Done", exact=True)
+    run.check("which is kept", f"You told {T} how it went")
+    told = wait_for(lambda: [c for c in sheet_rows(run.sheet, "checkins") if c["session_id"] == target["id"] and c["phase"] == "after"])
+    run.verdict("and lands, once", [c["mood"] for c in told] == [4], str(told))
+
+
+def practice_refused(run: Run, debug: bool) -> None:
+    """Part 23: a practice on Asha's own that the server refuses waits on the Practice tab with the reason; opened again
+    and sent, it is saved."""
+    tab("Practice")
+    time.sleep(2)
+    p.scroll_to_top()
+    p.tap("Practise on your own")
+    p.type_into("Search by name", "vajra")
+    p.tap("+ Vajrasana")
+    p.hide_keyboard()
+    p.tap_scrolling("Start (1)", exact=True)
+    p.tap("Steady", exact=True)
+    p.trouble("/me/solo", refuse="unknown_item")
+    p.tap_scrolling("Finish", exact=True)
+    run.check("refused, the Practice tab says it was not saved", "was not saved", scroll=True)
+    run.check("and why", "Something in it is no longer in the studio's library.", scroll=True)
+    run.check("and offers to open it again", "Open it again", scroll=True)
+    run.shot("46_student_practice_refused")
+    if debug:  # in Hindi and Marathi
+        for me, lang, practice, short in (("Me", "हिन्दी", "अभ्यास", "hi"), ("मैं", "मराठी", "सराव", "mr")):
+            tab(me)
+            p.tap_scrolling(lang, exact=True)
+            time.sleep(4)
+            tab(practice)
+            time.sleep(2)
+            p.scroll_to_top()
+            run.shot(f"46_student_practice_refused_{short}")
+        tab("मी")
+        p.tap_scrolling("English", exact=True)
+        time.sleep(4)
+        tab("Practice")
+        time.sleep(2)
+    solos = len([r for r in sheet_rows(run.sheet, "solo_sessions")])
+    p.tap_scrolling("Open it again", exact=True)
+    run.check("opened again, the practice is as she left it, to send", "Finish", scroll=True)
+    p.tap_scrolling("Finish", exact=True)
+    run.check("sent again, it is saved", "Saved to your practice")
+    landed = wait_for(lambda: sheet_rows(run.sheet, "solo_sessions")[solos:])
+    run.verdict("and lands, once", len(landed) == 1, str(landed))
+    run.check_gone("the refusal goes from the Practice tab", "was not saved")
+
+
+def schedule(sheet: Path, backend: p.DevBackend) -> None:
+    """Has every batch meet every day, from two and a half hours ahead, a quarter of an hour apart, before any class is
+    made: whatever the hour the run starts, the teacher's day has classes far enough ahead for a batch's time to move
+    (part 8), and today has a class of each batch, coming or over, for the teacher to give a time of its own (part 22).
+    The times stay on one date with the move of part 8: past 22:15, they start at 00:30."""
+    now = datetime.now(IST)
+    base = (now + timedelta(minutes=154)).replace(second=0, microsecond=0)
+    base -= timedelta(minutes=base.minute % 5)
+    if base.date() == now.date() and base.hour * 60 + base.minute > 22 * 60 + 15:
+        base = datetime.combine(now.date() + timedelta(days=1), datetime.min.time(), IST) + timedelta(minutes=30)
+    backend.stop()
+    for i, key in enumerate(BATCHES):
+        at = base + timedelta(minutes=15 * i)
+        TIMES[key] = f"{at:%H:%M}"
+        edit_sheet(sheet, "batches", {"key": key}, {"time": TIMES[key], "days": EVERY_DAY})
+    backend.start()
+
 
 def come_back() -> None:
     """Home, then back to the running app, as a person returning from Meet or the share sheet would, and the page pulled
@@ -1158,7 +1327,13 @@ def class_cards() -> list[str]:
 
 def link_box(batch: str) -> str:
     """The label of a batch's everyday-link box on the teacher's Today tab: "Beginner · 07:00"."""
-    return f"{BATCHES[batch]['name']['en']} · {BATCHES[batch]['time']}"
+    return f"{BATCHES[batch]['name']['en']} · {TIMES[batch]}"
+
+
+def day_word(stamp: str) -> str:
+    """A moment's day as a card shows it, in India: "Today", "Tomorrow" or "Fri 21 Nov"."""
+    days = (moment(stamp).date() - datetime.now(IST).date()).days
+    return {0: "Today", 1: "Tomorrow"}.get(days, f"{moment(stamp):%a} {moment(stamp).day} {moment(stamp):%b}")
 
 
 def moment(stamp: str) -> datetime:
@@ -1259,10 +1434,10 @@ def summary(version: str, runs: list[Run], started: datetime) -> str:
         f"- **Server:** the dev backend at {SERVER} (the laptop as the emulators see it), on an empty Sheet for each build",
         f"- **Phones:** {TEACHER} (teacher), {STUDENT} (students), Android 16 emulators with 2 GB and no WhatsApp, so each "
         "share button opens Android's share sheet",
-        f"- **Started:** {started:%Y-%m-%d %H:%M} India time. The teacher's Today tab shows the rest of the day's classes, "
-        "one card per batch, so how many depends on the hour",
+        f"- **Started:** {started:%Y-%m-%d %H:%M} India time. Any hour will do: each batch meets every day from two and a "
+        "half hours after the start, and the classes the steps need are made relative to now",
         "- **Not tested:** the Ask tab, as Gemma needs a phone with 6 GB. The Hindi pass is screenshots only "
-        "(41_hindi_*, 42_hindi_*), read by eye", "",
+        "(41_hindi_*, 42_hindi_*, and the new screens' *_hi and *_mr), read by eye", "",
     ]
     for run in runs:
         passed = sum(ok for _, ok, _ in run.results)
