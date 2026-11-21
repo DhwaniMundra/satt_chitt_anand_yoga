@@ -109,7 +109,11 @@ private fun Refused(vm: AppViewModel, r: RefusedPractice) {
             style = MaterialTheme.typography.titleSmall)
         Text(errorText(r.reason), style = MaterialTheme.typography.bodyMedium)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Button(onClick = { vm.openRefused(r) }) { Text(stringResource(R.string.open_again)) }
+            val finishFirst = stringResource(R.string.finish_first)
+            // Given up on, it goes again as it was; refused, it opens to change.
+            Button(onClick = { vm.openRefused(r, finishFirst) }) {
+                Text(stringResource(if (r.reason == "gave_up") R.string.send_again else R.string.open_again))
+            }
             TextButton(onClick = { vm.letGo(r) }) { Text(stringResource(R.string.let_go)) }
         }
     }

@@ -247,6 +247,8 @@
     <string name="solo_refused">%1$s का आपका अभ्यास (%2$s) सेव नहीं हुआ</string>
     <string name="open_again">फिर से खोलें</string>
     <string name="let_go">छोड़ दें</string>
+    <string name="send_again">फिर से भेजें</string>
+    <string name="finish_first">पहले चल रहा अभ्यास पूरा करें या छोड़ें, फिर इसे खोलें।</string>
     <string name="solo">स्वयं अभ्यास</string>
     <string name="solo_held">स्वयं अभ्यास · %1$s तक</string>
     <string name="holds_line">सबसे लंबा %1$s · पिछली बार %2$s</string>

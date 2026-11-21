@@ -565,11 +565,26 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** Opens a refused practice again, to change and send; not while another is in progress. */
-    fun openRefused(refused: RefusedPractice) {
-        if (solo != null) return
-        solo = restoredRun(JSONObject(refused.write.shown).optString("run").ifEmpty { null }) ?: return letGo(refused)
-        outbox.remove(refused.write)
+    /** A practice the server gave up on is sent again as it was, with its request id, which the server writes once.
+     *  One it refused opens again, to change and send, keeping its length and its day; not while another is in
+     *  progress, when [notice] says [finishFirst]. */
+    fun openRefused(refused: RefusedPractice, finishFirst: String) {
+        val write = refused.write
+        if (refused.reason == "gave_up") {
+            outbox.add(write.copy(refused = null, failures = 0))
+            showSolo()
+            sendPending()
+            return
+        }
+        if (solo != null) {
+            notice = finishFirst
+            return
+        }
+        val body = JSONObject(write.body)
+        val ended = runCatching { Instant.parse(body.getString("ended_at")).toEpochMilli() }.getOrNull()
+        val run = restoredRun(JSONObject(write.shown).optString("run").ifEmpty { null }) ?: return letGo(refused)
+        solo = run.copy(firstMinutes = body.intOrNull("minutes"), firstEndedAt = ended)
+        outbox.remove(write)
         showSolo()
     }
 
@@ -580,8 +595,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Finishes the practice on one's own: if anything was timed or said, it is saved on the phone at once and sent in
-     *  the background, with one request id and when it ended ([sendPending]); the student goes on at once. One the
-     *  server refuses waits on the Practice tab with the reason, to open again. */
+     *  the background, with one request id, its length and when it ended ([sendPending]): now, or for one opened again
+     *  after a refusal, as it was first finished. The student goes on at once. One the server refuses waits on the
+     *  Practice tab with the reason, to open again. */
     fun finishSolo(saved: String) {
         val token = prefs.token ?: return
         val now = SystemClock.elapsedRealtime()
@@ -589,10 +605,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         solo = null
         val entries = run.entries()
         if (entries.isEmpty()) return
-        val minutes = ((now - run.startedAt + 59_999) / 60000).toInt().coerceIn(1, 240) // whole minutes, rounded up
-        val body = JSONObject().put("minutes", minutes).put("ended_at", Instant.now().toString()).put("entries", JSONArray(entries.map { it.json() }))
+        val minutes = run.firstMinutes ?: ((now - run.startedAt + 59_999) / 60000).toInt().coerceIn(1, 240) // whole minutes, rounded up
+        val ended = run.firstEndedAt ?: System.currentTimeMillis()
+        val body = JSONObject().put("minutes", minutes).put("ended_at", Instant.ofEpochMilli(ended).toString())
+            .put("entries", JSONArray(entries.map { it.json() }))
         val names = entries.map { curricula?.library?.get(it.item)?.short(prefs.lang) ?: it.item }
-        val shown = JSONObject().put("at", System.currentTimeMillis() - minutes * 60_000L).put("minutes", minutes).put("items", JSONArray(names))
+        val shown = JSONObject().put("at", ended - minutes * 60_000L).put("minutes", minutes).put("items", JSONArray(names))
             .put("run", keptRun(run))
         outbox.add(PendingWrite(PendingWrite.SOLO, run.startedAt.toString(), "/me/solo", body.toString(), newRequestId(), token, shown.toString()))
         showSolo()

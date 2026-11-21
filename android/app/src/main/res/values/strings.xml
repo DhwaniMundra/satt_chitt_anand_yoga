@@ -256,6 +256,8 @@
     <string name="solo_refused">Your practice from %1$s (%2$s) was not saved</string>
     <string name="open_again">Open it again</string>
     <string name="let_go">Let it go</string>
+    <string name="send_again">Send again</string>
+    <string name="finish_first">Finish or leave the practice in progress first, then open this one.</string>
     <string name="solo">Solo</string>
     <string name="solo_held">Solo · held %1$s</string>
     <string name="holds_line">Longest hold %1$s · latest %2$s</string>

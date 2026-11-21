@@ -134,6 +134,15 @@ class DataTest {
         assertEquals(listOf(3600), run.entries().map { it.heldSeconds })
     }
 
+    @Test fun aPracticeOpenedAgainKeepsTheLengthAndTheEndItWasFirstFinishedWith() {
+        val run = SoloRun.start(listOf("vajrasana"), null, 1_000).copy(firstMinutes = 20, firstEndedAt = 1_763_700_000_000)
+        val back = SoloRun.restore(run.saved())!!
+        assertEquals(20 to 1_763_700_000_000L, back.firstMinutes to back.firstEndedAt)
+        assertEquals("moved after a restart, the end on the wall clock stays", 1_763_700_000_000L, back.shifted(-5_000).firstEndedAt)
+        val fresh = SoloRun.restore(SoloRun.start(listOf("vajrasana"), null, 1_000).saved())!!
+        assertEquals(null to null, fresh.firstMinutes to fresh.firstEndedAt)
+    }
+
     @Test fun aRunInProgressIsKeptAndRestoredAsTyped() {
         val start = 5_000L
         val run = SoloRun.start(listOf("vajrasana", "tadasana"), "beginner", start).toggled(start + 1_000)

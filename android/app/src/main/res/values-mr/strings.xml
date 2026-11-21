@@ -247,6 +247,8 @@
     <string name="solo_refused">%1$s चा तुमचा सराव (%2$s) सेव्ह झाला नाही</string>
     <string name="open_again">पुन्हा उघडा</string>
     <string name="let_go">सोडून द्या</string>
+    <string name="send_again">पुन्हा पाठवा</string>
+    <string name="finish_first">आधी सुरू असलेला सराव पूर्ण करा किंवा सोडा, मग हा उघडा.</string>
     <string name="solo">स्वतः सराव</string>
     <string name="solo_held">स्वतः सराव · %1$s टिकवले</string>
     <string name="holds_line">सर्वात जास्त %1$s · मागच्या वेळी %2$s</string>
