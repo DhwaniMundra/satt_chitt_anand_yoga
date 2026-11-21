@@ -125,8 +125,6 @@ class DataTest {
         val back = SoloRun.restore(run.saved())!!
         assertEquals(run, back)
         assertEquals(run.copy(startedAt = start - 12_000, runningSince = start + 28_000), back.shifted(-12_000))
-        val unsure = run.stopped(start + 50_000).copy(unsure = true, sentMinutes = 1) // a Finish whose outcome is unknown
-        assertEquals("sent again as it was, its length too", unsure, SoloRun.restore(unsure.saved()))
         assertNull(SoloRun.restore("not json"))
         assertNull(SoloRun.restore("""{"started_at": 1, "at": 3, "held_ms": [0], "said": [{"item": "x"}]}"""))
     }

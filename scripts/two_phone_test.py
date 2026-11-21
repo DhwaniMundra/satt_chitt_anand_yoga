@@ -688,6 +688,30 @@ def loop(run: Run, backend: p.DevBackend, teacher_code: str, debug: bool) -> Non
         p.tap("Log in", exact=True, last=True)
         time.sleep(3)
         run.check("and the new one works", "Namaste, Meera")
+    with run.part("Meera says how a class went while the studio is out of reach"):
+        session = p.add_class("advanced", -50)  # under way, five minutes left: its after-class window is open
+        come_back()
+        asked = p.call("GET", "/home?lang=en", api_login(MEERA, OWN_PASSWORD))["after_class"] or {}
+        run.verdict("a class of her new batch is the one she is asked about", asked.get("id") == session, str(asked.get("id")))
+        p.find_scrolling("Were you in class?")
+        backend.stop()
+        p.tap(f"Tell {T}")
+        p.tap("Good", exact=True)
+        p.tap_scrolling("Steady", exact=True)  # the first item's
+        p.tap_scrolling("Done", exact=True)
+        run.check("with the studio out of reach, what she said shows as told at once", f"You told {T} how it went")
+        run.shot("40f_student_after_class_saved_offline")
+        backend.start()
+        come_back()  # coming back to the app sends what waits
+        def hers(tab_name: str, phase: str | None = None) -> list[dict]:
+            return [r for r in sheet_rows(run.sheet, tab_name)
+                    if (r["user_id"], r["session_id"]) == (meera, session) and phase in (None, r.get("phase"))]
+
+        items = wait_for(lambda: hers("practice"))
+        run.verdict("back in reach, it lands, written once: one item", [r["reaction"] for r in items] == [3], str(items))
+        run.verdict("one mood after", [r["mood"] for r in hers("checkins", "after")] == [4], str(hers("checkins", "after")))
+        run.verdict("and her coming to the class, once", len(hers("checkins", "before")) == 1, str(hers("checkins", "before")))
+        run.check("and the Today tab still says she told", f"You told {T} how it went", scroll=True)
 
     # 18. A new group code asks first; the invite opens the share sheet. The old code is turned away from a third
     #     sign-up, whose pain areas are kept when the phone turns.

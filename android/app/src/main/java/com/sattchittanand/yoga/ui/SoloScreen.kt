@@ -117,14 +117,6 @@ fun SoloPractise(vm: AppViewModel, run: SoloRun) {
         )
     }
     val saved = stringResource(R.string.solo_saved)
-    if (run.unsure) { // its Finish may have reached the studio or not: sent again as it is, or left, never changed
-        Column(Modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text(stringResource(R.string.solo_unsure), style = MaterialTheme.typography.bodyLarge)
-            Button(onClick = { vm.finishSolo(saved) }, enabled = !vm.busy, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.try_again)) }
-            OutlinedButton(onClick = { vm.solo = null }, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.leave)) }
-        }
-        return
-    }
     val curricula = vm.curricula ?: return Waiting(vm, vm::refresh)
     val f = run.current
     var now by remember { mutableLongStateOf(SystemClock.elapsedRealtime()) }
@@ -166,10 +158,10 @@ fun SoloPractise(vm: AppViewModel, run: SoloRun) {
                 OutlinedButton(onClick = { update(run.moved(run.at - 1, SystemClock.elapsedRealtime())) }, Modifier.weight(1f)) { Text(stringResource(R.string.back)) }
             }
             Button(onClick = { if (last) vm.finishSolo(saved) else update(run.moved(run.at + 1, SystemClock.elapsedRealtime())) },
-                Modifier.weight(1f), enabled = !vm.busy) {
+                Modifier.weight(1f)) {
                 Text(stringResource(if (last) R.string.finish else R.string.next))
             }
         }
-        if (!last) TextButton(onClick = { vm.finishSolo(saved) }, enabled = !vm.busy) { Text(stringResource(R.string.finish_here)) }
+        if (!last) TextButton(onClick = { vm.finishSolo(saved) }) { Text(stringResource(R.string.finish_here)) }
     }
 }

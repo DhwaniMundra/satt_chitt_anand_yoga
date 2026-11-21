@@ -65,6 +65,7 @@ fun PracticeScreen(vm: AppViewModel) {
     val stats = vm.stats ?: return Waiting(vm, vm::refresh)
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text(stringResource(R.string.my_practice), style = MaterialTheme.typography.headlineSmall)
+        SendError(vm)
         Button(onClick = { choosing = true }, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.practise_alone)) }
         StatTiles(
             stats.classesJoined.toString() to stringResource(R.string.classes_joined),

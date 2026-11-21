@@ -66,7 +66,8 @@ fun rememberNow(): Instant {
 
 /** The student's day: how the last class went, the next class and its sequence, the week ahead, and the studio. While
  *  the next class is within the hour or under way, the tab is read again every two minutes, so a link the teacher has
- *  just shared appears; coming back to the app reads it again too ([AppViewModel.onResume]). */
+ *  just shared appears; coming back to the app reads it again too ([AppViewModel.onResume]). What this phone has yet
+ *  to send goes every two minutes while the app is open ([Main]). */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TodayScreen(vm: AppViewModel) {
@@ -81,7 +82,6 @@ fun TodayScreen(vm: AppViewModel) {
         lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) { // only while the app is in front
             while (true) {
                 delay(2 * 60_000)
-                vm.sendCheckins() // any still waiting
                 val at = Instant.now()
                 if (next != null && at >= next.startsAt.minusSeconds(60 * 60) && at < next.endsAt) vm.refreshHome()
             }
@@ -119,12 +119,7 @@ fun TodayScreen(vm: AppViewModel) {
             }
             if (!home.user.isApproved) PendingCard { aboutMe = true }
 
-            vm.checkInError?.let { code -> // a check-in sent in the background and refused: here until read
-                SectionCard(tint = Palette.saffronLight) {
-                    Text(errorText(code), style = MaterialTheme.typography.bodyMedium)
-                    TextButton(onClick = { vm.checkInError = null }) { Text(stringResource(R.string.ok)) }
-                }
-            }
+            SendError(vm)
             next?.let { NextClassCard(vm, it, now) }
 
             home.groupLink?.let { link ->
@@ -220,6 +215,18 @@ private fun NextClassCard(vm: AppViewModel, s: ClassSession, now: Instant) {
                 Label(stringResource(R.string.sequence) + " · " + plan.name)
                 Sequence(plan, curricula, vm.prefs.lang, collapsed = 3)
             }
+        }
+    }
+}
+
+/** Why something sent in the background was refused (a check-in, what was said after class, a practice on one's
+ *  own): here until read. */
+@Composable
+fun SendError(vm: AppViewModel) {
+    vm.sendError?.let { code ->
+        SectionCard(tint = Palette.saffronLight) {
+            Text(errorText(code), style = MaterialTheme.typography.bodyMedium)
+            TextButton(onClick = { vm.sendError = null }) { Text(stringResource(R.string.ok)) }
         }
     }
 }

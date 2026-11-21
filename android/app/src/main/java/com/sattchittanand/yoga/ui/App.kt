@@ -51,8 +51,12 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import com.sattchittanand.yoga.AppViewModel
 import com.sattchittanand.yoga.R
+import kotlinx.coroutines.delay
 import java.time.Instant
 import java.time.ZoneId
 
@@ -94,6 +98,15 @@ private fun Main(vm: AppViewModel, teacher: Boolean, onLanguage: (String) -> Uni
     val error = vm.error?.let { errorText(it) }
 
     LaunchedEffect(vm.notice) { vm.notice?.let { snackbar.showSnackbar(it); vm.notice = null } }
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    LaunchedEffect(Unit) { // what this phone has yet to send, every two minutes while the app is in front
+        lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            while (true) {
+                delay(2 * 60_000)
+                vm.sendWaiting()
+            }
+        }
+    }
     LaunchedEffect(vm.error, tab) { if (error != null && vm.error !in FORM_ERRORS) snackbar.showSnackbar(error) }
 
     Scaffold(

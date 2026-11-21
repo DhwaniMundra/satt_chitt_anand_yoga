@@ -82,7 +82,7 @@ fun AfterClassScreen(vm: AppViewModel, session: ClassSession, before: Said?, clo
         }
         item {
             Spacer(Modifier.height(4.dp))
-            Button(onClick = { vm.sendAfterClass(session.id, mood, said.values.toList(), before != null, close) }, enabled = !vm.busy,
+            Button(onClick = { vm.sendAfterClass(session.id, mood, said.values.toList(), before != null, close) },
                 modifier = Modifier.fillMaxWidth().height(52.dp)) { Text(stringResource(R.string.done)) }
         }
     }

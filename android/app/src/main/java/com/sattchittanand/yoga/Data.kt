@@ -10,7 +10,7 @@ import java.time.LocalDate
 
 /** What the app keeps on the phone: the login token, the chosen language, the practice on one's own in progress and,
  *  in a debug build, the server address. */
-class Prefs(context: Context) : SignupMemory {
+class Prefs(context: Context) : SignupMemory, OutboxMemory {
     private val store = context.getSharedPreferences("sca", Context.MODE_PRIVATE)
 
     var token: String?
@@ -44,6 +44,11 @@ class Prefs(context: Context) : SignupMemory {
     override var lostSignup: String?
         get() = store.getString("lost_signup", null)
         set(value) = store.edit().putString("lost_signup", value).apply()
+
+    /** The writes waiting for the server, as [PendingWrite.saved] writes them. */
+    override var outbox: String?
+        get() = store.getString("outbox", null)
+        set(value) = store.edit().putString("outbox", value).apply()
 
     companion object {
         /** Read before the activity exists, to pick the language its resources load in. */
@@ -166,6 +171,11 @@ data class ItemFeedback(val item: String, val reaction: Int?, val pain: Boolean,
 
     fun json(): JSONObject = JSONObject().put("item", item).put("reaction", reaction ?: JSONObject.NULL).put("pain", if (pain) 1 else 0)
         .put("note", note.trim().ifEmpty { null } ?: JSONObject.NULL).apply { if (heldSeconds > 0) put("hold_s", heldSeconds) }
+
+    companion object {
+        /** One answer as [json] or the server writes it. */
+        fun from(o: JSONObject) = ItemFeedback(o.text("item"), o.intOrNull("reaction"), o.intOrNull("pain") == 1, o.text("note"))
+    }
 }
 
 /** The first reactions against the latest, as averages on the 1 to 4 scale. */
@@ -206,10 +216,9 @@ data class ItemHistory(val item: String, val inClass: Int, val solo: Int, val tr
 /** Practice on one's own, kept on the phone until Finish: what was said about each item, the one in front of the
  *  student ([at]), each item's stopwatch time ([heldMs], an hour at most), and since when the stopwatch has been
  *  running. Times are SystemClock.elapsedRealtime() milliseconds. [curriculum] is the sequence repeated, for its doses
- *  and cues. [unsure] after a Finish whose outcome is unknown: the run can then only be sent again as it is, its
- *  length too ([sentMinutes]), or left. */
+ *  and cues. */
 data class SoloRun(val startedAt: Long, val curriculum: String?, val said: List<ItemFeedback>, val heldMs: List<Long>, val at: Int = 0,
-    val runningSince: Long? = null, val unsure: Boolean = false, val sentMinutes: Int? = null) {
+    val runningSince: Long? = null) {
     val current get() = said[at]
 
     /** The stopwatch stops at 60:00, as long as the server keeps. */
@@ -231,8 +240,7 @@ data class SoloRun(val startedAt: Long, val curriculum: String?, val said: List<
 
     /** The run as the phone keeps it, every note as typed so far. */
     fun saved(): String = JSONObject().put("started_at", startedAt).put("curriculum", curriculum ?: JSONObject.NULL).put("at", at)
-        .put("running_since", runningSince ?: JSONObject.NULL).put("held_ms", JSONArray(heldMs)).put("unsure", unsure)
-        .put("sent_minutes", sentMinutes ?: JSONObject.NULL)
+        .put("running_since", runningSince ?: JSONObject.NULL).put("held_ms", JSONArray(heldMs))
         .put("said", JSONArray(said.map { JSONObject().put("item", it.item).put("reaction", it.reaction ?: JSONObject.NULL).put("pain", it.pain).put("note", it.note) }))
         .toString()
 
@@ -247,8 +255,8 @@ data class SoloRun(val startedAt: Long, val curriculum: String?, val said: List<
             val o = JSONObject(text)
             val said = o.getJSONArray("said").map { ItemFeedback(it.getString("item"), it.intOrNull("reaction"), it.optBoolean("pain"), it.text("note")) }
             val held = o.getJSONArray("held_ms").let { a -> List(a.length()) { a.getLong(it) } }
-            SoloRun(o.getLong("started_at"), o.str("curriculum"), said, held, o.getInt("at"), if (o.isNull("running_since")) null else o.getLong("running_since"),
-                o.optBoolean("unsure"), o.intOrNull("sent_minutes")).takeIf { said.isNotEmpty() && held.size == said.size && it.at in said.indices }
+            SoloRun(o.getLong("started_at"), o.str("curriculum"), said, held, o.getInt("at"), if (o.isNull("running_since")) null else o.getLong("running_since"))
+                .takeIf { said.isNotEmpty() && held.size == said.size && it.at in said.indices }
         } catch (e: JSONException) {
             null
         }
@@ -372,9 +380,7 @@ data class Home(val user: User, val batch: BatchInfo?, val studio: Studio, val s
 /** What a student said after a class: the mood, if given, and each item's answer. */
 data class Said(val mood: Int?, val items: List<ItemFeedback>) {
     companion object {
-        fun from(o: JSONObject) = Said(o.intOrNull("mood"), o.list("items").map {
-            ItemFeedback(it.text("item"), it.intOrNull("reaction"), it.intOrNull("pain") == 1, it.text("note"))
-        })
+        fun from(o: JSONObject) = Said(o.intOrNull("mood"), o.list("items").map(ItemFeedback::from))
     }
 }
 
