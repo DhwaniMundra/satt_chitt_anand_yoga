@@ -112,8 +112,9 @@ fun TodayScreen(vm: AppViewModel) {
                 val closes = after.endsAt.plusSeconds(AFTER_CLASS_S)
                 SectionCard(tint = Palette.mossLight) {
                     Text(stringResource(R.string.told_teacher, LocalTeacher.current), style = MaterialTheme.typography.titleMedium)
-                    Text(after.batch.name + " · " + stringResource(R.string.change_until, momentLabel(closes)), style = MaterialTheme.typography.bodyMedium,
-                        color = Palette.muted)
+                    Text(after.batch.name + " · " + stringResource(R.string.change_until, momentLabel(closes)),
+                        style = MaterialTheme.typography.bodyMedium, color = Palette.muted)
+                    if (vm.afterNotSent(after.id)) NotSent()
                     TextButton(onClick = { afterClass = true }) { Text(stringResource(R.string.change)) }
                 }
             }
@@ -183,6 +184,7 @@ private fun NextClassCard(vm: AppViewModel, s: ClassSession, now: Instant) {
             Text(stringResource(R.string.starts_in, untilLabel(now, s.startsAt)), style = MaterialTheme.typography.titleMedium, color = Color.White)
         }
         if (s.checkedIn) Pill(stringResource(R.string.checked_in), Palette.mossLight, Palette.moss)
+        if (vm.checkinNotSent(s.id)) NotSent(Palette.mossLight)
 
         if (askMood || (link == null && checkinOpen && !s.checkedIn)) {
             SectionCard(tint = Palette.paper) {
@@ -219,8 +221,13 @@ private fun NextClassCard(vm: AppViewModel, s: ClassSession, now: Instant) {
     }
 }
 
-/** Why something sent in the background was refused (a check-in, what was said after class, a practice on one's
- *  own): here until read. */
+/** On a card whose answer waits on the phone, a try having failed: it goes by itself once the studio can be reached. */
+@Composable
+fun NotSent(color: Color = Palette.muted) {
+    Text(stringResource(R.string.not_sent), style = MaterialTheme.typography.bodyMedium, color = color)
+}
+
+/** Why something sent in the background was refused (a check-in, what was said after class): here until read. */
 @Composable
 fun SendError(vm: AppViewModel) {
     vm.sendError?.let { code ->

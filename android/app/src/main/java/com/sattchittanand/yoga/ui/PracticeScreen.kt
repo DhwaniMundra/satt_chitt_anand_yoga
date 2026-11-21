@@ -13,6 +13,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -30,6 +31,7 @@ import androidx.compose.ui.unit.sp
 import com.sattchittanand.yoga.AppViewModel
 import com.sattchittanand.yoga.JoinedClass
 import com.sattchittanand.yoga.R
+import com.sattchittanand.yoga.RefusedPractice
 import com.sattchittanand.yoga.SoloSession
 import java.util.Locale
 
@@ -66,6 +68,7 @@ fun PracticeScreen(vm: AppViewModel) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text(stringResource(R.string.my_practice), style = MaterialTheme.typography.headlineSmall)
         SendError(vm)
+        vm.refusedPractice.forEach { Refused(vm, it) }
         Button(onClick = { choosing = true }, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.practise_alone)) }
         StatTiles(
             stats.classesJoined.toString() to stringResource(R.string.classes_joined),
@@ -94,6 +97,21 @@ private fun SoloDay(s: SoloSession) {
         Text(stringResource(R.string.solo_row, stringResource(R.string.minutes, s.minutes)), style = MaterialTheme.typography.bodyLarge)
         Text(dayLabel(s.at) + " · " + s.items.joinToString(", "), style = MaterialTheme.typography.bodyMedium, color = Palette.muted,
             maxLines = 2, overflow = TextOverflow.Ellipsis)
+        if (s.notSent) NotSent()
+    }
+}
+
+/** A practice on one's own the server refused: why, and to open it again, to change and send, or let it go. */
+@Composable
+private fun Refused(vm: AppViewModel, r: RefusedPractice) {
+    SectionCard(tint = Palette.saffronLight) {
+        Text(stringResource(R.string.solo_refused, momentLabel(r.at), stringResource(R.string.minutes, r.minutes)),
+            style = MaterialTheme.typography.titleSmall)
+        Text(errorText(r.reason), style = MaterialTheme.typography.bodyMedium)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Button(onClick = { vm.openRefused(r) }) { Text(stringResource(R.string.open_again)) }
+            TextButton(onClick = { vm.letGo(r) }) { Text(stringResource(R.string.let_go)) }
+        }
     }
 }
 

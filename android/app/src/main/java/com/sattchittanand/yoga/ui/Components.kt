@@ -392,6 +392,8 @@ fun errorText(code: String): String {
             "no_link" -> R.string.err_no_link
             "nothing_said" -> R.string.err_nothing_said
             "empty_note" -> R.string.err_empty_note
+            "unknown_item" -> R.string.err_unknown_item
+            "gave_up" -> R.string.err_gave_up
             else -> R.string.err_generic
         },
         LocalTeacher.current, // for the messages that name the teacher

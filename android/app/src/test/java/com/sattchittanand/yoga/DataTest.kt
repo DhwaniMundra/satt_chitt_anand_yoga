@@ -110,6 +110,13 @@ class DataTest {
         assertEquals(hindi, hindi.limitedTo(600))
     }
 
+    @Test fun aPracticeOnOnesOwnCarriesItsIdWhenTheServerGivesOne() {
+        val o = json("""{"id": 7, "date": "2026-11-20", "at": "2026-11-20T03:00:00Z", "minutes": 20, "items": ["Vajrasana"]}""")
+        assertEquals(7, SoloSession.from(o).id)
+        o.remove("id")
+        assertNull(SoloSession.from(o).id)
+    }
+
     @Test fun theStopwatchStopsAtAnHour() {
         val start = 1_000_000L
         var run = SoloRun.start(listOf("vajrasana"), null, start).toggled(start)

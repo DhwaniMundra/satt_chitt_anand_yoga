@@ -177,6 +177,7 @@
     <string name="new_code">नवीन कोड</string>
     <string name="saved">सेव्ह झाले</string>
     <string name="saving">सेव्ह होत आहे…</string>
+    <string name="not_sent">अजून पाठवले नाही: ऑनलाइन आल्यावर आपोआप जाईल.</string>
     <string name="students_title">विद्यार्थी</string>
     <string name="waiting">प्रतीक्षेत</string>
     <string name="approved">मंजूर</string>
@@ -241,6 +242,9 @@
     <string name="keep_going">सराव सुरू ठेवा</string>
     <string name="solo_saved">तुमच्या सरावात जोडले</string>
     <string name="solo_row">स्वतः सराव · %1$s</string>
+    <string name="solo_refused">%1$s चा तुमचा सराव (%2$s) सेव्ह झाला नाही</string>
+    <string name="open_again">पुन्हा उघडा</string>
+    <string name="let_go">सोडून द्या</string>
     <string name="solo">स्वतः सराव</string>
     <string name="solo_held">स्वतः सराव · %1$s टिकवले</string>
     <string name="holds_line">सर्वात जास्त %1$s · मागच्या वेळी %2$s</string>
@@ -352,6 +356,8 @@
     <string name="err_no_link">या वर्गाला अजून लिंक नाही. आधी लिंक टाका.</string>
     <string name="err_nothing_said">अजून सेव्ह करण्यासारखे काही नाही: एखाद्या आसनाची वेळ मोजा, किंवा कसे झाले ते सांगा.</string>
     <string name="err_empty_note">नोंद रिकामी आहे.</string>
+    <string name="err_unknown_item">यातील काही आता स्टुडिओच्या यादीत नाही.</string>
+    <string name="err_gave_up">स्टुडिओचा सर्व्हर वारंवार अयशस्वी झाला, म्हणून हे पाठवले नाही. कृपया नंतर पुन्हा प्रयत्न करा.</string>
     <string name="err_field_too_long">%1$s खूप मोठे आहे: जास्तीत जास्त %2$d अक्षरे.</string>
     <string name="err_field_range">%1$s: कृपया संख्या तपासा.</string>
     <string name="err_field_invalid">कृपया तपासा: %1$s.</string>

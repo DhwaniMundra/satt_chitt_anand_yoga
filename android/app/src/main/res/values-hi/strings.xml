@@ -177,6 +177,7 @@
     <string name="new_code">नया कोड</string>
     <string name="saved">सेव हो गया</string>
     <string name="saving">सेव हो रहा है…</string>
+    <string name="not_sent">अभी भेजा नहीं गया: ऑनलाइन होने पर अपने आप चला जाएगा।</string>
     <string name="students_title">विद्यार्थी</string>
     <string name="waiting">इंतज़ार में</string>
     <string name="approved">मंज़ूर</string>
@@ -241,6 +242,9 @@
     <string name="keep_going">अभ्यास जारी रखें</string>
     <string name="solo_saved">आपके अभ्यास में जुड़ गया</string>
     <string name="solo_row">स्वयं अभ्यास · %1$s</string>
+    <string name="solo_refused">%1$s का आपका अभ्यास (%2$s) सेव नहीं हुआ</string>
+    <string name="open_again">फिर से खोलें</string>
+    <string name="let_go">छोड़ दें</string>
     <string name="solo">स्वयं अभ्यास</string>
     <string name="solo_held">स्वयं अभ्यास · %1$s तक</string>
     <string name="holds_line">सबसे लंबा %1$s · पिछली बार %2$s</string>
@@ -352,6 +356,8 @@
     <string name="err_no_link">इस कक्षा का अभी कोई लिंक नहीं है। पहले लिंक डालें।</string>
     <string name="err_nothing_said">अभी सेव करने को कुछ नहीं: किसी आसन का समय लें, या बताएँ कि कैसा रहा।</string>
     <string name="err_empty_note">नोट खाली है।</string>
+    <string name="err_unknown_item">इसमें कुछ अब स्टूडियो की सूची में नहीं है।</string>
+    <string name="err_gave_up">स्टूडियो का सर्वर बार-बार विफल रहा, इसलिए यह नहीं भेजा गया। कृपया बाद में फिर कोशिश करें।</string>
     <string name="err_field_too_long">%1$s बहुत लंबा है: ज़्यादा से ज़्यादा %2$d अक्षर।</string>
     <string name="err_field_range">%1$s: कृपया संख्या जाँचें।</string>
     <string name="err_field_invalid">कृपया जाँचें: %1$s।</string>

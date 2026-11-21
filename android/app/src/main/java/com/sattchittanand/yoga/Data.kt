@@ -399,12 +399,17 @@ data class JoinedClass(val at: Instant, val name: String, val curriculum: String
     }
 }
 
-/** A session of practice on one's own (GET /me/practice): when it began, how long, and its items' names. */
-data class SoloSession(val at: Instant, val minutes: Int, val items: List<String>) {
+/** A session of practice on one's own (GET /me/practice): when it began, how long, and its items' names; the server's
+ *  id; and, for one this phone has yet to land, whether a try has failed ([notSent]). */
+data class SoloSession(val at: Instant, val minutes: Int, val items: List<String>, val id: Int? = null, val notSent: Boolean = false) {
     companion object {
-        fun from(o: JSONObject) = SoloSession(Instant.parse(o.getString("at")), o.getInt("minutes"), o.getJSONArray("items").let { a -> List(a.length()) { a.getString(it) } })
+        fun from(o: JSONObject) = SoloSession(Instant.parse(o.getString("at")), o.getInt("minutes"),
+            o.getJSONArray("items").let { a -> List(a.length()) { a.getString(it) } }, o.intOrNull("id"))
     }
 }
+
+/** A practice on one's own the server refused, or gave up on ([reason], its code): kept on the phone to open again. */
+data class RefusedPractice(val at: Instant, val minutes: Int, val reason: String, val write: PendingWrite)
 
 /** The class group's link, if the teacher gave one, and the group code (null if the owner cleared it in the Sheet). */
 data class TeacherSettings(val groupLink: String?, val groupCode: String?)

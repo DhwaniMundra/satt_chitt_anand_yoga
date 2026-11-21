@@ -186,6 +186,7 @@
     <string name="new_code">New code</string>
     <string name="saved">Saved</string>
     <string name="saving">Saving…</string>
+    <string name="not_sent">Not sent yet: it will go when you\'re online.</string>
     <string name="students_title">Students</string>
     <string name="waiting">Waiting</string>
     <string name="approved">Approved</string>
@@ -250,6 +251,9 @@
     <string name="keep_going">Keep practising</string>
     <string name="solo_saved">Saved to your practice</string>
     <string name="solo_row">Solo practice · %1$s</string>
+    <string name="solo_refused">Your practice from %1$s (%2$s) was not saved</string>
+    <string name="open_again">Open it again</string>
+    <string name="let_go">Let it go</string>
     <string name="solo">Solo</string>
     <string name="solo_held">Solo · held %1$s</string>
     <string name="holds_line">Longest hold %1$s · latest %2$s</string>
@@ -361,6 +365,8 @@
     <string name="err_no_link">This class has no link yet. Paste one first.</string>
     <string name="err_nothing_said">Nothing to save yet: time an item, or say how it went.</string>
     <string name="err_empty_note">The note is empty.</string>
+    <string name="err_unknown_item">Something in it is no longer in the studio\'s library.</string>
+    <string name="err_gave_up">The studio\'s server kept failing, so this was not sent. Please try again later.</string>
     <string name="err_field_too_long">%1$s is too long: %2$d letters at most.</string>
     <string name="err_field_range">%1$s: please check the number.</string>
     <string name="err_field_invalid">Please check: %1$s.</string>

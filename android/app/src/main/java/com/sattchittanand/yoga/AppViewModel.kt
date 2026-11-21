@@ -44,10 +44,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var stats by mutableStateOf<Stats?>(null); private set
     /** The classes the student joined in the last two weeks, newest first. */
     var practice by mutableStateOf<List<JoinedClass>>(emptyList()); private set
-    /** The practice on one's own of the last two weeks, newest first: those still waiting for the server, then the
-     *  server's ([soloRead]). */
+    /** The practice on one's own of the last two weeks, newest first: the server's ([soloRead]) and those this phone has
+     *  sent or is sending that it does not list yet. */
     var soloSessions by mutableStateOf<List<SoloSession>>(emptyList()); private set
     private var soloRead = emptyList<SoloSession>()
+    /** Practice on one's own the server refused or gave up on, kept on the phone with the reason, to open again. */
+    var refusedPractice by mutableStateOf<List<RefusedPractice>>(emptyList()); private set
     private var soloRun by mutableStateOf(restoredRun(prefs.solo?.takeIf { prefs.token != null }))
     /** Practice on one's own in progress; the screen changes it as the student goes, and [finishSolo] sends it. Kept on
      *  the phone at each change, so it outlasts Android closing the app. */
@@ -120,9 +122,17 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     private val sending = mutableSetOf<Int>()
     /** What was said after class and the practice on one's own, saved on the phone at once and sent in the background
-     *  ([sendPending]) until the server has them; the screens show them as saved meanwhile. */
+     *  ([sendPending]) until the server has them; the screens show them as saved meanwhile, and once landed, over a reply
+     *  read before they landed. */
     private val outbox = Outbox(api, prefs).also { it.keepOnly(prefs.token) }
+    /** The writes on their way, by [PendingWrite.slot]: one at a time for each class's mood, its items and each practice,
+     *  so two sends of the same never land in the wrong order. */
     private val sendingWrites = mutableSetOf<String>()
+    /** The request ids of the check-ins and writes a try has not landed (and those kept from the last time the app was
+     *  open): their cards say they are not sent yet. */
+    private val unsent = mutableStateListOf<String>().also { list ->
+        list += pending.map { it.requestId } + outbox.writes.filter { it.waiting }.map { it.requestId }
+    }
     /** The student's day as the server last gave it, before what this phone has sent or is sending is laid over it. */
     private var dayRead: Home? = null
     /** Check-ins the server has confirmed, by class, kept shown as done until the class ends (its end, as a moment). */
@@ -290,15 +300,17 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Shows a day from the server ([dayRead]) on the Today tab, with what this phone has sent laid over it: the
      *  check-ins shown as done, those not confirmed yet and those that are, until their class ends, in case the day was
-     *  read before the check-in; and what was said after class, while it waits for the server. */
+     *  read before the check-in; and what was said after class, waiting for the server or landed, until it can no longer
+     *  be changed, for the same reason. */
     private fun showDay(day: Home? = dayRead) {
         dayRead = day
         if (day == null) return
         val now = Instant.now()
         confirmed.values.removeAll { it < now }
+        outbox.drop { it.landed && it.kind != PendingWrite.SOLO && JSONObject(it.shown).optLong("until") < now.toEpochMilli() }
         val checkedIn = (pending.map { it.sessionId } + confirmed.keys).fold(day) { h, id -> h.checkedIn(id, true) }
         val after = checkedIn.afterClass
-        val waiting = outbox.writes.filter { it.key == after?.id?.toString() }
+        val waiting = outbox.writes.filter { it.kind != PendingWrite.SOLO && it.refused == null && it.key == after?.id?.toString() }
         val mood = waiting.lastOrNull { it.kind == PendingWrite.AFTER_MOOD }?.let { JSONObject(it.body).intOrNull("mood") }
         val items = waiting.lastOrNull { it.kind == PendingWrite.AFTER_ITEMS }?.let { JSONObject(it.body).getJSONArray("entries").map(ItemFeedback::from) }
         home = if (mood == null && items == null) checkedIn
@@ -376,6 +388,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         signedInScope = newSignedInScope()
         confirmed.clear()
         outbox.keepOnly(null)
+        unsent.clear()
         dayRead = null
         saved.clear()
         shownFrom = null
@@ -386,6 +399,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         user = null; home = null; stats = null; teacherHome = null; insights = null; review = null
         practice = emptyList(); soloSessions = emptyList(); solo = null; students = emptyList(); notes = emptyList(); sharedNotes = emptyList()
         items = emptyList(); itemHistory = null; intake = null; intakeRead = false; pending = emptyList(); sendError = null; soloRead = emptyList()
+        refusedPractice = emptyList()
         chat.clear()
         store = null // the chat and notes stay on the phone, under this account, for its next sign-in
         loadStudio()
@@ -432,6 +446,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      *  the phone, with this sign-in's token, and sent in the background ([sendCheckins]) until the server has it. */
     fun checkIn(sessionId: Int, mood: Int) {
         val token = prefs.token ?: return
+        unsent.removeAll(pending.filter { it.sessionId == sessionId }.map { it.requestId })
         pending = pending.filter { it.sessionId != sessionId } + PendingCheckin(sessionId, mood, newRequestId(), token)
         showDay()
         sendError = null
@@ -452,11 +467,17 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                         token = p.token)
                     if (prefs.token != p.token) return@launch
                     pending = pending - p
+                    unsent -= p.requestId
                     confirmed[p.sessionId] = classOf(p.sessionId)?.endsAt ?: Instant.now()
                     stats = Stats.from(reply.getJSONObject("stats"))
                 } catch (e: ApiError) {
-                    if (prefs.token != p.token || e.status !in 400..499) return@launch
+                    if (prefs.token != p.token) return@launch
+                    if (e.status !in 400..499) {
+                        if (p.requestId !in unsent && p in pending) unsent += p.requestId
+                        return@launch
+                    }
                     pending = pending - p
+                    unsent -= p.requestId
                     showDay()
                     when (e.code) {
                         "signed_out" -> signOutLocally()
@@ -475,6 +496,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** Whether the check-in to this class is waiting for a connection: a try has not landed it. */
+    fun checkinNotSent(sessionId: Int) = pending.any { it.sessionId == sessionId && it.requestId in unsent }
+
+    /** Whether what was said after this class is waiting for a connection: a try has not landed it. */
+    fun afterNotSent(sessionId: Int) = outbox.writes.any { it.kind != PendingWrite.SOLO && it.key == "$sessionId" && it.waiting && it.requestId in unsent }
+
     /** A class on the Today tab, coming or to say how it went. */
     private fun classOf(sessionId: Int) = home?.let { h -> h.sessions.firstOrNull { it.id == sessionId } ?: h.afterClass?.takeIf { it.id == sessionId } }
 
@@ -488,18 +515,46 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         showSolo()
     }
 
-    /** The practice on one's own as the Practice tab lists it: those still waiting for the server first. */
+    /** The practice on one's own as the Practice tab lists it, newest first: the server's, and those this phone sent or
+     *  is sending that the server's list does not have yet (a list read before one landed); and those refused, apart.
+     *  A landed one goes from the phone once the server lists it. */
     private fun showSolo() {
-        val waiting = outbox.writes.filter { it.kind == PendingWrite.SOLO }.reversed().map {
+        val read = soloRead.mapNotNull { it.id }.toSet()
+        val old = System.currentTimeMillis() - 15 * 86_400_000L // out of the two weeks listed
+        // Listed: by its id, or (from a server that gives none) by its start, within a minute or two, and its length.
+        fun listed(o: JSONObject) = o.optInt("id", -1) in read ||
+            soloRead.any { it.minutes == o.optInt("minutes") && kotlin.math.abs(it.at.toEpochMilli() - o.optLong("at")) < 120_000 }
+        outbox.drop { w -> w.kind == PendingWrite.SOLO && w.landed && JSONObject(w.shown).let { listed(it) || it.optLong("at") < old } }
+        val solos = outbox.writes.filter { it.kind == PendingWrite.SOLO }
+        val mine = solos.filter { it.refused == null }.map {
             val o = JSONObject(it.shown)
-            SoloSession(Instant.ofEpochMilli(o.getLong("at")), o.getInt("minutes"), o.getJSONArray("items").strings())
+            SoloSession(Instant.ofEpochMilli(o.getLong("at")), o.getInt("minutes"), o.getJSONArray("items").strings(),
+                notSent = it.waiting && it.requestId in unsent)
         }
-        soloSessions = waiting + soloRead
+        soloSessions = (mine + soloRead).sortedByDescending { it.at }
+        refusedPractice = solos.mapNotNull { w ->
+            val o = JSONObject(w.shown)
+            w.refused?.let { RefusedPractice(Instant.ofEpochMilli(o.getLong("at")), o.getInt("minutes"), it, w) }
+        }
+    }
+
+    /** Opens a refused practice again, to change and send; not while another is in progress. */
+    fun openRefused(refused: RefusedPractice) {
+        if (solo != null) return
+        solo = restoredRun(JSONObject(refused.write.shown).optString("run").ifEmpty { null }) ?: return letGo(refused)
+        outbox.remove(refused.write)
+        showSolo()
+    }
+
+    /** Forgets a refused practice. */
+    fun letGo(refused: RefusedPractice) {
+        outbox.remove(refused.write)
+        showSolo()
     }
 
     /** Finishes the practice on one's own: if anything was timed or said, it is saved on the phone at once and sent in
-     *  the background, with one request id ([sendPending]); the student goes on at once. A refusal opens the run again,
-     *  to change and send. */
+     *  the background, with one request id and when it ended ([sendPending]); the student goes on at once. One the
+     *  server refuses waits on the Practice tab with the reason, to open again. */
     fun finishSolo(saved: String) {
         val token = prefs.token ?: return
         val now = SystemClock.elapsedRealtime()
@@ -508,7 +563,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val entries = run.entries()
         if (entries.isEmpty()) return
         val minutes = ((now - run.startedAt + 59_999) / 60000).toInt().coerceIn(1, 240) // whole minutes, rounded up
-        val body = JSONObject().put("minutes", minutes).put("entries", JSONArray(entries.map { it.json() }))
+        val body = JSONObject().put("minutes", minutes).put("ended_at", Instant.now().toString()).put("entries", JSONArray(entries.map { it.json() }))
         val names = entries.map { curricula?.library?.get(it.item)?.short(prefs.lang) ?: it.item }
         val shown = JSONObject().put("at", System.currentTimeMillis() - minutes * 60_000L).put("minutes", minutes).put("items", JSONArray(names))
             .put("run", keptRun(run))
@@ -544,15 +599,20 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      *  once, and the student goes on. */
     fun sendAfterClass(sessionId: Int, mood: Int?, items: List<ItemFeedback>, changing: Boolean, done: () -> Unit) {
         val token = prefs.token ?: return
+        // Kept shown, once landed, until it can no longer be changed.
+        val until = ((classOf(sessionId)?.endsAt ?: Instant.now()).plusSeconds(AFTER_CLASS_S)).toEpochMilli()
+        val shown = JSONObject().put("until", until).toString()
         if (mood != null) {
             val body = JSONObject().put("phase", "after").put("mood", mood)
-            outbox.add(PendingWrite(PendingWrite.AFTER_MOOD, sessionId.toString(), "/sessions/$sessionId/checkin", body.toString(), newRequestId(), token))
+            outbox.add(PendingWrite(PendingWrite.AFTER_MOOD, sessionId.toString(), "/sessions/$sessionId/checkin", body.toString(), newRequestId(), token,
+                shown))
         }
         val said = items.filter { it.said }
         // Changing what was said replaces all of it, even with nothing, so an item cleared is cleared on the server too.
         if (said.isNotEmpty() || changing) {
             val body = JSONObject().put("entries", JSONArray(said.map { it.json() }))
-            outbox.add(PendingWrite(PendingWrite.AFTER_ITEMS, sessionId.toString(), "/sessions/$sessionId/practice", body.toString(), newRequestId(), token))
+            outbox.add(PendingWrite(PendingWrite.AFTER_ITEMS, sessionId.toString(), "/sessions/$sessionId/practice", body.toString(), newRequestId(), token,
+                shown))
         }
         sendError = null
         showDay()
@@ -561,32 +621,45 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Sends each write waiting in the outbox, with its request id and the login it was made with: at once, at each start
-     *  and return to the app, and every two minutes while the app is open, until it lands. A clear refusal (a 4xx)
-     *  undoes it and [sendError] says why: the Today tab shows the class as not yet said, and a practice on one's own
-     *  opens again. Anything else (no connection, busy, a 5xx) keeps it for the next try. */
+     *  and return to the app, and every two minutes while the app is open, until it lands; one at a time for each class's
+     *  mood, its items and each practice, the newest after the one on its way. A clear refusal (a 4xx), or the server
+     *  failing on it again and again, undoes it: the Today tab shows the class as not yet said, with [sendError] saying
+     *  why, and a practice on one's own waits on the Practice tab with the reason, to open again. Anything else (no
+     *  connection, busy, a 5xx) keeps it for the next try, its card saying it is not sent yet. */
     fun sendPending() {
-        outbox.writes.filter { it.requestId !in sendingWrites }.forEach { w ->
-            sendingWrites += w.requestId
+        outbox.writes.filter { it.waiting && it.slot !in sendingWrites }.forEach { w ->
+            sendingWrites += w.slot
             signedInScope.launch {
                 try {
-                    val reply = outbox.send(w) ?: return@launch
-                    when (w.kind) {
-                        PendingWrite.AFTER_MOOD -> stats = Stats.from(reply.getJSONObject("stats"))
-                        PendingWrite.SOLO -> { showSolo(); quietly { readPractice(); readItems(null) } }
+                    val reply = outbox.send(w)
+                    if (reply == null) {
+                        if (w.requestId !in unsent) unsent += w.requestId
+                    } else {
+                        unsent -= w.requestId
+                        when (w.kind) {
+                            PendingWrite.AFTER_MOOD -> stats = Stats.from(reply.getJSONObject("stats"))
+                            PendingWrite.SOLO -> {
+                                reply.intOrNull("id")?.let { id -> outbox.change(w.copy(landed = true)) { it.copy(shown = JSONObject(it.shown).put("id", id).toString()) } }
+                                quietly { readPractice(); readItems(null) }
+                            }
+                        }
                     }
+                    if (w.kind == PendingWrite.SOLO) showSolo()
                 } catch (e: ApiError) {
+                    unsent -= w.requestId
                     if (e.code == "signed_out") return@launch signOutLocally()
-                    sendError = if (e.code == "checkin_closed") "after_closed" else e.code
                     if (w.kind == PendingWrite.SOLO) {
-                        if (solo == null) solo = restoredRun(JSONObject(w.shown).optString("run").ifEmpty { null })
+                        outbox.add(w.copy(refused = e.code))
                         showSolo()
                     } else {
+                        sendError = if (e.code == "checkin_closed") "after_closed" else e.code
                         showDay()
                     }
                 } catch (_: JSONException) {
                 } finally {
-                    sendingWrites -= w.requestId
+                    sendingWrites -= w.slot
                 }
+                if (outbox.writes.any { it.waiting && it.slot == w.slot && it.requestId != w.requestId }) sendPending() // a newer one, made meanwhile
             }
         }
     }
