@@ -42,7 +42,8 @@ goes unsaid, and nothing is remembered from week to week. The app keeps that rec
 </p>
 
 **For the teacher**
-- **The Today tab:** a card per batch with the class's sequence and Meet link, to share anywhere.
+- **The Today tab:** a card per batch with the class's sequence and Meet link, to share anywhere; Change time moves one
+  class, for a make-up class or a quick try.
 - **The Students tab:** a new student's answers and the batch they point to; placing and moving students; feedback on
   any asana.
 - **The Insights tab:** mood before and after each class, and how each class went, strain or pain first.
@@ -73,6 +74,7 @@ and answer is read, and each finding is fixed, with a test where one fits.
 | v0.7 | The backend moves from a laptop to a Google Sheet |
 | v0.9 | The practice tracker, released for testing |
 | v0.9.1 | Works without WhatsApp; the fixes from two reviews and a two-phone test |
+| v1.0 | Tested on the studio's real backend; waits that feel natural, with answers saved on the phone first; the teacher can move a class |
 
 ![v0.1 against v0.2: Log in moved to the top, and a Hindi question finds its notes](docs/media/figures/before_after.png)
 
@@ -86,13 +88,17 @@ Findings that changed the design:
 - **Testing the release.** After v0.9, an independent review found class times typed in the Sheet read eight minutes
   late, among other things, and a two-phone test ran the loop without WhatsApp. With the studio's request to work
   without it, this became v0.9.1: 131 of 131 checks on two phones.
+- **Testing on the real backend.** On Google's server a write took about 5 to 10 s, and up to about 19 s with several
+  students sending at once. v1.0 saves an answer on the phone at once and sends it in the background, saying "Not sent
+  yet" until it lands. A fresh review then found that a practice resent after the server's ten-minute memory of a
+  request could be written twice; each practice now keeps its request id in its row, so it is written once.
 
 The record: [iteration log](docs/iterations/README.md) · [evaluations, every answer](docs/evals/) ·
 [decisions](docs/decisions.md) · [development](docs/DEVELOPMENT.md).
 
 ## The field test
 
-From late November 2026, the teacher and the first students use v0.9.1 in class, with their consent. The studio's
+From late November 2026, the teacher and the first students use v1.0 in class, with their consent. The studio's
 Sheet records what the app is for (attendance, moods, how each item went, strain or pain, notes on items, practice
 alone, the teacher's feedback), to learn whether the record helps the teacher guide each student and what to change
 next. The Gemma chat stays on the phones, and so do health notes unless a student shares one. Results will be added
@@ -124,7 +130,7 @@ flowchart LR
 
 ## Try it
 
-The app for Android is on the [v0.9.1 release page](https://github.com/DhwaniMundra/satt_chitt_anand_yoga/releases/tag/v0.9.1).
+The app for Android is on the [v1.0 release page](https://github.com/DhwaniMundra/satt_chitt_anand_yoga/releases/tag/v1.0).
 To run everything on the laptop that holds the toolchain:
 
 ```bash

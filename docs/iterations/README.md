@@ -44,6 +44,7 @@ The people, check-ins and comments in the screenshots are demo data.
 | [v0.7](v0.7.md) | A live backend on Google Sheets: an Apps Script web app the studio owns | [`appsscript/README.md`](../../appsscript/README.md) |
 | [v0.9](v0.9.md) | A practice tracker: asanas in class and on one's own, the teacher's feedback, batches and the intake; Gemma answers about each asana; the release for testing | [screens](../media/iterations/v0.9.jpg), [`companion_v0.9_phone`](../evals/companion_v0.9_phone.md), [two phones before the release](../evals/two_phones_v0.9_first.md), [two phones without WhatsApp](../evals/two_phones_v0.9.md) |
 | [v0.9.1](v0.9.1.md) | Works without WhatsApp; attendance without a check-in; the streak counted in classes; the fixes from two reviews | [two phones, 131 of 131](../evals/two_phones_v0.9.1.md) |
+| [v1.0](v1.0.md) | Tested on the real backend; waits that feel natural, with answers saved on the phone first; the teacher moves a class from the app; Reset the studio; the fixes from three reviews | [two phones before the live test](../evals/two_phones_v1.0-hardening.md), [two phones, 178 of 178 and 173 of 173](../evals/two_phones_v1.0-natural-waits.md) |
 
 ## Who did what
 
