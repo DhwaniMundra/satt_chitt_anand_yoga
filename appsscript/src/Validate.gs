@@ -55,6 +55,9 @@ const BODY_ = {
   status: { status: F_.oneOf(['approved', 'rejected'], REQUIRED_) },
   shared: { text: F_.str({ required: true, min: 1, max: 1000 }) },
   curriculum: { curriculum: F_.str({ required: true, min: 1, max: 40 }) },
+  // A class's own start in India ("18:30"), on its own date, and its length: 10 minutes (after class opens as it
+  // starts) to 3 hours.
+  time: { time: F_.str({ required: true, min: 1, max: 5 }), duration_min: F_.int({ required: true, ge: 10, le: 180 }) },
   itemFeedback: { item: F_.str({ required: true, min: 1, max: 40 }), text: F_.str({ required: true, min: 1, max: 1000 }) },
   practice: {
     entries: F_.list({

@@ -134,6 +134,7 @@ function routes_() {
     ['PUT', '/teacher/sessions/{session_id}', setLink_, LOCK_],
     ['GET', '/teacher/sessions/{session_id}/share', share_],
     ['PUT', '/teacher/sessions/{session_id}/curriculum', setCurriculum_, LOCK_],
+    ['PUT', '/teacher/sessions/{session_id}/time', setTime_, LOCK_],
     ['GET', '/teacher/sessions/{session_id}/practice', classReview_],
     ['PUT', '/teacher/settings', updateSettings_, LOCK_],
     ['PUT', '/teacher/batches/{key}', setBatchLink_, LOCK_],

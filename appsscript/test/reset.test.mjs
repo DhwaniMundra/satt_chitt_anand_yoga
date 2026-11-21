@@ -124,6 +124,9 @@ test('reset the studio: everyone goes, the teacher too, and rows left by anyone;
   const day = b.call('GET', '/teacher/home', { token: t.token }).body.sessions;
   ok(b.call('PUT', '/teacher/sessions/' + day[0].id, { token: t.token, body: { meet_link: 'https://meet.google.com/xyz-abcd-efg' } }));
   ok(b.call('PUT', '/teacher/sessions/' + day[1].id + '/curriculum', { token: t.token, body: { curriculum: 'pain_management' } }));
+  const moved = day[2];
+  const at = moved.starts_at;
+  ok(b.call('PUT', '/teacher/sessions/' + moved.id + '/time', { token: t.token, body: { time: '21:00', duration_min: 10 } }));
   addRow(b, 'checkins', { user_id: 99, session_id: 1, phase: 'before', mood: 3, created_at: b.clock() }); // someone deleted from users by hand
   const users = tab(b, 'users').length - 1;
   const lastId = Math.max(...tab(b, 'users').slice(1).map((r) => r[0]));
@@ -131,7 +134,7 @@ test('reset the studio: everyone goes, the teacher too, and rows left by anyone;
   const headers = Object.fromEntries(['users'].concat(PERSON_TABS.map(([name]) => name)).map((name) => [name, tab(b, name)[0]]));
 
   const out = run(b, 'resetStudio_(new Db_())');
-  assert.deepEqual([out.people, out.teacher, out.cleared], [users, true, 6], 'four batches, a class\'s link, a class\'s curriculum');
+  assert.deepEqual([out.people, out.teacher, out.cleared], [users, true, 7], 'four batches, a class\'s link, its curriculum, its time');
   for (const name of Object.keys(headers)) assert.deepEqual(tab(b, name), [headers[name]], name + ': the header alone');
   const now = snapshot(b, KEPT_TABS);
   for (const name of ['batches', 'library', 'curricula', 'curriculum_items', 'Dashboard']) {
@@ -139,8 +142,8 @@ test('reset the studio: everyone goes, the teacher too, and rows left by anyone;
   }
   assert.equal(tab(b, 'class_sessions').length, classes, 'the week of classes stays');
   const [head, ...rows] = tab(b, 'class_sessions');
-  assert.deepEqual(rows.filter((r) => r[head.indexOf('meet_link')] !== '' || r[head.indexOf('curriculum')] !== ''), [],
-    'no class keeps a link or a curriculum of its own');
+  assert.deepEqual(rows.filter((r) => ['meet_link', 'curriculum', 'time_set_by'].some((c) => r[head.indexOf(c)] !== '')), [],
+    'no class keeps a link, a curriculum or a time of its own');
   assert.equal(me(b, t).status, 401, 'the teacher too is signed out');
 
   const teacher = signup(b, '9000000009', { role: 'teacher', code: 'TEACH123' });
@@ -148,9 +151,14 @@ test('reset the studio: everyone goes, the teacher too, and rows left by anyone;
   const home = b.call('GET', '/teacher/home', { token: teacher.token }).body;
   assert.deepEqual([home.settings.group_code, home.settings.group_link], [code, 'https://chat.whatsapp.com/AbCdEf123'], 'the settings stay');
   assert.deepEqual(home.batches.map((x) => x.meet_link), [null, null, null, null], 'no batch keeps an everyday link');
+  const [bh, ...brows] = tab(b, 'batches');
+  const curriculumOf = Object.fromEntries(brows.map((r) => [r[bh.indexOf('key')], r[bh.indexOf('curriculum')]]));
   assert.deepEqual(home.sessions.map((s) => [s.meet_link, s.has_link, s.curriculum]),
-    home.sessions.map((s) => [null, false, home.batches.find((x) => x.key === s.batch.key)?.curriculum ?? s.curriculum]),
-    'each class follows its batch again: no link, and its batch\'s curriculum');
+    home.sessions.map((s) => [null, false, curriculumOf[s.batch.key]]), 'each class follows its batch again: no link, and its batch\'s curriculum');
+  assert.ok(home.sessions.some((s) => s.curriculum !== 'pain_management'), 'the class given another curriculum has its batch\'s again');
+  const back = tab(b, 'class_sessions').slice(1).find((r) => r[0] === moved.id);
+  assert.deepEqual([new Date(back[head.indexOf('starts_at')]).toISOString().replace('.000Z', 'Z'), back[head.indexOf('duration_min')]],
+    [at, moved.duration_min], 'the class moved is back at its batch\'s time');
   assert.equal(signup(b, '9000000002', { code, name: 'Asha' }).user.status, 'approved', 'and the group code');
   assert.equal(b.call('GET', '/teacher/students', { token: teacher.token }).body.students[0].joined, 0, 'no check-in of anyone before');
 });
@@ -208,14 +216,14 @@ test('the menu: its items, and each asks before it removes anything', () => {
   }
   assert.equal(state.dialogs.at(-1).prompt, 'Nothing was removed: the box did not say RESET.');
   assert.match(state.dialogs[0].prompt, /^This removes everyone signed up \(3 people, the teacher among them\) and every row they made/);
-  assert.match(state.dialogs[0].prompt, /The Meet links the teacher set go too, each batch's and each class's own, and the curriculum chosen for a class/);
+  assert.match(state.dialogs[0].prompt, /The Meet links the teacher set go too, each batch's and each class's own, and the curriculum and the time chosen for a class/);
   assert.match(state.dialogs[0].prompt, /What stays: the batches \(their names, days and times\), the curriculum \(library, curricula, curriculum_items\), the classes/);
   assert.equal(state.dialogs[2].kind, 'prompt');
   state.dialogs.splice(0);
   state.answers.push('YES', ['OK', ' RESET ']);
   context.resetStudio();
   assert.equal(users(), 0);
-  assert.match(state.dialogs.at(-1).prompt, /^The studio is reset: 3 people and \d+ rows were removed, and the Meet links and curricula the teacher set cleared\./);
+  assert.match(state.dialogs.at(-1).prompt, /^The studio is reset: 3 people and \d+ rows were removed, and the Meet links, curricula and class times the teacher set cleared\./);
 
   state.answers.push('NO');
   context.newGroupCode();

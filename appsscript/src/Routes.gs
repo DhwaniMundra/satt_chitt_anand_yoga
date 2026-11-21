@@ -292,7 +292,8 @@ function feedback_(ctx) {
 // ---------- teacher ----------
 
 /** The teacher's day: the classes of the next day that has some left (today, or tomorrow once today's are over),
- * every batch's, each with its curriculum and link; the batches with their everyday links; the settings. */
+ * every batch's, each with its curriculum and link; today's classes already over (`earlier`), to give one a later time;
+ * the batches with their everyday links; the settings. */
 function teacherHome_(ctx) {
   teacher_(ctx);
   const { query } = ctx.check({ query: QUERY_LANG_ });
@@ -304,15 +305,14 @@ function teacherHome_(ctx) {
   });
   const plan = sessionCurricula_(ctx);
   const day = ahead.length ? istDay_(ahead[0].starts_at) : null;
-  const sessions = ahead.filter((r) => istDay_(r.starts_at) === day).map((r) => {
-    const s = sessionJson_(r, query.lang, true, batches);
-    s.own_link = r.meet_link !== null && r.meet_link !== '';
-    s.joined = joined[r.id] || 0;
-    s.curriculum = plan[r.id];
-    return s;
-  });
+  const today = istDay_(ctx.now);
+  const show = (r) => teacherSession_(ctx, r, query.lang, batches, joined, plan);
+  const earlier = ctx.db.t('class_sessions').rows
+    .filter((r) => istDay_(r.starts_at) === today && r.starts_at + r.duration_min * 60000 <= ctx.now && batches[r.batch])
+    .sort((a, b) => a.starts_at - b.starts_at || String(a.batch).localeCompare(String(b.batch)));
   return {
-    sessions: sessions,
+    sessions: ahead.filter((r) => istDay_(r.starts_at) === day).map(show),
+    earlier: earlier.map(show),
     batches: Object.keys(batches).map((key) => Object.assign(batchJson_(batches[key], key, query.lang), { meet_link: batches[key].meet_link })),
     settings: { group_link: ctx.db.setting('group_link'), group_code: ctx.db.setting('group_code') },
     pending_students: ctx.db.t('users').rows.filter((u) => u.status === 'pending').length,
@@ -337,6 +337,43 @@ function setLink_(ctx) {
   const link = cleanMeetLink_(body.meet_link || '');
   ctx.db.t('class_sessions').update(row, { meet_link: link, updated_at: ctx.now });
   return shareFor_(ctx, row, query.lang);
+}
+
+/** A class's own time, on its own India date: its start ("18:30") and length, set by the teacher, which the batch's time
+ * then no longer moves (ensureWeek_). A class already over today may start again later today. Refused for a class of
+ * an earlier day (class_past), one that would overlap another class of its batch (class_overlap), and one with
+ * after-class answers or practice said about it (class_answered), which belong to the time it was held; check-ins
+ * before it move with it. The class as the teacher's day shows it. */
+function setTime_(ctx) {
+  teacher_(ctx);
+  const { path, query, body } = ctx.check({ path: PATH_SESSION_, query: QUERY_LANG_, body: BODY_.time });
+  const clock = /^(\d{1,2}):(\d\d)$/.exec(latinDigits_(body.time).trim());
+  if (!clock || Number(clock[1]) > 23 || Number(clock[2]) > 59) throw new HttpError_(400, 'bad_time');
+  const row = sessionRow_(ctx, path.session_id);
+  const day = istDay_(row.starts_at);
+  if (day < istDay_(ctx.now)) throw new HttpError_(400, 'class_past');
+  const start = istMidnight_(day) + (Number(clock[1]) * 60 + Number(clock[2])) * 60000;
+  const end = start + body.duration_min * 60000;
+  const classes = ctx.db.t('class_sessions');
+  if (classes.rows.some((r) => r.id !== row.id && r.batch === row.batch && r.starts_at < end && start < r.starts_at + r.duration_min * 60000)) {
+    throw new HttpError_(400, 'class_overlap');
+  }
+  const answered = ctx.db.t('checkins').rows.some((c) => c.session_id === row.id && c.phase === 'after') ||
+    ctx.db.t('practice').rows.some((p) => p.session_id === row.id);
+  if (answered) throw new HttpError_(400, 'class_answered');
+  classes.update(row, { starts_at: start, duration_min: body.duration_min, time_set_by: 'teacher', updated_at: ctx.now });
+  return teacherSession_(ctx, row, query.lang, batches_(ctx));
+}
+
+/** A class as the teacher's day shows it: with whether it has its own link, how many checked in, its curriculum, and
+ * whether the teacher gave it a time of its own. */
+function teacherSession_(ctx, row, lang, batches, joined, plan) {
+  const s = sessionJson_(row, lang, true, batches);
+  s.own_link = row.meet_link !== null && row.meet_link !== '';
+  s.joined = joined ? joined[row.id] || 0 : ctx.db.t('checkins').rows.filter((c) => c.session_id === row.id && c.phase === 'before').length;
+  s.curriculum = (plan || sessionCurricula_(ctx))[row.id];
+  s.time_set = Boolean(row.time_set_by);
+  return s;
 }
 
 function share_(ctx) {

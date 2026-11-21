@@ -1743,6 +1743,7 @@ function routes_() {
     ['PUT', '/teacher/sessions/{session_id}', setLink_, LOCK_],
     ['GET', '/teacher/sessions/{session_id}/share', share_],
     ['PUT', '/teacher/sessions/{session_id}/curriculum', setCurriculum_, LOCK_],
+    ['PUT', '/teacher/sessions/{session_id}/time', setTime_, LOCK_],
     ['GET', '/teacher/sessions/{session_id}/practice', classReview_],
     ['PUT', '/teacher/settings', updateSettings_, LOCK_],
     ['PUT', '/teacher/batches/{key}', setBatchLink_, LOCK_],
@@ -1960,6 +1961,9 @@ const BODY_ = {
   status: { status: F_.oneOf(['approved', 'rejected'], REQUIRED_) },
   shared: { text: F_.str({ required: true, min: 1, max: 1000 }) },
   curriculum: { curriculum: F_.str({ required: true, min: 1, max: 40 }) },
+  // A class's own start in India ("18:30"), on its own date, and its length: 10 minutes (after class opens as it
+  // starts) to 3 hours.
+  time: { time: F_.str({ required: true, min: 1, max: 5 }), duration_min: F_.int({ required: true, ge: 10, le: 180 }) },
   itemFeedback: { item: F_.str({ required: true, min: 1, max: 40 }), text: F_.str({ required: true, min: 1, max: 1000 }) },
   practice: {
     entries: F_.list({
@@ -2961,7 +2965,7 @@ function weekStarts_(now, batches) {
  * A class whose time or length no longer matches the batch's (the owner changed it) is moved in its row, keeping its
  * id, its own link and its curriculum, when nobody has checked in to it and both its old and its new start are more
  * than an hour away (out of its check-in window, perhaps after its message was shared); otherwise it stays as it is,
- * and the day gets no second class. A class is removed only on a day its batch no longer meets, under the same
+ * and the day gets no second class. A class the teacher gave a time of its own (setTime_) keeps it. A class is removed only on a day its batch no longer meets, under the same
  * conditions. A batch whose time is no time (being retyped, say) is left as it is.
  *
  * The classes and check-ins are read for this only under the lock, for the first time in the request: read before
@@ -2995,7 +2999,8 @@ function ensureWeek_(ctx) {
       const rows = byDay[dayOf(w)] || [];
       const row = rows[0];
       if (!row) todo.missing.push(w);
-      else if (rows.length === 1 && free(row) && away(w.starts_at) && (row.starts_at !== w.starts_at || row.duration_min !== w.duration_min)) {
+      else if (rows.length === 1 && !row.time_set_by && free(row) && away(w.starts_at) &&
+        (row.starts_at !== w.starts_at || row.duration_min !== w.duration_min)) {
         todo.moved.push([row, w]);
       }
     });
@@ -3986,7 +3991,8 @@ function feedback_(ctx) {
 // ---------- teacher ----------
 
 /** The teacher's day: the classes of the next day that has some left (today, or tomorrow once today's are over),
- * every batch's, each with its curriculum and link; the batches with their everyday links; the settings. */
+ * every batch's, each with its curriculum and link; today's classes already over (`earlier`), to give one a later time;
+ * the batches with their everyday links; the settings. */
 function teacherHome_(ctx) {
   teacher_(ctx);
   const { query } = ctx.check({ query: QUERY_LANG_ });
@@ -3998,15 +4004,14 @@ function teacherHome_(ctx) {
   });
   const plan = sessionCurricula_(ctx);
   const day = ahead.length ? istDay_(ahead[0].starts_at) : null;
-  const sessions = ahead.filter((r) => istDay_(r.starts_at) === day).map((r) => {
-    const s = sessionJson_(r, query.lang, true, batches);
-    s.own_link = r.meet_link !== null && r.meet_link !== '';
-    s.joined = joined[r.id] || 0;
-    s.curriculum = plan[r.id];
-    return s;
-  });
+  const today = istDay_(ctx.now);
+  const show = (r) => teacherSession_(ctx, r, query.lang, batches, joined, plan);
+  const earlier = ctx.db.t('class_sessions').rows
+    .filter((r) => istDay_(r.starts_at) === today && r.starts_at + r.duration_min * 60000 <= ctx.now && batches[r.batch])
+    .sort((a, b) => a.starts_at - b.starts_at || String(a.batch).localeCompare(String(b.batch)));
   return {
-    sessions: sessions,
+    sessions: ahead.filter((r) => istDay_(r.starts_at) === day).map(show),
+    earlier: earlier.map(show),
     batches: Object.keys(batches).map((key) => Object.assign(batchJson_(batches[key], key, query.lang), { meet_link: batches[key].meet_link })),
     settings: { group_link: ctx.db.setting('group_link'), group_code: ctx.db.setting('group_code') },
     pending_students: ctx.db.t('users').rows.filter((u) => u.status === 'pending').length,
@@ -4031,6 +4036,43 @@ function setLink_(ctx) {
   const link = cleanMeetLink_(body.meet_link || '');
   ctx.db.t('class_sessions').update(row, { meet_link: link, updated_at: ctx.now });
   return shareFor_(ctx, row, query.lang);
+}
+
+/** A class's own time, on its own India date: its start ("18:30") and length, set by the teacher, which the batch's time
+ * then no longer moves (ensureWeek_). A class already over today may start again later today. Refused for a class of
+ * an earlier day (class_past), one that would overlap another class of its batch (class_overlap), and one with
+ * after-class answers or practice said about it (class_answered), which belong to the time it was held; check-ins
+ * before it move with it. The class as the teacher's day shows it. */
+function setTime_(ctx) {
+  teacher_(ctx);
+  const { path, query, body } = ctx.check({ path: PATH_SESSION_, query: QUERY_LANG_, body: BODY_.time });
+  const clock = /^(\d{1,2}):(\d\d)$/.exec(latinDigits_(body.time).trim());
+  if (!clock || Number(clock[1]) > 23 || Number(clock[2]) > 59) throw new HttpError_(400, 'bad_time');
+  const row = sessionRow_(ctx, path.session_id);
+  const day = istDay_(row.starts_at);
+  if (day < istDay_(ctx.now)) throw new HttpError_(400, 'class_past');
+  const start = istMidnight_(day) + (Number(clock[1]) * 60 + Number(clock[2])) * 60000;
+  const end = start + body.duration_min * 60000;
+  const classes = ctx.db.t('class_sessions');
+  if (classes.rows.some((r) => r.id !== row.id && r.batch === row.batch && r.starts_at < end && start < r.starts_at + r.duration_min * 60000)) {
+    throw new HttpError_(400, 'class_overlap');
+  }
+  const answered = ctx.db.t('checkins').rows.some((c) => c.session_id === row.id && c.phase === 'after') ||
+    ctx.db.t('practice').rows.some((p) => p.session_id === row.id);
+  if (answered) throw new HttpError_(400, 'class_answered');
+  classes.update(row, { starts_at: start, duration_min: body.duration_min, time_set_by: 'teacher', updated_at: ctx.now });
+  return teacherSession_(ctx, row, query.lang, batches_(ctx));
+}
+
+/** A class as the teacher's day shows it: with whether it has its own link, how many checked in, its curriculum, and
+ * whether the teacher gave it a time of its own. */
+function teacherSession_(ctx, row, lang, batches, joined, plan) {
+  const s = sessionJson_(row, lang, true, batches);
+  s.own_link = row.meet_link !== null && row.meet_link !== '';
+  s.joined = joined ? joined[row.id] || 0 : ctx.db.t('checkins').rows.filter((c) => c.session_id === row.id && c.phase === 'before').length;
+  s.curriculum = (plan || sessionCurricula_(ctx))[row.id];
+  s.time_set = Boolean(row.time_set_by);
+  return s;
 }
 
 function share_(ctx) {
@@ -4552,19 +4594,30 @@ function removeLocked_(db, pick, everything) {
   return removalCounts_(removal);
 }
 
-/** Under the lock: what the teacher set on the batches and the classes put back as setup() leaves it, empty: each
- * batch's everyday Meet link, and each class's own link and curriculum, so a class follows its batch again. The
- * batches' names, days and times, the curriculum tabs and the settings stay. The rows changed. */
+/** Under the lock: what the teacher set on the batches and the classes put back as setup() leaves it: each batch's
+ * everyday Meet link emptied, and each class's own link and curriculum, and a time the teacher gave a class back to its
+ * batch's on the class's date, so a class follows its batch again. The batches' names, days and times, the curriculum
+ * tabs and the settings stay. The rows changed. */
 function clearTeacherSettings_(db) {
   let changed = 0;
-  const batches = db.t('batches');
-  batches.rows.filter((r) => r.meet_link).forEach((r) => {
-    batches.update(r, { meet_link: null });
+  const table = db.t('batches');
+  table.rows.filter((r) => r.meet_link).forEach((r) => {
+    table.update(r, { meet_link: null });
     changed++;
   });
+  const batches = batches_({ db: db });
   const classes = db.t('class_sessions');
-  classes.rows.filter((r) => r.meet_link || r.curriculum).forEach((r) => {
-    classes.update(r, { meet_link: null, curriculum: null });
+  classes.rows.filter((r) => r.meet_link || r.curriculum || r.time_set_by).forEach((r) => {
+    const changes = { meet_link: null, curriculum: null };
+    const batch = batches[r.batch];
+    if (r.time_set_by) {
+      changes.time_set_by = null;
+      if (batch && batch.start_min !== null) {
+        changes.starts_at = istMidnight_(istDay_(r.starts_at)) + batch.start_min * 60000;
+        changes.duration_min = batch.duration_min;
+      }
+    }
+    classes.update(r, changes);
     changed++;
   });
   return changed;
@@ -4641,8 +4694,8 @@ function resetStudio() {
   const text = 'This removes everyone signed up (' + count_(plan.people, 'person', 'people') +
     (plan.teacher ? ', the teacher among them' : '') + ') and every row they made (' + count_(plan.total, 'row', 'rows') + ')' +
     (plan.total ? ': ' + rowsText_(plan) : '') + '. Every phone is signed out.\n\n' +
-    'The Meet links the teacher set go too, each batch\'s and each class\'s own, and the curriculum chosen for a class, ' +
-    'so each class follows its batch again, as setup left them.\n\n' +
+    'The Meet links the teacher set go too, each batch\'s and each class\'s own, and the curriculum and the time chosen ' +
+    'for a class, so each class follows its batch again, as setup left them.\n\n' +
     'What stays: the batches (their names, days and times), the curriculum (library, curricula, curriculum_items), the ' +
     'classes (class_sessions), the settings (the teacher code, the group code, the group link and the app link) and the ' +
     'Dashboard. Afterwards the teacher signs up again with the same teacher code, and students with the same group ' +
@@ -4657,7 +4710,7 @@ function resetStudio() {
   }
   const done = resetStudio_(new Db_());
   ui.alert(title, 'The studio is reset: ' + count_(done.people, 'person', 'people') + ' and ' + count_(done.total, 'row', 'rows') +
-    ' were removed, and the Meet links and curricula the teacher set cleared. The teacher can sign up again with the ' +
+    ' were removed, and the Meet links, curricula and class times the teacher set cleared. The teacher can sign up again with the ' +
     'teacher code (in the hidden settings tab), and students with the group code.', ui.ButtonSet.OK);
 }
 

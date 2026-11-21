@@ -99,8 +99,8 @@ row is gone (File → Version history can only bring back the whole Sheet as it 
   signed out at its next request. A teacher whose name starts with TEST goes too, and the teacher code then works
   again.
 - **Reset the studio…** removes everyone, the teacher too, and every row of those tabs, and empties what the teacher
-  set on the batches and classes (each batch's everyday Meet link, each class's own link and curriculum), so the
-  studio is as it was right after `setup`. What stays: the batches (names, days, times), the curriculum (`library`,
+  set on the batches and classes (each batch's everyday Meet link, each class's own link and curriculum, and a time
+  the teacher gave a class, which goes back to its batch's), so the studio is as it was right after `setup`. What stays: the batches (names, days, times), the curriculum (`library`,
   `curricula`, `curriculum_items`), the classes (`class_sessions`), the settings (teacher code, group code, group link,
   app link) and the Dashboard. It asks twice: yes or no, then a box where you type RESET. Afterwards the teacher signs
   up again with the same teacher code, and students with the same group code.
@@ -172,7 +172,8 @@ phone app ◀──── HTTP 200 {"status": 401, "body": {...}} ────�
   one class per batch per day: it adds each one missing, moves a class whose batch's time or length changed in its
   row (keeping its id, link and curriculum), and removes one from a day its batch no longer meets; it moves or
   removes only a class nobody has checked in to whose start (old and new) is more than an hour away, and leaves a
-  batch whose time is no time alone. It does so under the lock, with the classes read there, and then leaves a mark
+  batch whose time is no time alone. A class the teacher gave a time of its own from the app (`time_set_by`) keeps
+  it. It does so under the lock, with the classes read there, and then leaves a mark
   in the cache for the day, the batches' days, times and lengths, and the cache generation, so the visits after it
   take no lock; the mark lasts ten minutes, as the cache does, so a class row deleted by hand comes back within ten
   minutes. A visit that cannot have the lock goes on with the classes as they are, rather than answer `busy`.
@@ -263,11 +264,12 @@ curl -sL "$URL" -H 'Content-Type: text/plain' \
 | `POST /sessions/{session_id}/checkin` | approved student | yes | `{phase: before\|after, mood: 1..5}` → `{ok, stats}`. "before" from an hour before class to its end, for a class that is the student's (`other_batch`); "after" from 10 minutes before the end to 12 hours after, for a class checked in to or that is the student's (above): without a check-in before, it records that they came, with no mood before. `pending`, `no_session`, `checkin_closed` |
 | `POST /sessions/{session_id}/practice` | approved student | yes | `{entries: [{item, reaction: 1..4\|null, pain: 0\|1, note?}]}` (at most 60, notes up to 1000) → `{ok, saved}`: how each item went, replacing what was sent before for this class; entries with nothing said are not kept. Open when the "after" check-in is, and records coming in the same way; `checkin_closed`, `unknown_item`, `pending`, `no_session` |
 | `POST /feedback` | signed in | yes | `{screen, text}` → `{ok}` |
-| `GET /teacher/home?lang=` | teacher | the day's classes, once | `{sessions, batches, settings, pending_students}`: `sessions` are the classes of the next day that has some left (today, or tomorrow once today's are over), every batch's, each with `own_link`, `joined` and `curriculum`; `batches` with their everyday `meet_link` |
+| `GET /teacher/home?lang=` | teacher | the day's classes, once | `{sessions, earlier, batches, settings, pending_students}`: `sessions` are the classes of the next day that has some left (today, or tomorrow once today's are over), every batch's, each with `own_link`, `joined`, `curriculum` and `time_set` (the teacher gave it a time of its own); `earlier` today's classes already over, alike, to give one a later time; `batches` with their everyday `meet_link` |
 | `PUT /teacher/batches/{key}` | teacher | yes | `{meet_link}` → `{ok, meet_link}`: the batch's everyday link, for its classes without their own, checked and made plain as below; empty or null removes it; `bad_meet_link`, `no_batch` |
 | `PUT /teacher/sessions/{session_id}?lang=` | teacher | yes | `{meet_link}` → `{text}`, the class's message. A video call link, made plain: Google Meet (`https://meet.google.com/abc-defg-hij`, query, slash and capitals dropped; `g.co/meet/…` too), Zoom (`/j/<id>`, keeping `pwd` as given, or `/my/<name>`, on any `zoom.us` address), Microsoft Teams (a `/l/meetup-join/` link as given, or `/meet/<id>` keeping `p`, on `teams.microsoft.com` or `teams.live.com`) or Jitsi (`meet.jit.si/<room>`); `https://` added, words around it skipped; `bad_meet_link`, `no_session` |
 | `GET /teacher/sessions/{session_id}/share?lang=` | teacher | | the class's message `{text}`, plain text for any app; `no_link`, `no_session` |
 | `PUT /teacher/sessions/{session_id}/curriculum` | teacher | yes | `{curriculum}` → `{ok, curriculum}`. A class without its own follows its batch's default curriculum (the `batches` tab), else the first in the `curricula` tab; `no_curriculum`, `no_session` |
+| `PUT /teacher/sessions/{session_id}/time?lang=` | teacher | yes | `{time, duration_min}` → the class as in `sessions` above. A class's own start in India (`"18:30"`) on its own date, and its length, 10 to 180 minutes (at 10, after class opens as it starts); the batch's time no longer moves it, until the studio is reset. A class already over today may start again later today. `bad_time`; `class_past` for a class of an earlier day; `class_overlap` when it would overlap another class of its batch; `class_answered` once someone said how it went (answers after it, or practice), which belong to the time it was held; check-ins before it move with it |
 | `GET /teacher/sessions/{session_id}/practice?lang=` | teacher | | how the class went: `{id, starts_at, curriculum, joined, answered, items: [{item, reactions: [not yet, with effort, steady, at ease], pain: [{name, note}], notes: [{name, text}]}]}`, items with strain or pain first, then the plan's order; a student whose row was deleted is "A former student", in `lang` |
 | `PUT /teacher/settings` | teacher | yes | `{group_link?}` → `{group_link, group_code}`: the class group's link, optional. Any web link (a Telegram or Signal group, say; a WhatsApp invite is kept without its query), always https; a word with `http(s)://` is taken first, and one without needs a path (`t.me/x`), so "Mr.Sharma" or "7.00" is no link. Checked before it is saved (`bad_group_link`); empty or null removes it; left out, it stays |
 | `POST /teacher/group_code` | teacher | yes | a new group code → `{group_code}` |
@@ -296,7 +298,7 @@ write of a value to it adds its header at the end of the header row, under the l
 | `users` | id, name, phone, role, status, pw_hash, lang, created_at, batch, batch_since | role `student`/`teacher`; status `pending`/`approved`/`rejected`; `batch` a key of `batches`, empty until placed |
 | `batches` | key, name, name_hi, name_mr, curriculum, days, time, duration_min, meet_link, about, about_hi, about_mr | seeded once from `content/studio.json`, then the owner's to edit: `days` like `mon, wed, fri`, `time` like `17:30` or `5:30 pm` in India (a plain text column, read as typed), `curriculum` its classes' default, `meet_link` its everyday link |
 | `batch_changes` | id, student_id, from, to, note, created_at | each placement and each move between batches, with the teacher's note: the review history |
-| `class_sessions` | id, batch, starts_at, duration_min, meet_link, curriculum, updated_at | one per class of each batch, made a week ahead; `meet_link` and `curriculum` when the teacher set them for this class |
+| `class_sessions` | id, batch, starts_at, duration_min, meet_link, curriculum, updated_at, time_set_by | one per class of each batch, made a week ahead; `meet_link` and `curriculum` when the teacher set them for this class; `time_set_by` is `teacher` once the teacher gave it a time of its own |
 | `checkins` | user_id, session_id, phase, mood, created_at, class, class_date | phase `before`/`after`, mood 1 to 5. `class` and `class_date` copy the class's batch name and India date, for queries; the code goes by session_id |
 | `practice` | id, user_id, session_id, item, reaction, pain, note, created_at, item_name, week, solo_id, hold_s | how each item went, in a class (`session_id`) or on one's own (`solo_id`, with the stopwatch's `hold_s`): reaction 1 not yet, 2 with effort, 3 steady, 4 at ease (or blank), pain 1 for "felt strain or pain". `item_name` and `week` (its Monday) copy the item's name and the week, for queries |
 | `solo_sessions` | id, user_id, started_at, ended_at, request_id | a student's practice on their own; its items are the `practice` rows with its id; `request_id` the phone's id for the send, so a send repeated days later is written once |
@@ -471,11 +473,16 @@ done
 - [`reset.test.mjs`](test/reset.test.mjs): the Sheet's menu: which tabs hold a person's rows; removing the test
   people (theirs go, everyone else's rows stay as they were); a removed person's token refused at once, a write
   replayed with its request id bringing nothing back, a login that overlaps the removal; resetting the studio (what
-  stays, the links and class curricula the teacher set emptied, the codes working again); a tab whose rows fill its grid; the lock; the dialogs and the RESET box; a new
-  group code.
+  stays, the links, class curricula and class times the teacher set put back, the codes working again); a tab whose
+  rows fill its grid; the lock; the dialogs and the RESET box; a new group code.
+- [`class_time.test.mjs`](test/class_time.test.mjs): a class's own time from the teacher: what students see, the
+  week's making leaving it, a class over today started again later with check-in and after class open at once, the
+  check-ins moving with it, the rules (times, lengths, overlap, an earlier day, answers said, the teacher only), and
+  the reset giving it back to its batch.
 - [`concurrency.test.mjs`](test/concurrency.test.mjs): two requests at once, each run in the middle of another
   (`meanwhile()` in the fakes), with the Sheet read as we believe Apps Script reads it when requests overlap (below):
-  sign-ups (two numbers, or one number twice), logouts, the first visits of a day, intakes, a login and the menu
+  sign-ups (two numbers, or one number twice), logouts, the first visits of a day, a class moved while the week is
+  made, intakes, a login and the menu
   overlapping a removal or a logout, two copies of a password change or of a new password for a student, and what a
   class sends together (how each item went, a practice on one's own, a shared note, feedback: two students, and two
   copies of one request id, with the Sheet calls each makes under the lock); then the guards that hold whatever a

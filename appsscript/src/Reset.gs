@@ -104,19 +104,30 @@ function removeLocked_(db, pick, everything) {
   return removalCounts_(removal);
 }
 
-/** Under the lock: what the teacher set on the batches and the classes put back as setup() leaves it, empty: each
- * batch's everyday Meet link, and each class's own link and curriculum, so a class follows its batch again. The
- * batches' names, days and times, the curriculum tabs and the settings stay. The rows changed. */
+/** Under the lock: what the teacher set on the batches and the classes put back as setup() leaves it: each batch's
+ * everyday Meet link emptied, and each class's own link and curriculum, and a time the teacher gave a class back to its
+ * batch's on the class's date, so a class follows its batch again. The batches' names, days and times, the curriculum
+ * tabs and the settings stay. The rows changed. */
 function clearTeacherSettings_(db) {
   let changed = 0;
-  const batches = db.t('batches');
-  batches.rows.filter((r) => r.meet_link).forEach((r) => {
-    batches.update(r, { meet_link: null });
+  const table = db.t('batches');
+  table.rows.filter((r) => r.meet_link).forEach((r) => {
+    table.update(r, { meet_link: null });
     changed++;
   });
+  const batches = batches_({ db: db });
   const classes = db.t('class_sessions');
-  classes.rows.filter((r) => r.meet_link || r.curriculum).forEach((r) => {
-    classes.update(r, { meet_link: null, curriculum: null });
+  classes.rows.filter((r) => r.meet_link || r.curriculum || r.time_set_by).forEach((r) => {
+    const changes = { meet_link: null, curriculum: null };
+    const batch = batches[r.batch];
+    if (r.time_set_by) {
+      changes.time_set_by = null;
+      if (batch && batch.start_min !== null) {
+        changes.starts_at = istMidnight_(istDay_(r.starts_at)) + batch.start_min * 60000;
+        changes.duration_min = batch.duration_min;
+      }
+    }
+    classes.update(r, changes);
     changed++;
   });
   return changed;
@@ -193,8 +204,8 @@ function resetStudio() {
   const text = 'This removes everyone signed up (' + count_(plan.people, 'person', 'people') +
     (plan.teacher ? ', the teacher among them' : '') + ') and every row they made (' + count_(plan.total, 'row', 'rows') + ')' +
     (plan.total ? ': ' + rowsText_(plan) : '') + '. Every phone is signed out.\n\n' +
-    'The Meet links the teacher set go too, each batch\'s and each class\'s own, and the curriculum chosen for a class, ' +
-    'so each class follows its batch again, as setup left them.\n\n' +
+    'The Meet links the teacher set go too, each batch\'s and each class\'s own, and the curriculum and the time chosen ' +
+    'for a class, so each class follows its batch again, as setup left them.\n\n' +
     'What stays: the batches (their names, days and times), the curriculum (library, curricula, curriculum_items), the ' +
     'classes (class_sessions), the settings (the teacher code, the group code, the group link and the app link) and the ' +
     'Dashboard. Afterwards the teacher signs up again with the same teacher code, and students with the same group ' +
@@ -209,7 +220,7 @@ function resetStudio() {
   }
   const done = resetStudio_(new Db_());
   ui.alert(title, 'The studio is reset: ' + count_(done.people, 'person', 'people') + ' and ' + count_(done.total, 'row', 'rows') +
-    ' were removed, and the Meet links and curricula the teacher set cleared. The teacher can sign up again with the ' +
+    ' were removed, and the Meet links, curricula and class times the teacher set cleared. The teacher can sign up again with the ' +
     'teacher code (in the hidden settings tab), and students with the group code.', ui.ButtonSet.OK);
 }
 

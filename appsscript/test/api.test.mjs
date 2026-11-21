@@ -561,7 +561,8 @@ test('the teacher home: the next day\'s classes, every batch\'s, with links and 
   const { t, code } = teacherAndCode(b);
   const home = b.call('GET', '/teacher/home', { token: t.token, query: { lang: 'mr' } }).body;
   assert.deepEqual(home.sessions.map((x) => x.batch.key), ['beginner', 'intermediate', 'advanced', 'pain_management']); // Wednesday
-  assert.deepEqual(Object.keys(home.sessions[0]), ['id', 'starts_at', 'duration_min', 'batch', 'meet_link', 'has_link', 'own_link', 'joined', 'curriculum']);
+  assert.deepEqual(Object.keys(home.sessions[0]), ['id', 'starts_at', 'duration_min', 'batch', 'meet_link', 'has_link', 'own_link', 'joined', 'curriculum',
+    'time_set']);
   assert.deepEqual(home.sessions.map((x) => x.curriculum), ['beginner', 'intermediate', 'advanced', 'pain_management']);
   assert.deepEqual(home.settings, { group_link: null, group_code: code });
   assert.deepEqual(home.batches.map((x) => [x.key, x.name, x.time, x.meet_link]), [['beginner', 'नवशिके', '07:00', null],

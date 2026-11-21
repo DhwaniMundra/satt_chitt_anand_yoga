@@ -1,5 +1,5 @@
 // Two requests at once, as a class sends them: sign-ups, logouts, the first visits of a day, a login that overlaps a
-// removal, a password change, a new password for a student and intakes, each with another request run in its middle
+// removal, a password change, a new password for a student, intakes and a class moved by the teacher, each with another request run in its middle
 // (meanwhile() in fakes.mjs) and the Sheet read as we believe Apps Script reads it when executions overlap (the
 // stale-read mode in fakes.mjs: a tab read twice in one execution comes back the second time as it was the first).
 // Each runs in two models: `believed`, where a flush makes the next reads go to the Sheet, and `worst`, where it
@@ -90,6 +90,27 @@ for (const model of Object.keys(MODELS)) {
       const days_ = rows.map((r) => r[header.indexOf('batch')] + '@' + Math.floor((r[header.indexOf('starts_at')].getTime() + 330 * MIN) / DAY));
       assert.equal(new Set(days_).size, days_.length, 'one class per batch per day');
       for (const id of mine.body.sessions.concat(theirs.body.sessions).map((x) => x.id)) assert.ok(ids.includes(id), 'class ' + id + ' is in the tab');
+    });
+  }
+
+  for (const moment of [{ read: 'class_sessions' }, { lock: 1 }]) {
+    test(`a class the teacher moves while a visit makes the week keeps the teacher's time (${model}, the other at ${JSON.stringify(moment)})`, () => {
+      const { b, other, t, code } = studio(model);
+      const s = signup(b, '9000000002', { code });
+      const id = b.call('GET', '/teacher/home', { token: t.token }).body.sessions.find((x) => x.batch.key === 'beginner').id;
+      b.cache.clear(); // the week's mark gone: the next visit makes the week again
+      let moved;
+      b.meanwhile(moment, () => { moved = other.call('PUT', '/teacher/sessions/' + id + '/time', { token: t.token, body: { time: '15:00', duration_min: 10 } }); });
+      assert.equal(b.call('GET', '/home', { token: s.token }).status, 200);
+      assert.equal(moved && moved.status, 200, JSON.stringify(moved));
+      b.cache.clear();
+      b.call('GET', '/home', { token: s.token });
+      const [header, ...rows] = tab(b, 'class_sessions');
+      const row = rows.find((r) => r[0] === id);
+      assert.deepEqual([new Date(row[header.indexOf('starts_at')].getTime() + 330 * MIN).toISOString().slice(11, 16), row[header.indexOf('duration_min')],
+        row[header.indexOf('time_set_by')]], ['15:00', 10, 'teacher']);
+      const ids = column(b, 'class_sessions', 'id');
+      assert.equal(new Set(ids).size, ids.length, 'no two classes share an id');
     });
   }
 

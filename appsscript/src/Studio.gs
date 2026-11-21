@@ -214,7 +214,7 @@ function weekStarts_(now, batches) {
  * A class whose time or length no longer matches the batch's (the owner changed it) is moved in its row, keeping its
  * id, its own link and its curriculum, when nobody has checked in to it and both its old and its new start are more
  * than an hour away (out of its check-in window, perhaps after its message was shared); otherwise it stays as it is,
- * and the day gets no second class. A class is removed only on a day its batch no longer meets, under the same
+ * and the day gets no second class. A class the teacher gave a time of its own (setTime_) keeps it. A class is removed only on a day its batch no longer meets, under the same
  * conditions. A batch whose time is no time (being retyped, say) is left as it is.
  *
  * The classes and check-ins are read for this only under the lock, for the first time in the request: read before
@@ -248,7 +248,8 @@ function ensureWeek_(ctx) {
       const rows = byDay[dayOf(w)] || [];
       const row = rows[0];
       if (!row) todo.missing.push(w);
-      else if (rows.length === 1 && free(row) && away(w.starts_at) && (row.starts_at !== w.starts_at || row.duration_min !== w.duration_min)) {
+      else if (rows.length === 1 && !row.time_set_by && free(row) && away(w.starts_at) &&
+        (row.starts_at !== w.starts_at || row.duration_min !== w.duration_min)) {
         todo.moved.push([row, w]);
       }
     });
