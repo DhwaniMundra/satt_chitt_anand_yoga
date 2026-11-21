@@ -11,9 +11,9 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.coroutineScope
@@ -24,7 +24,6 @@ import org.json.JSONException
 import org.json.JSONObject
 import java.io.File
 import java.time.Instant
-import java.util.concurrent.Executors
 
 /** All screen state, and every call to the server. Errors land in [error] as the server's code. */
 class AppViewModel(app: Application) : AndroidViewModel(app) {
@@ -40,7 +39,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** What the first screens showed, kept on this phone for this sign-in, to open on at once. */
     private val saved = SavedScreens(File(app.filesDir, "saved_screens.json"))
     /** Where [saved] is read and written: off the main thread, one at a time, in the order asked. */
-    private val disk = Executors.newSingleThreadExecutor().asCoroutineDispatcher()
+    private val disk = Dispatchers.IO.limitedParallelism(1)
     /** Reading [saved] at the start: the screen stays plain meanwhile, a moment, rather than breathe once and go. */
     var restoring by mutableStateOf(false); private set
 
