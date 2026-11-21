@@ -4040,9 +4040,10 @@ function setLink_(ctx) {
 
 /** A class's own time, on its own India date: its start ("18:30") and length, set by the teacher, which the batch's time
  * then no longer moves (ensureWeek_). A class already over today may start again later today. Refused for a class of
- * an earlier day (class_past), one that would overlap another class of its batch (class_overlap), and one with
- * after-class answers or practice said about it (class_answered), which belong to the time it was held; check-ins
- * before it move with it. The class as the teacher's day shows it. */
+ * an earlier day, and for a time that would be over already (both class_past: at 15:00, "6:30" for the 18:30 class
+ * would close its check-in and open after class at once); one that would overlap another class of its batch
+ * (class_overlap); and one with after-class answers or practice said about it (class_answered), which belong to the
+ * time it was held. Check-ins before it move with it. The class as the teacher's day shows it. */
 function setTime_(ctx) {
   teacher_(ctx);
   const { path, query, body } = ctx.check({ path: PATH_SESSION_, query: QUERY_LANG_, body: BODY_.time });
@@ -4053,6 +4054,7 @@ function setTime_(ctx) {
   if (day < istDay_(ctx.now)) throw new HttpError_(400, 'class_past');
   const start = istMidnight_(day) + (Number(clock[1]) * 60 + Number(clock[2])) * 60000;
   const end = start + body.duration_min * 60000;
+  if (end <= ctx.now) throw new HttpError_(400, 'class_past');
   const classes = ctx.db.t('class_sessions');
   if (classes.rows.some((r) => r.id !== row.id && r.batch === row.batch && r.starts_at < end && start < r.starts_at + r.duration_min * 60000)) {
     throw new HttpError_(400, 'class_overlap');

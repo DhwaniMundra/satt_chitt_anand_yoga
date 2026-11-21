@@ -105,6 +105,16 @@ test('the rules: a time on the clock, 10 minutes to 3 hours, no overlap with the
   assert.equal(b.call('PUT', '/teacher/sessions/' + id + '/time', { token: s.token, body: { time: '18:00', duration_min: 30 } }).status, 403);
 });
 
+test('a time already over is refused: 6:30 typed at 15:00 for the 18:30 class; one under way, or later, is not', () => {
+  const { b, t } = studio(WEDNESDAY_6AM + 9 * HOUR); // 15:00
+  const id = teacherDay(b, t).sessions.find((x) => x.batch.key === 'pain_management').id; // 17:30
+  assert.deepEqual(move(b, t, id, '6:30', 55), { status: 400, body: { detail: 'class_past' } });
+  assert.deepEqual(move(b, t, id, '14:00', 60), { status: 400, body: { detail: 'class_past' } }, 'ending as now: over');
+  assert.equal(ist(teacherDay(b, t).sessions.find((x) => x.id === id).starts_at), '17:30', 'left as it was');
+  assert.equal(move(b, t, id, '14:55', 10).status, 200, 'started five minutes ago, five to go: under way');
+  assert.equal(move(b, t, id, '18:30', 45).status, 200);
+});
+
 test('a move is written once for its request id, and runs under the lock', () => {
   const { b, t } = studio();
   const id = beginners(b, t).id;
