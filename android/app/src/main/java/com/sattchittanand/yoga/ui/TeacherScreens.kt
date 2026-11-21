@@ -52,6 +52,7 @@ import com.sattchittanand.yoga.AppViewModel
 import com.sattchittanand.yoga.ClassSession
 import com.sattchittanand.yoga.Intake
 import com.sattchittanand.yoga.Limits
+import com.sattchittanand.yoga.latinDigits
 import com.sattchittanand.yoga.R
 import com.sattchittanand.yoga.User
 import com.sattchittanand.yoga.Student
@@ -186,16 +187,29 @@ private fun Earlier(vm: AppViewModel, classes: List<ClassSession>) {
 }
 
 /** A class's own time: its start in India, on its own date, and its length, 10 minutes (after class opens as it starts)
- *  to 3 hours. "In 5 minutes" fills in a start five minutes from now, to try check-in and after class at once. A time
- *  refused says why under the boxes, and the sheet stays open. */
+ *  to 3 hours, typed in Latin or Devanagari digits. "In 5 minutes" fills in a start five minutes from now, to try
+ *  check-in and after class at once. While Save is off, the sheet says why: a time that is no time, a length out of
+ *  range, or a class that would be over already (6:30 typed at 15:00 for an evening class). A time the server refuses
+ *  says why too, and the sheet stays open. */
 @Composable
 private fun ChangeTime(vm: AppViewModel, s: ClassSession, close: () -> Unit) {
     val india = s.startsAt.atZone(IST)
     var time by rememberSaveable(s.id) { mutableStateOf("%02d:%02d".format(Locale.US, india.hour, india.minute)) }
     var length by rememberSaveable(s.id) { mutableStateOf(s.minutes.toString()) }
-    val minutes = length.trim().toIntOrNull()
-    val clock = Regex("^([01]?\\d|2[0-3]):([0-5]\\d)$").matches(time.trim())
-    val ok = clock && minutes != null && minutes in Limits.CLASS_MINUTES
+    val typed = latinDigits(time).trim()
+    val minutes = latinDigits(length).trim().toIntOrNull()
+    val clock = Regex("^([01]?\\d|2[0-3]):([0-5]\\d)$").matchEntire(typed)
+    val ends = clock?.let { india.toLocalDate().atTime(it.groupValues[1].toInt(), it.groupValues[2].toInt()).atZone(IST).toInstant() }
+        ?.let { start -> minutes?.let { start.plusSeconds(it * 60L) } }
+    val past = ends != null && !ends.isAfter(java.time.Instant.now())
+    val lengthOk = minutes != null && minutes in Limits.CLASS_MINUTES
+    val ok = clock != null && lengthOk && !past
+    val why = when {
+        time.isNotBlank() && clock == null -> R.string.err_bad_time
+        length.isNotBlank() && !lengthOk -> R.string.class_length_help
+        past -> R.string.err_class_past
+        else -> null
+    }
     val saving = vm.saving("time:${s.id}")
     val saved = stringResource(R.string.time_saved)
     LaunchedEffect(Unit) { vm.error = null }
@@ -206,21 +220,23 @@ private fun ChangeTime(vm: AppViewModel, s: ClassSession, close: () -> Unit) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("${s.batch.name} · ${dayLabel(s.startsAt)}", style = MaterialTheme.typography.bodyMedium, color = Palette.muted)
                 OutlinedTextField(time, { time = it; vm.error = null }, label = { Text(stringResource(R.string.class_starts)) },
-                    placeholder = { Text("18:30") }, singleLine = true, isError = time.isNotBlank() && !clock, modifier = Modifier.fillMaxWidth())
+                    placeholder = { Text("18:30") }, singleLine = true, isError = time.isNotBlank() && (clock == null || past),
+                    modifier = Modifier.fillMaxWidth())
                 AssistChip(onClick = {
                     val soon = java.time.Instant.now().plusSeconds(5 * 60).atZone(IST)
                     if (soon.toLocalDate() == india.toLocalDate()) time = "%02d:%02d".format(Locale.US, soon.hour, soon.minute)
                     vm.error = null
                 }, label = { Text(stringResource(R.string.in_five_minutes)) })
                 OutlinedTextField(length, { length = it.filter(Char::isDigit).take(3); vm.error = null }, label = { Text(stringResource(R.string.class_length)) },
-                    singleLine = true, isError = length.isNotBlank() && !ok && clock, modifier = Modifier.fillMaxWidth(),
+                    singleLine = true, isError = length.isNotBlank() && !lengthOk, modifier = Modifier.fillMaxWidth(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
                 Text(stringResource(R.string.class_length_help), style = MaterialTheme.typography.bodySmall, color = Palette.muted)
-                vm.error?.let { Text(errorText(it), color = MaterialTheme.colorScheme.error) }
+                // Why Save is off, or why the server refused the time.
+                (why?.let { stringResource(it) } ?: vm.error?.let { errorText(it) })?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             }
         },
         confirmButton = {
-            TextButton(onClick = { if (ok && !saving) vm.setClassTime(s.id, time.trim(), minutes, saved, close) }, enabled = ok) {
+            TextButton(onClick = { if (ok && !saving && minutes != null) vm.setClassTime(s.id, typed, minutes, saved, close) }, enabled = ok) {
                 SavingLabel(stringResource(R.string.save), saving)
             }
         },

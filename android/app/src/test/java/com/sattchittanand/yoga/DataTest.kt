@@ -108,6 +108,12 @@ class DataTest {
         assertEquals("generic", problem("[]"))
     }
 
+    @Test fun devanagariDigitsReadAsLatinOnes() {
+        assertEquals("18:30", latinDigits("१८:३०"))
+        assertEquals("7:05 pm", latinDigits("७:०५ pm"))
+        assertEquals("55", latinDigits("55"))
+    }
+
     @Test fun lengthsAreCountedInCodePointsAsTheServerCountsThem() {
         val hindi = "घुटने में दर्द" // Devanagari is all in the BMP: as many code points as chars
         assertEquals(14, hindi.codePointLength())

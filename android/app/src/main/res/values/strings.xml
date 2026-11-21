@@ -380,7 +380,7 @@
     <string name="err_unknown_item">Something in it is no longer in the studio\'s library.</string>
     <string name="err_gave_up">The studio\'s server kept failing, so this was not sent. Please try again later.</string>
     <string name="err_bad_time">Type the time as hours:minutes, like 18:30.</string>
-    <string name="err_class_past">That class was on an earlier day.</string>
+    <string name="err_class_past">That time has already passed today. Times are 24-hour: 6:30 PM is 18:30.</string>
     <string name="err_class_overlap">That would overlap another class of this batch.</string>
     <string name="err_class_answered">Students have already said how this class went, so its time stays.</string>
     <string name="err_field_too_long">%1$s is too long: %2$d letters at most.</string>

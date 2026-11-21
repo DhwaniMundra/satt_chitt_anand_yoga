@@ -22,6 +22,9 @@ object Limits {
     val CLASS_MINUTES = 10..180
 }
 
+/** Text with any Devanagari digits (०–९, as Hindi and Marathi keyboards type them) as Latin ones. */
+fun latinDigits(text: String): String = text.map { if (it in '०'..'९') '0' + (it - '०') else it }.joinToString("")
+
 /** The length the server counts. */
 fun String.codePointLength(): Int = codePointCount(0, length)
 

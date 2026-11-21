@@ -371,7 +371,7 @@
     <string name="err_unknown_item">यातील काही आता स्टुडिओच्या यादीत नाही.</string>
     <string name="err_gave_up">स्टुडिओचा सर्व्हर वारंवार अयशस्वी झाला, म्हणून हे पाठवले नाही. कृपया नंतर पुन्हा प्रयत्न करा.</string>
     <string name="err_bad_time">वेळ तास:मिनिटे अशी लिहा, जसे 18:30.</string>
-    <string name="err_class_past">तो वर्ग आधीच्या दिवशी होता.</string>
+    <string name="err_class_past">ही वेळ आज निघून गेली आहे. वेळ 24 तासांची आहे: संध्याकाळी 6:30 म्हणजे 18:30.</string>
     <string name="err_class_overlap">हे या बॅचच्या दुसऱ्या वर्गाच्या वेळेशी जुळेल.</string>
     <string name="err_class_answered">विद्यार्थ्यांनी हा वर्ग कसा झाला ते आधीच सांगितले आहे, म्हणून त्याची वेळ तशीच राहील.</string>
     <string name="err_field_too_long">%1$s खूप मोठे आहे: जास्तीत जास्त %2$d अक्षरे.</string>
