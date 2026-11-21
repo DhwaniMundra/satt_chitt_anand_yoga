@@ -69,8 +69,9 @@ fun MeScreen(vm: AppViewModel, onLanguage: (String) -> Unit) {
         SectionCard {
             Text(stringResource(R.string.feedback_title), style = MaterialTheme.typography.titleMedium)
             LimitedField(feedback, { feedback = it }, Limits.FEEDBACK, placeholder = { Text(stringResource(R.string.feedback_hint)) }, minLines = 3)
-            Button(onClick = { vm.sendFeedback(feedback, thanks) { feedback = "" } }, enabled = feedback.isNotBlank() && !vm.busy) {
-                Text(stringResource(R.string.send))
+            val sending = vm.saving("feedback")
+            Button(onClick = { if (!sending) vm.sendFeedback(feedback, thanks) { feedback = "" } }, enabled = feedback.isNotBlank()) {
+                SavingLabel(stringResource(R.string.send), sending)
             }
         }
 
@@ -96,9 +97,10 @@ private fun ChangePassword(vm: AppViewModel) {
         PasswordField(new, { new = it }, R.string.password)
         PasswordField(again, { again = it }, R.string.new_password_again, if (differ) R.string.passwords_differ else null)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = { vm.changePassword(current, new, changed) { open = false } },
-                enabled = current.isNotEmpty() && new.length >= Limits.PASSWORD_MIN && again == new && !vm.busy) {
-                Text(stringResource(R.string.save))
+            val saving = vm.saving("password")
+            Button(onClick = { if (!saving) vm.changePassword(current, new, changed) { open = false } },
+                enabled = current.isNotEmpty() && new.length >= Limits.PASSWORD_MIN && again == new) {
+                SavingLabel(stringResource(R.string.save), saving)
             }
             TextButton(onClick = { open = false }) { Text(stringResource(R.string.cancel)) }
         }

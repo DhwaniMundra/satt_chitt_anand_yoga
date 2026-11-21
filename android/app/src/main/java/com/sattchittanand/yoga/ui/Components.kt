@@ -9,6 +9,7 @@ import android.net.Uri
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
@@ -19,6 +20,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.TextAutoSize
@@ -40,11 +42,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
@@ -125,6 +129,24 @@ fun Waiting(vm: AppViewModel, retry: () -> Unit, modifier: Modifier = Modifier.f
     }
 }
 
+/** A button's own words, or while its write is out ([saving]) a small spinner and "Saving…" ([what]; null for the
+ *  spinner alone) in their place, in the room the words take, so nothing moves. */
+@Composable
+fun SavingLabel(text: String, saving: Boolean, what: String? = stringResource(R.string.saving)) {
+    Box(contentAlignment = Alignment.Center) {
+        Text(text, if (saving) Modifier.alpha(0f).clearAndSetSemantics { } else Modifier)
+        if (saving) {
+            Row(Modifier.matchParentSize(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+                CircularProgressIndicator(Modifier.size(16.dp), color = LocalContentColor.current, strokeWidth = 2.dp)
+                if (what != null) {
+                    Spacer(Modifier.width(8.dp))
+                    FitText(what, color = LocalContentColor.current)
+                }
+            }
+        }
+    }
+}
+
 /** A stopwatch's time: "1:05". */
 fun stopwatch(seconds: Int): String = "%d:%02d".format(seconds / 60, seconds % 60)
 
@@ -143,7 +165,7 @@ fun FitText(text: String, modifier: Modifier = Modifier, style: TextStyle = Loca
 /** Options side by side, equal widths, at most one selected: the reactions after class, the curricula, the batches.
  *  [perRow] to a row (all in one by default); two to a row with a large font. */
 @Composable
-fun Choices(labels: List<String>, selected: Int?, enabled: Boolean = true, perRow: Int = labels.size, onPick: (Int) -> Unit) {
+fun Choices(labels: List<String>, selected: Int?, enabled: Boolean = true, perRow: Int = labels.size, saving: Int? = null, onPick: (Int) -> Unit) {
     val perRow = if (largeFont()) minOf(2, perRow) else perRow
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         labels.indices.chunked(perRow).forEach { row ->
@@ -158,8 +180,11 @@ fun Choices(labels: List<String>, selected: Int?, enabled: Boolean = true, perRo
                         border = BorderStroke(1.dp, if (on) Palette.moss else Palette.line),
                         modifier = Modifier.weight(1f),
                     ) {
-                        FitText(labels[i], Modifier.padding(vertical = 10.dp, horizontal = 4.dp), MaterialTheme.typography.labelMedium,
-                            if (on) Color.White else Palette.ink, TextAlign.Center)
+                        Box(contentAlignment = Alignment.Center) { // [saving]: a small spinner in the room the words take
+                            FitText(labels[i], Modifier.padding(vertical = 10.dp, horizontal = 4.dp).alpha(if (saving == i) 0f else 1f),
+                                MaterialTheme.typography.labelMedium, if (on) Color.White else Palette.ink, TextAlign.Center)
+                            if (saving == i) CircularProgressIndicator(Modifier.size(16.dp), color = if (on) Color.White else Palette.moss, strokeWidth = 2.dp)
+                        }
                     }
                 }
                 repeat(perRow - row.size) { Spacer(Modifier.weight(1f)) }

@@ -116,8 +116,9 @@ fun ItemHistoryScreen(vm: AppViewModel, item: String, student: Student?, back: (
             val about = vm.curricula?.library?.get(item)?.short(vm.prefs.lang) ?: item
             LimitedField(draft, { draft = it }, Limits.ITEM_FEEDBACK,
                 placeholder = { Text(stringResource(R.string.feedback_for, student.user.name.substringBefore(' '), about)) }, minLines = 2)
-            Button(onClick = { vm.sendItemFeedback(student.user.id, item, draft, sent) { draft = "" } }, enabled = draft.isNotBlank() && !vm.busy) {
-                Text(stringResource(R.string.send))
+            val sending = vm.saving("item-feedback")
+            Button(onClick = { if (!sending) vm.sendItemFeedback(student.user.id, item, draft, sent) { draft = "" } }, enabled = draft.isNotBlank()) {
+                SavingLabel(stringResource(R.string.send), sending)
             }
         }
         if (h.entries.isNotEmpty()) {

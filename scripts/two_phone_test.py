@@ -249,7 +249,10 @@ def loop(run: Run, backend: p.DevBackend, teacher_code: str, debug: bool) -> Non
         fill_intake("34", "160", "58", "Vegetarian", ["Knee"], "Right knee aches on the stairs",
                     [("Tadasana", "Steady"), ("Vajrasana", "With effort")])
         run.shot("05_student_intake_pain")
+        p.trouble("/me/intake", delay_ms=5000)  # a slow answer
         p.tap_scrolling(f"Send to {T}", exact=True)
+        run.check("while it waits, the button tapped says Saving…, in its own place", "Saving…", timeout=4)
+        run.shot("05b_student_intake_saving")
         run.check("the answers are sent", f"{T} will place you soon")
         run.check("then she waits to be placed", "Waiting for")
         log_out("Me")

@@ -175,6 +175,7 @@
     <string name="invite_students">विद्यार्थियों को बुलाएँ</string>
     <string name="new_code">नया कोड</string>
     <string name="saved">सेव हो गया</string>
+    <string name="saving">सेव हो रहा है…</string>
     <string name="students_title">विद्यार्थी</string>
     <string name="waiting">इंतज़ार में</string>
     <string name="approved">मंज़ूर</string>

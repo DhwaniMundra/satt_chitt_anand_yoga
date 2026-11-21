@@ -184,6 +184,7 @@
     <string name="invite_students">Invite students</string>
     <string name="new_code">New code</string>
     <string name="saved">Saved</string>
+    <string name="saving">Saving…</string>
     <string name="students_title">Students</string>
     <string name="waiting">Waiting</string>
     <string name="approved">Approved</string>

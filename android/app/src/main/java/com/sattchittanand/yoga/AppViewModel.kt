@@ -79,6 +79,14 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     val busy get() = calls > 0
     /** Logging in or signing up, until the first screen's data has come or the call has failed. */
     var signingIn by mutableStateOf(false); private set
+    /** The writes the student or teacher waits on, by what they are ("intake", "place:12"…): the button tapped shows
+     *  "Saving…" meanwhile, and the rest of the screen stays as it is. */
+    private val savingKeys = mutableStateListOf<String>()
+
+    fun saving(key: String) = key in savingKeys
+
+    /** A call out that is no write shown on its own button: a read, for the thin line at the top. */
+    val loading get() = calls > savingKeys.size
     /** When the wait for signing in or for the first screen began (elapsedRealtime): the breath on screen counts from
      *  it. */
     var waitSince by mutableLongStateOf(SystemClock.elapsedRealtime()); private set
@@ -163,9 +171,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         prefs.token?.let { saved.keep(it, prefs.lang, part, json, System.currentTimeMillis()) }
     }
 
-    /** Runs a call to the server: [busy] meanwhile ([signingIn] too, for a login or a sign-up), its error in [error]. */
-    private fun launchCall(signIn: Boolean = false, block: suspend () -> Unit) {
+    /** Runs a call to the server: [busy] meanwhile ([signingIn] too, for a login or a sign-up, and [saving] the write's
+     *  key), its error in [error]. */
+    private fun launchCall(signIn: Boolean = false, saving: String? = null, block: suspend () -> Unit) {
         signedInScope.launch {
+            saving?.let { savingKeys += it }
             if (signIn || user == null && signedIn && !busy) waitSince = SystemClock.elapsedRealtime()
             calls++
             error = null
@@ -179,6 +189,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             } finally {
                 calls--
                 if (signIn) signingIn = false
+                saving?.let { savingKeys -= it }
             }
         }
     }
@@ -344,7 +355,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** A student's own new password, after the current one; this phone stays signed in. [done] runs once it is through. */
-    fun changePassword(current: String, new: String, changed: String, done: () -> Unit) = launchCall {
+    fun changePassword(current: String, new: String, changed: String, done: () -> Unit) = launchCall(saving = "password") {
         val body = JSONObject().put("current_password", current).put("new_password", new)
         // Sent once, not tried again by itself; a second tap after no answer came carries the same request id, which the
         // server answers as it did the first, even when the two arrive together.
@@ -409,7 +420,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Sends feedback to the studio; [sent] runs only once it is through, so a failed send keeps the text. */
-    fun sendFeedback(text: String, thanks: String, sent: () -> Unit) = launchCall {
+    fun sendFeedback(text: String, thanks: String, sent: () -> Unit) = launchCall(saving = "feedback") {
         once("feedback", text) { api.post("/feedback", JSONObject().put("screen", "me").put("text", text), it) }
         notice = thanks
         sent()
@@ -659,14 +670,14 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Saves one class's own link; [done] runs once it is saved and the classes read again. Then [share], if given,
      *  gets the class's message for the share sheet; if not, the snackbar says [saved]. */
-    fun saveLink(sessionId: Int, link: String, saved: String, done: () -> Unit, share: ((String) -> Unit)?) = launchCall {
+    fun saveLink(sessionId: Int, link: String, saved: String, done: () -> Unit, share: ((String) -> Unit)?) = launchCall(saving = "link:$sessionId") {
         val reply = api.put("/teacher/sessions/$sessionId?lang=${prefs.lang}", JSONObject().put("meet_link", link))
         readTeacherHome()
         done()
         if (share != null) share(reply.getString("text")) else notice = saved
     }
 
-    fun shareSession(sessionId: Int, share: (String) -> Unit) = launchCall {
+    fun shareSession(sessionId: Int, share: (String) -> Unit) = launchCall(saving = "share:$sessionId") {
         share(api.get("/teacher/sessions/$sessionId/share?lang=${prefs.lang}").getString("text"))
     }
 
@@ -674,7 +685,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      *  ([group], null when unchanged; empty removes it) and each batch's everyday Meet link ([links], by batch key;
      *  empty removes it). [done] gets the fields saved (the group's as [GROUP_FIELD]) and those refused, each with the
      *  reason, to show beside it. */
-    fun saveLinks(group: String?, links: Map<String, String>, saved: String, done: (Set<String>, Map<String, String>) -> Unit) = launchCall {
+    fun saveLinks(group: String?, links: Map<String, String>, saved: String, done: (Set<String>, Map<String, String>) -> Unit) = launchCall(saving = "links") {
         val sends = listOfNotNull(group?.let { g -> GROUP_FIELD to suspend { api.put("/teacher/settings", JSONObject().put("group_link", g)) } }) +
             links.map { (key, link) -> key to suspend { api.put("/teacher/batches/$key", JSONObject().put("meet_link", link)) } }
         val ok = mutableSetOf<String>()
@@ -695,7 +706,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (refused.isEmpty() && ok.isNotEmpty()) notice = saved
     }
 
-    fun newGroupCode() = launchCall {
+    fun newGroupCode() = launchCall(saving = "group-code") {
         once("group-code", "") { api.post("/teacher/group_code", JSONObject(), it) }
         readTeacherHome()
     }
@@ -725,7 +736,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         intakeRead = true
     }
 
-    fun saveIntake(answers: Intake, thanks: String, done: () -> Unit) = launchCall {
+    fun saveIntake(answers: Intake, thanks: String, done: () -> Unit) = launchCall(saving = "intake") {
         val body = answers.json()
         intake = Intake.from(once("intake", body.toString().hashCode().toString()) { api.put("/me/intake", body, it) }.getJSONObject("intake"))
         notice = thanks
@@ -734,7 +745,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Places a student in a batch: approving a new one, or moving one after a review, with the teacher's note. [done]
      *  runs once it is saved, so a move that fails keeps the picker and the note. */
-    fun placeStudent(userId: Int, batch: String, note: String, done: () -> Unit) = launchCall {
+    fun placeStudent(userId: Int, batch: String, note: String, done: () -> Unit) = launchCall(saving = "place:$userId") {
         val body = JSONObject().put("batch", batch).put("note", note.trim().ifEmpty { null } ?: JSONObject.NULL)
         once("move:$userId", "$batch:${note.trim()}") { api.put("/teacher/students/$userId/batch", body, it) }
         done()
@@ -742,7 +753,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         readTeacherHome()
     }
 
-    fun setStudentStatus(userId: Int, status: String) = launchCall {
+    fun setStudentStatus(userId: Int, status: String) = launchCall(saving = "status:$userId") {
         once("status:$userId", status) { api.post("/teacher/students/$userId/status", JSONObject().put("status", status), it) }
         students = api.get("/teacher/students").getJSONArray("students").map(Student::from)
         readTeacherHome()
@@ -751,11 +762,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** A new password for a student, sent once, not tried again by itself. The teacher's retry after no answer came, or
      *  a second confirm, carries the same request id, and the server gives it the same password, even when the two
      *  arrive together; the confirm is off while a call is out. */
-    fun resetPassword(userId: Int, show: (String) -> Unit) = launchCall {
+    fun resetPassword(userId: Int, show: (String) -> Unit) = launchCall(saving = "password:$userId") {
         show(once("reset:$userId", "") { api.post("/teacher/students/$userId/password", JSONObject(), it, retry = false) }.getString("password"))
     }
 
-    fun setCurriculum(sessionId: Int, curriculum: String) = launchCall {
+    fun setCurriculum(sessionId: Int, curriculum: String) = launchCall(saving = "curriculum:$sessionId:$curriculum") {
         api.put("/teacher/sessions/$sessionId/curriculum", JSONObject().put("curriculum", curriculum))
         readTeacherHome()
     }
@@ -778,7 +789,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** The teacher's feedback on one student's item; [done] runs only once it is through, so a failed send keeps the text. */
-    fun sendItemFeedback(studentId: Int, item: String, text: String, sent: String, done: () -> Unit) = launchCall {
+    fun sendItemFeedback(studentId: Int, item: String, text: String, sent: String, done: () -> Unit) = launchCall(saving = "item-feedback") {
         val body = JSONObject().put("item", item).put("text", text)
         once("item-feedback:$studentId:$item", text) { api.post("/teacher/students/$studentId/feedback", body, it) }
         itemHistory = ItemHistory.from(api.get(itemsPath(studentId) + "/$item"))

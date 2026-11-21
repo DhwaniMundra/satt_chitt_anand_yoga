@@ -145,9 +145,9 @@ private fun Main(vm: AppViewModel, teacher: Boolean, onLanguage: (String) -> Uni
                     }
                 }
             }
-            // A call to the server takes a second or more, and the screens are read again behind what they show: a thin
-            // line over the top says so and moves nothing. A pull of the Today tab shows its own spinner instead.
-            if (vm.busy || vm.refreshing && !vm.pulling) {
+            // A read takes a second or more, and the screens are read again behind what they show: a thin line over the
+            // top says so and moves nothing. A pull of the Today tab shows its own spinner, and a write its own button.
+            if (vm.loading || vm.refreshing && !vm.pulling) {
                 val updating = stringResource(R.string.updating)
                 LinearProgressIndicator(Modifier.fillMaxWidth().align(Alignment.TopCenter).semantics { contentDescription = updating }, color = Palette.moss)
             }

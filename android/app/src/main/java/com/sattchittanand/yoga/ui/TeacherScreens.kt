@@ -121,19 +121,27 @@ private fun SessionCard(vm: AppViewModel, s: ClassSession, open: Boolean, batchL
                 placeholder = { Text("meet.google.com/abc-defg-hij") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
             )
             vm.error?.takeIf { it == "bad_meet_link" }?.let { Text(errorText(it), color = MaterialTheme.colorScheme.error) }
+            // The link's save shows on the button tapped: Save, or Share, which saves a changed link first.
+            var sharing by rememberSaveable(s.id) { mutableStateOf(false) }
+            val linkSaving = vm.saving("link:${s.id}")
+            val busyHere = linkSaving || vm.saving("share:${s.id}")
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = { save(null) }, enabled = changed && !vm.busy, modifier = Modifier.weight(1f).height(52.dp)) {
-                    Text(stringResource(R.string.save))
+                OutlinedButton(onClick = { if (!busyHere) { sharing = false; save(null) } }, enabled = changed, modifier = Modifier.weight(1f).height(52.dp)) {
+                    SavingLabel(stringResource(R.string.save), linkSaving && !sharing)
                 }
                 Button(
-                    onClick = { if (changed) save { shareText(context, it) } else vm.shareSession(s.id) { shareText(context, it) } },
-                    enabled = (changed || s.hasLink) && !vm.busy,
+                    onClick = {
+                        if (busyHere) return@Button
+                        sharing = true
+                        if (changed) save { shareText(context, it) } else vm.shareSession(s.id) { shareText(context, it) }
+                    },
+                    enabled = changed || s.hasLink,
                     colors = ButtonDefaults.buttonColors(containerColor = Palette.saffron),
                     modifier = Modifier.weight(1f).height(52.dp),
                 ) {
                     Icon(Icons.AutoMirrored.Filled.Send, null)
                     Spacer(Modifier.width(8.dp))
-                    Text(stringResource(R.string.share))
+                    SavingLabel(stringResource(R.string.share), busyHere && sharing, what = if (linkSaving) stringResource(R.string.saving) else null)
                 }
             }
         }
@@ -146,7 +154,8 @@ private fun Plan(vm: AppViewModel, s: ClassSession) {
     val curricula = vm.curricula ?: return
     Label(stringResource(R.string.curriculum))
     val keys = curricula.curricula.map { it.key }
-    Choices(curricula.curricula.map { it.name }, keys.indexOf(s.curriculum).takeIf { it >= 0 }, enabled = !vm.busy, perRow = 2) { i ->
+    val saving = keys.indexOfFirst { vm.saving("curriculum:${s.id}:$it") }.takeIf { it >= 0 }
+    Choices(curricula.curricula.map { it.name }, keys.indexOf(s.curriculum).takeIf { it >= 0 }, enabled = saving == null, perRow = 2, saving = saving) { i ->
         if (s.curriculum != keys[i]) vm.setCurriculum(s.id, keys[i])
     }
     curricula.find(s.curriculum)?.let { plan ->
@@ -186,23 +195,26 @@ private fun GroupCard(vm: AppViewModel) {
             LinkField(shown(key), { edit(key, it) }, b.info.name + (b.info.time?.let { " · $it" } ?: ""), "meet.google.com/abc-defg-hij", refused[key])
         }
         LinkField(shown(group), { edit(group, it) }, stringResource(R.string.group_link), null, refused[group])
+        val savingLinks = vm.saving("links")
         Button(
             onClick = {
+                if (savingLinks) return@Button
                 vm.saveLinks(changed[group], changed - group, saved) { ok, bad ->
                     edits = edits.filterKeys { it in changed && it !in ok }
                     refused = bad
                 }
             },
-            enabled = changed.isNotEmpty() && !vm.busy,
-        ) { Text(stringResource(R.string.save)) }
+            enabled = changed.isNotEmpty(),
+        ) { SavingLabel(stringResource(R.string.save), savingLinks) }
         HorizontalDivider(color = Palette.line)
         Label(stringResource(R.string.group_code_label))
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(settings.groupCode ?: "–", style = MaterialTheme.typography.displaySmall.copy(letterSpacing = 6.sp), color = Palette.moss,
                 modifier = Modifier.weight(1f))
-            TextButton(onClick = { askNewCode = true }, enabled = !vm.busy) {
+            val newCode = vm.saving("group-code")
+            TextButton(onClick = { if (!newCode) askNewCode = true }) {
                 Icon(Icons.Filled.Refresh, null)
-                Text(stringResource(R.string.new_code))
+                SavingLabel(stringResource(R.string.new_code), newCode)
             }
         }
         OutlinedButton(onClick = { vm.shareInvite { shareText(context, it) } }, modifier = Modifier.fillMaxWidth()) {
@@ -297,13 +309,17 @@ fun StudentsScreen(vm: AppViewModel) {
                 } else if (placing) {
                     BatchPicker(vm, student, preselect = student.batch, action = R.string.move_to) { placing = false }
                 }
+                val status = vm.saving("status:${student.id}")
+                val password = vm.saving("password:${student.id}")
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     if (student.status == "approved" && !placing) OutlinedButton(onClick = { placing = true }) { Text(stringResource(R.string.move_batch)) }
                     if (student.status == "rejected" && student.batch != null) {
-                        Button(onClick = { vm.setStudentStatus(student.id, "approved") }) { Text(stringResource(R.string.take_back)) }
+                        Button(onClick = { if (!status) vm.setStudentStatus(student.id, "approved") }) { SavingLabel(stringResource(R.string.take_back), status) }
                     }
-                    if (student.status != "rejected") OutlinedButton(onClick = { askingRemove = student.id }) { Text(stringResource(R.string.remove)) }
-                    TextButton(onClick = { askingPassword = student.id }) { Text(stringResource(R.string.new_password)) }
+                    if (student.status != "rejected") {
+                        OutlinedButton(onClick = { if (!status) askingRemove = student.id }) { SavingLabel(stringResource(R.string.remove), status) }
+                    }
+                    TextButton(onClick = { if (!password) askingPassword = student.id }) { SavingLabel(stringResource(R.string.new_password), password) }
                 }
                 if (student.status == "approved") {
                     TextButton(onClick = { openStudent = student.id }) { Text(stringResource(R.string.each_item) + " ›") }
@@ -318,7 +334,8 @@ fun StudentsScreen(vm: AppViewModel) {
             title = { Text(stringResource(R.string.new_password_ask, name)) },
             text = { Text(stringResource(R.string.new_password_why, name.substringBefore(' '))) },
             confirmButton = {
-                TextButton(onClick = { askingPassword = null; vm.resetPassword(student.user.id) { shownPassword = name to it } }, enabled = !vm.busy) {
+                TextButton(onClick = { askingPassword = null; vm.resetPassword(student.user.id) { shownPassword = name to it } },
+                    enabled = !vm.saving("password:${student.user.id}")) {
                     Text(stringResource(R.string.new_password))
                 }
             },
@@ -395,8 +412,9 @@ private fun BatchPicker(vm: AppViewModel, student: User, preselect: String?, act
     Choices(batches.map { it.info.name }, batches.indexOfFirst { it.info.key == chosen }.takeIf { it >= 0 }, perRow = 2) { chosen = batches[it].info.key }
     LimitedField(note, { note = it }, Limits.BATCH_NOTE, placeholder = { Text(stringResource(R.string.batch_note)) }, minLines = 2, maxLines = 3)
     val name = batches.firstOrNull { it.info.key == chosen }?.info?.name
-    Button(onClick = { chosen?.let { vm.placeStudent(student.id, it, note, done) } }, enabled = name != null && !vm.busy, modifier = Modifier.fillMaxWidth()) {
-        Text(stringResource(action, name.orEmpty()))
+    val saving = vm.saving("place:${student.id}")
+    Button(onClick = { if (!saving) chosen?.let { vm.placeStudent(student.id, it, note, done) } }, enabled = name != null, modifier = Modifier.fillMaxWidth()) {
+        SavingLabel(stringResource(action, name.orEmpty()), saving)
     }
 }
 

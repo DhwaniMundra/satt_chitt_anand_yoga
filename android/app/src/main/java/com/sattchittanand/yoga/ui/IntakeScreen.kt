@@ -119,14 +119,16 @@ private fun IntakeForm(vm: AppViewModel, before: Intake?, close: () -> Unit) {
         }
         val inRange = listOf(age to Limits.AGE, height to Limits.HEIGHT_CM, weight to Limits.WEIGHT_KG).all { (typed, range) -> typed.toIntOrNull() in range }
         val ready = inRange && food != null
+        val saving = vm.saving("intake")
         Button(
             onClick = {
+                if (saving) return@Button
                 val intake = Intake(age.toInt(), height.toInt(), weight.toInt(), food!!, meals.trim().ifEmpty { null }, pain.toList(),
                     painNote.trim().ifEmpty { null }, ratings.toList(), null)
                 vm.saveIntake(intake, thanks, close)
             },
-            enabled = ready && !vm.busy, modifier = Modifier.fillMaxWidth(),
-        ) { Text(stringResource(R.string.send_to, teacher)) }
+            enabled = ready, modifier = Modifier.fillMaxWidth(),
+        ) { SavingLabel(stringResource(R.string.send_to, teacher), saving) }
     }
 }
 
