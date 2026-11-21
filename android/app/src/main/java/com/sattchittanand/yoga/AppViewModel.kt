@@ -159,6 +159,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             loadStudio()
         } else {
             restoring = true
+            sendWaiting() // what this phone has yet to send goes at once, whatever the screens show
             val lang = prefs.lang
             viewModelScope.launch {
                 val kept = withContext(disk) { saved.read(token, lang) }
@@ -493,7 +494,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     if (prefs.token != p.token) return@launch
                     pending = pending - p
                     unsent -= p.requestId
-                    confirmed[p.sessionId] = classOf(p.sessionId)?.endsAt ?: Instant.now()
+                    // Until the class ends; one not on the screens yet (sent as the app starts) is at most three hours long.
+                    confirmed[p.sessionId] = classOf(p.sessionId)?.endsAt ?: Instant.now().plusSeconds(3 * 3600)
                     stats = Stats.from(reply.getJSONObject("stats"))
                 } catch (e: ApiError) {
                     if (prefs.token != p.token) return@launch
@@ -921,14 +923,15 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         loadSharedNotes() // the "Notes shared" tile
     }
 
-    /** Coming back to the app (from Meet, say) sends the check-ins still waiting, and reloads, so the after-class
+    /** Coming back to the app (from Meet, say) sends what is still waiting, and reloads, so the after-class
      *  question appears when it is due; it reloads not again within half a minute (a rotation, a glance at another
      *  app). */
     fun onResume() {
         val stale = SystemClock.elapsedRealtime() - refreshedAt > RESUME_REFRESH_MS
-        if (restoring) return // the start's own read follows
         if (signedIn) sendWaiting()
-        if (signedIn && !busy && !refreshing && stale) refresh() // signed in, or signed in but the studio was out of reach: try again
+        // Signed in, or signed in but the studio was out of reach: read again; while the start reads what was kept, its
+        // own read follows.
+        if (signedIn && !restoring && !busy && !refreshing && stale) refresh()
         gemma.refresh(loadModel = false) // a download that went on, or finished, while the app was away
     }
 
